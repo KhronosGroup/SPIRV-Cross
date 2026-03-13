@@ -10714,26 +10714,26 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
-	uint32_t layout = ops[3];
+		uint32_t layout = ops[3];
 
-	auto &layout_c = get<SPIRConstant>(layout);
-	if (layout_c.specialization)
-		SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
-	uint32_t layout_val = layout_c.scalar();
-	bool col_major = false;
+		auto &layout_c = get<SPIRConstant>(layout);
+		if (layout_c.specialization)
+			SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
+		uint32_t layout_val = layout_c.scalar();
+		bool col_major = false;
 
-	switch (layout_val)
-	{
-	case CooperativeMatrixLayoutRowMajorKHR:
-	case CooperativeMatrixLayoutColumnMajorKHR:
-		if (instruction.length < 5)
-			SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
-		col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
-		break;
+		switch (layout_val)
+		{
+		case CooperativeMatrixLayoutRowMajorKHR:
+		case CooperativeMatrixLayoutColumnMajorKHR:
+			if (instruction.length < 5)
+				SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
+			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
+			break;
 
-	default:
-		SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
-	}
+		default:
+			SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
+		}
 
 		uint32_t stride = ops[4];
 
@@ -10780,10 +10780,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 		if (col_major)
 			statement("simdgroup_load(", to_expression(id), ", ",
-						ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+			          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
 		else
 			statement("simdgroup_load(", to_expression(id), ", ",
-						ptr_expr, ", ", stride_expr, ");");
+			          ptr_expr, ", ", stride_expr, ");");
 
 		register_read(id, ptr, false);
 		break;
@@ -10814,57 +10814,57 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("MSL cooperative matrix store only supports RowMajorKHR and ColumnMajorKHR layouts.");
 		}
 
-			uint32_t stride = ops[3];
+		uint32_t stride = ops[3];
 
-			auto ptr_expr = to_ptr_expression(ptr);
-			string stride_expr = to_expression(stride);
+		auto ptr_expr = to_ptr_expression(ptr);
+		string stride_expr = to_expression(stride);
 
-			// The pointer operand is allowed to use a different element type than the cooperative matrix component type.
-			// In that case, cast the pointer and convert the stride from source element units to component element units.
-			auto &mat_type = expression_type(obj);
-			auto &component_type = get<SPIRType>(mat_type.parent_type);
-			auto &ptr_type = expression_type(ptr);
-			auto &pointee_type = get<SPIRType>(ptr_type.parent_type);
-			if (pointee_type.self != component_type.self)
+		// The pointer operand is allowed to use a different element type than the cooperative matrix component type.
+		// In that case, cast the pointer and convert the stride from source element units to component element units.
+		auto &mat_type = expression_type(obj);
+		auto &component_type = get<SPIRType>(mat_type.parent_type);
+		auto &ptr_type = expression_type(ptr);
+		auto &pointee_type = get<SPIRType>(ptr_type.parent_type);
+		if (pointee_type.self != component_type.self)
+		{
+			auto addr_space = get_type_address_space(ptr_type, ptr);
+			ptr_expr = join("reinterpret_cast<", addr_space, " ", type_to_glsl(component_type), "*>(", ptr_expr, ")");
+
+			uint32_t src_bytes = (pointee_type.width * pointee_type.vecsize) / 8;
+			uint32_t dst_bytes = (component_type.width * component_type.vecsize) / 8;
+			if (src_bytes == 0 || dst_bytes == 0)
+				SPIRV_CROSS_THROW("Cannot determine element size for cooperative matrix load/store.");
+
+			if (src_bytes == dst_bytes)
 			{
-				auto addr_space = get_type_address_space(ptr_type, ptr);
-				ptr_expr = join("reinterpret_cast<", addr_space, " ", type_to_glsl(component_type), "*>(", ptr_expr, ")");
-
-				uint32_t src_bytes = (pointee_type.width * pointee_type.vecsize) / 8;
-				uint32_t dst_bytes = (component_type.width * component_type.vecsize) / 8;
-				if (src_bytes == 0 || dst_bytes == 0)
-					SPIRV_CROSS_THROW("Cannot determine element size for cooperative matrix load/store.");
-
-				if (src_bytes == dst_bytes)
-				{
-					// No conversion needed.
-				}
-				else if (src_bytes > dst_bytes && (src_bytes % dst_bytes) == 0)
-				{
-					uint32_t multiplier = src_bytes / dst_bytes;
-					stride_expr = join("(", stride_expr, ") * ", multiplier, "u");
-				}
-				else if (src_bytes < dst_bytes && (dst_bytes % src_bytes) == 0)
-				{
-					uint32_t divisor = dst_bytes / src_bytes;
-					stride_expr = join("(", stride_expr, ") / ", divisor, "u");
-				}
-				else
-				{
-					stride_expr = join("((", stride_expr, ") * ", src_bytes, "u) / ", dst_bytes, "u");
-				}
+				// No conversion needed.
 			}
-
-			if (col_major)
-				statement("simdgroup_store(", to_expression(obj), ", ",
-				          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+			else if (src_bytes > dst_bytes && (src_bytes % dst_bytes) == 0)
+			{
+				uint32_t multiplier = src_bytes / dst_bytes;
+				stride_expr = join("(", stride_expr, ") * ", multiplier, "u");
+			}
+			else if (src_bytes < dst_bytes && (dst_bytes % src_bytes) == 0)
+			{
+				uint32_t divisor = dst_bytes / src_bytes;
+				stride_expr = join("(", stride_expr, ") / ", divisor, "u");
+			}
 			else
-				statement("simdgroup_store(", to_expression(obj), ", ",
-				          ptr_expr, ", ", stride_expr, ");");
-
-			register_write(ptr);
-			break;
+			{
+				stride_expr = join("((", stride_expr, ") * ", src_bytes, "u) / ", dst_bytes, "u");
+			}
 		}
+
+		if (col_major)
+			statement("simdgroup_store(", to_expression(obj), ", ",
+			          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+		else
+			statement("simdgroup_store(", to_expression(obj), ", ",
+			          ptr_expr, ", ", stride_expr, ");");
+
+		register_write(ptr);
+		break;
+	}
 
 	case OpCooperativeMatrixMulAddKHR:
 	{
