@@ -300,6 +300,10 @@ typedef enum spvc_msl_shader_variable_format
 	SPVC_MSL_SHADER_VARIABLE_FORMAT_UINT16 = 2,
 	SPVC_MSL_SHADER_VARIABLE_FORMAT_ANY16 = 3,
 	SPVC_MSL_SHADER_VARIABLE_FORMAT_ANY32 = 4,
+	SPVC_MSL_SHADER_VARIABLE_FORMAT_UINT32 = 5,
+	SPVC_MSL_SHADER_VARIABLE_FORMAT_SINT8 = 6,
+	SPVC_MSL_SHADER_VARIABLE_FORMAT_SINT16 = 7,
+	SPVC_MSL_SHADER_VARIABLE_FORMAT_SINT32 = 8,
 
 	/* Deprecated names. */
 	SPVC_MSL_VERTEX_FORMAT_OTHER = SPVC_MSL_SHADER_VARIABLE_FORMAT_OTHER,
@@ -311,9 +315,9 @@ typedef enum spvc_msl_shader_variable_format
 	SPVC_MSL_SHADER_INPUT_FORMAT_ANY16 = SPVC_MSL_SHADER_VARIABLE_FORMAT_ANY16,
 	SPVC_MSL_SHADER_INPUT_FORMAT_ANY32 = SPVC_MSL_SHADER_VARIABLE_FORMAT_ANY32,
 
-
 	SPVC_MSL_SHADER_INPUT_FORMAT_INT_MAX = 0x7fffffff
-} spvc_msl_shader_variable_format, spvc_msl_shader_input_format, spvc_msl_vertex_format;
+} spvc_msl_shader_variable_format,
+	spvc_msl_shader_input_format, spvc_msl_vertex_format;
 
 /* Maps to C++ API. Deprecated; use spvc_msl_shader_interface_var. */
 typedef struct spvc_msl_vertex_attribute
