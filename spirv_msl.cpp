@@ -10909,47 +10909,27 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	default:
 	{
-		auto is_cooperative_matrix_typed_id = [&](uint32_t typed_id) -> bool {
-			auto *type = maybe_get<SPIRType>(typed_id);
-			if (!type)
-			{
-				auto *var = this->maybe_get<SPIRVariable>(typed_id);
-				if (var)
-					type = this->maybe_get<SPIRType>(var->basetype);
-
-				auto *expr = this->maybe_get<SPIRExpression>(typed_id);
-				if (!type && expr)
-					type = this->maybe_get<SPIRType>(expr->expression_type);
-
-				auto *constant = this->maybe_get<SPIRConstant>(typed_id);
-				if (!type && constant)
-					type = this->maybe_get<SPIRType>(constant->constant_type);
-
-				auto *constant_op = this->maybe_get<SPIRConstantOp>(typed_id);
-				if (!type && constant_op)
-					type = this->maybe_get<SPIRType>(constant_op->basetype);
-
-				auto *undef = this->maybe_get<SPIRUndef>(typed_id);
-				if (!type && undef)
-					type = this->maybe_get<SPIRType>(undef->basetype);
-
-				auto *ac = this->maybe_get<SPIRAccessChain>(typed_id);
-				if (!type && ac)
-					type = this->maybe_get<SPIRType>(ac->basetype);
-			}
-
-			while (type && (is_pointer(*type) || is_array(*type)))
-				type = this->maybe_get<SPIRType>(type->parent_type);
-
-			return type && type->op == OpTypeCooperativeMatrixKHR;
-		};
-
 		// Prevent GLSL cooperative matrix code from leaking into MSL output.
 		// Element-wise arithmetic on cooperative matrices is not supported in Metal.
+		// Should cover any reasonable situation we come across.
 		if (instruction.length >= 2)
 		{
-			if (is_cooperative_matrix_typed_id(ops[0]))
-				SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
+			bool has_result = false, has_result_type = false;
+			HasResultAndType(opcode, &has_result, &has_result_type);
+
+			if (has_result_type)
+			{
+				auto *type = &get<SPIRType>(ops[0]);
+				while (type && (is_pointer(*type) || is_array(*type)))
+					type = this->maybe_get<SPIRType>(type->parent_type);
+				if (type->op == OpTypeCooperativeMatrixKHR)
+					SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
+			}
+
+			auto is_cooperative_matrix_typed_id = [&](uint32_t id) -> bool {
+				auto &type = expression_type(id);
+				return type.op == OpTypeCooperativeMatrixKHR;
+			};
 
 			if (opcode == OpCompositeExtract || opcode == OpVectorExtractDynamic)
 			{
