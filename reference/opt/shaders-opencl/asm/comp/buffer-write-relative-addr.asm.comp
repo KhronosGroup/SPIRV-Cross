@@ -1,0 +1,21 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct cb5_struct
+{
+    float4 _m0[5];
+};
+
+typedef struct cb5_struct cb5_struct;
+
+__attribute__((reqd_work_group_size(4, 1, 1)))
+__kernel void comp_main(cb5_struct cb0_5, write_only image1d_buffer_t u0)
+{
+    uint _41 = as_uint(as_float(as_int(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2))).x) << 4)) >> 2u;
+    uint4 _50 = as_uint4(cb0_5._m0[as_uint(as_int(as_float(as_int(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2))).x)))) + 1u]);
+    write_imageui(u0, as_int(_41), _50.xxxx);
+    write_imageui(u0, as_int(_41 + 1u), _50.yyyy);
+    write_imageui(u0, as_int(_41 + 2u), _50.zzzz);
+    write_imageui(u0, as_int(_41 + 3u), _50.wwww);
+}
+

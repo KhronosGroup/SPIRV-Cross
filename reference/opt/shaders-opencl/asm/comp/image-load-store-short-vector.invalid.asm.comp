@@ -1,0 +1,18 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+void _main( uint3* id)
+{
+    float2 loaded = read_imagef(TargetTexture, as_int2((*id).xy)).xy;
+    float2 storeTemp = loaded + (float2)(1.0f);
+    write_imagef(TargetTexture, as_int2((*id).xy + (uint2)(1u)), (float4)(storeTemp));
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(write_only image2d_t TargetTexture)
+{
+    uint3 id_1 = ((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)));
+    uint3 param = id_1;
+    _main(&param);
+}
+

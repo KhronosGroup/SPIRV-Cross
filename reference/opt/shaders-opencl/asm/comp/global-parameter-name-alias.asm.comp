@@ -1,0 +1,8 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main()
+{
+}
+

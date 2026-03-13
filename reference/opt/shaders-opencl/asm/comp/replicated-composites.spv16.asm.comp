@@ -1,0 +1,30 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 0.0f
+#endif
+constant float spec_const = SPIRV_CROSS_CONSTANT_ID_0;
+constant float4 _20 = (float4)(spec_const);
+constant float _26[8] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+
+struct UBO
+{
+    float uniform_float;
+};
+
+typedef struct UBO UBO;
+
+constant float _42 = 0;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(UBO ubo)
+{
+    float4 a_1 = (float4)(0.0f);
+    float4 b_1 = (float4)(1.0f);
+    float4 c_1 = _20;
+    float4 _36 = (float4)(ubo.uniform_float);
+    float4 d_1 = _36;
+    float4 e_1 = _36;
+}
+

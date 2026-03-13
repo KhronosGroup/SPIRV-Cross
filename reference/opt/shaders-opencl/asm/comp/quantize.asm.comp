@@ -1,0 +1,35 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO0
+{
+    float scalar;
+    float2 vec2_val;
+    float3 vec3_val;
+    float4 vec4_val;
+};
+
+typedef struct SSBO0 SSBO0;
+
+uint spvPackHalf2x16(float2 v) {
+    uint r;
+    vstore_half(v.x, 0, (__private half *)&r);
+    vstore_half(v.y, 1, (__private half *)&r);
+    return r;
+}
+
+float2 spvUnpackHalf2x16(uint u) {
+    const __private uint *p = &u;
+    return (float2)(vload_half(0, (const __private half *)p),
+                   vload_half(1, (const __private half *)p));
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO0* _12)
+{
+    _12->scalar = spvUnpackHalf2x16(spvPackHalf2x16((float2)(_12->scalar, 0.0f))).x;
+    _12->vec2_val = spvUnpackHalf2x16(spvPackHalf2x16(_12->vec2_val));
+    _12->vec3_val = (float3)(spvUnpackHalf2x16(spvPackHalf2x16(_12->vec3_val.xy)), spvUnpackHalf2x16(spvPackHalf2x16((float2)(_12->vec3_val.z, 0.0f))).x);
+    _12->vec4_val = (float4)(spvUnpackHalf2x16(spvPackHalf2x16(_12->vec4_val.xy)), spvUnpackHalf2x16(spvPackHalf2x16(_12->vec4_val.zw)));
+}
+

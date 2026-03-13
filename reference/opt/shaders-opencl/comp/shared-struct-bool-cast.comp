@@ -1,0 +1,65 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct S1
+{
+    int3 a;
+    uint2 b;
+    int4 c;
+    uint d;
+};
+
+typedef struct S1 S1;
+
+struct block
+{
+    uint passed;
+};
+
+typedef struct block block;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _132)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local S1 s1;
+    s1.a = (int3)(6, 8, 8);
+    s1.b = (uint2)(4u);
+    s1.c = (int4)(false, false, false, true);
+    s1.d = 6u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    bool _144 = all((int3)(6, 8, 8) == s1.a);
+    bool _108;
+    if (_144)
+    {
+        _108 = all((uint2)(4u) == s1.b);
+    }
+    else
+    {
+        _108 = _144;
+    }
+    bool _117;
+    if (_108)
+    {
+        _117 = all((int4)(false, false, false, true) == s1.c);
+    }
+    else
+    {
+        _117 = _108;
+    }
+    bool _126;
+    if (_117)
+    {
+        _126 = 6u == s1.d;
+    }
+    else
+    {
+        _126 = _117;
+    }
+    if (_126)
+    {
+        _132[0] += as_uint(1);
+    }
+}
+

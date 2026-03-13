@@ -1,0 +1,28 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    int a;
+};
+
+typedef struct foo foo;
+
+struct bar
+{
+    int b;
+};
+
+typedef struct bar bar;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* x, __global int* y)
+{
+    __global int* _47 = (((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x != 0u) ? &x[0] : &y[0];
+    __global int* _40 = _47;
+    __global int* _33 = _47;
+    int _37 = x[0];
+    *_47 = 0;
+    y[0] = _37 + _37;
+}
+

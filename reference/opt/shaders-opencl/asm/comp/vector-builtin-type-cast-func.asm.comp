@@ -1,0 +1,28 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct cb1_struct
+{
+    float4 _RESERVED_IDENTIFIER_FIXUP_m0[1];
+};
+
+typedef struct cb1_struct cb1_struct;
+
+__attribute__((reqd_work_group_size(16, 16, 1)))
+__kernel void comp_main(write_only image2d_t u0, cb1_struct cb0_1)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    int2 _37 = (int2)(get_image_width(u0), get_image_height(u0)) >> as_int2((uint2)(4u));
+    int _98;
+    _98 = 0;
+    for (; _98 < _37.y; _98++)
+    {
+        for (int _99 = 0; _99 < _37.x; )
+        {
+            write_imagef(u0, (_37 * as_int3(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)))).xy) + (int2)(_98, _99), cb0_1._RESERVED_IDENTIFIER_FIXUP_m0[0].xxxx);
+            _99++;
+            continue;
+        }
+    }
+}
+

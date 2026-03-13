@@ -1,0 +1,9 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+__attribute__((reqd_work_group_size(8, 4, 2)))
+__kernel void comp_main()
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+}
+

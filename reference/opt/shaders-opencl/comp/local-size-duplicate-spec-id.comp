@@ -1,0 +1,30 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct StorageBuffer
+{
+    uint values[1];
+};
+
+typedef struct StorageBuffer StorageBuffer;
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 1u
+#endif
+constant uint _22 = SPIRV_CROSS_CONSTANT_ID_0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 1u
+#endif
+constant uint _23 = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 1u
+#endif
+constant uint _24 = SPIRV_CROSS_CONSTANT_ID_2;
+constant uint3 spvWorkgroupSize = (uint3)(_22, _23, _24);
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* ssbo)
+{
+    ssbo[((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0)))] = 1u;
+}
+

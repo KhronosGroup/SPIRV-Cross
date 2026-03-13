@@ -1,0 +1,27 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    int a;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* _9)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _9[0] += 10;
+    _9[0] -= 10;
+    _9[0] *= 10;
+    _9[0] /= 10;
+    _9[0] = _9[0] << 2;
+    _9[0] = _9[0] >> 3;
+    _9[0] &= 40;
+    _9[0] ^= 10;
+    _9[0] %= 40;
+    _9[0] |= 1;
+    _9[0] = 0;
+}
+

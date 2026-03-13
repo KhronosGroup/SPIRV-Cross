@@ -1,0 +1,53 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    uint u32;
+    int i32;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* ssbo)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local uint shared_u32;
+    __local int shared_i32;
+    uint _16 = atomic_add(&(ssbo->u32), 1u);
+    uint _18 = atomic_or(&(ssbo->u32), 1u);
+    uint _20 = atomic_xor(&(ssbo->u32), 1u);
+    uint _22 = atomic_and(&(ssbo->u32), 1u);
+    uint _24 = atomic_min(&(ssbo->u32), 1u);
+    uint _26 = atomic_max(&(ssbo->u32), 1u);
+    uint _28 = atomic_xchg(&(ssbo->u32), 1u);
+    uint _32 = atomic_cmpxchg(&(ssbo->u32), 10u, 2u);
+    int _36 = atomic_add(&(ssbo->i32), 1);
+    int _38 = atomic_or(&(ssbo->i32), 1);
+    int _40 = atomic_xor(&(ssbo->i32), 1);
+    int _42 = atomic_and(&(ssbo->i32), 1);
+    int _44 = atomic_min(&(ssbo->i32), 1);
+    int _46 = atomic_max(&(ssbo->i32), 1);
+    int _48 = atomic_xchg(&(ssbo->i32), 1);
+    int _52 = atomic_cmpxchg(&(ssbo->i32), 10, 2);
+    shared_u32 = 10u;
+    shared_i32 = 10;
+    uint _57 = atomic_add(&shared_u32, 1u);
+    uint _58 = atomic_or(&shared_u32, 1u);
+    uint _59 = atomic_xor(&shared_u32, 1u);
+    uint _60 = atomic_and(&shared_u32, 1u);
+    uint _61 = atomic_min(&shared_u32, 1u);
+    uint _62 = atomic_max(&shared_u32, 1u);
+    uint _63 = atomic_xchg(&shared_u32, 1u);
+    uint _64 = atomic_cmpxchg(&shared_u32, 10u, 2u);
+    int _65 = atomic_add(&shared_i32, 1);
+    int _66 = atomic_or(&shared_i32, 1);
+    int _67 = atomic_xor(&shared_i32, 1);
+    int _68 = atomic_and(&shared_i32, 1);
+    int _69 = atomic_min(&shared_i32, 1);
+    int _70 = atomic_max(&shared_i32, 1);
+    int _71 = atomic_xchg(&shared_i32, 1);
+    int _72 = atomic_cmpxchg(&shared_i32, 10, 2);
+}
+

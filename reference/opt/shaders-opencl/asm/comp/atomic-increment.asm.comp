@@ -1,0 +1,17 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct u0_counters
+{
+    uint c;
+};
+
+typedef struct u0_counters u0_counters;
+
+__attribute__((reqd_work_group_size(4, 1, 1)))
+__kernel void comp_main(write_only image1d_buffer_t u0, __global uint* u0_counter)
+{
+    uint _24 = atomic_add(&(u0_counter[0]), 1u);
+    write_imageui(u0, as_int(as_float(_24)), (uint4)(as_uint(as_int(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x))));
+}
+

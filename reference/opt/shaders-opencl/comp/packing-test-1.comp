@@ -1,0 +1,32 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct T1
+{
+    float3 a;
+    float b;
+};
+
+typedef struct T1 T1;
+
+struct Buffer0
+{
+    T1 buf0[1];
+};
+
+typedef struct Buffer0 Buffer0;
+
+struct Buffer1
+{
+    float buf1[1];
+};
+
+typedef struct Buffer1 Buffer1;
+
+__attribute__((reqd_work_group_size(32, 1, 1)))
+__kernel void comp_main(__global T1* _15, __global float* _34)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _34[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = _15[0].b;
+}
+

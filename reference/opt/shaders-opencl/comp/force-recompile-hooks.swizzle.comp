@@ -1,0 +1,11 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+const sampler_t spvDefaultSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(read_only image2d_t foo, write_only image2d_t bar)
+{
+    write_imagef(bar, (int2)(0), read_imagef(foo, spvDefaultSampler, (float2)(1.0f)));
+}
+

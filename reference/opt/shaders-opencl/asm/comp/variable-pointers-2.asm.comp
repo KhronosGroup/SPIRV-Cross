@@ -1,0 +1,56 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    int a[128];
+    uint b;
+    float2 c;
+};
+
+typedef struct foo foo;
+
+struct bar
+{
+    int d;
+};
+
+typedef struct bar bar;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global foo* buf, bar cb)
+{
+    uint3 _3 = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    uint3 _4 = ((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)));
+    bool _71 = cb.d != 0;
+    __global foo* _72 = _71 ? buf : NULL;
+    __global foo* _67 = _72;
+    __global foo* _65 = _72;
+    __private uint3* _79 = _71 ? &_3 : &_4;
+    __private uint3* _74 = _79;
+    __global int* _49;
+    __global int* _52;
+    _49 = &_72->a[0u];
+    _52 = &buf->a[0u];
+    int _54;
+    int _55;
+    for (;;)
+    {
+        _54 = *_49;
+        _55 = *_52;
+        if (_54 != _55)
+        {
+            int _63 = (_54 + _55) + as_int((*_79).x);
+            *_49 = _63;
+            *_52 = _63;
+            _49 = &_49[1u];
+            _52 = &_52[1u];
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+

@@ -1,0 +1,23 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO2
+{
+    float4 out_data[1];
+};
+
+typedef struct SSBO2 SSBO2;
+
+struct SSBO
+{
+    float4 in_data[1];
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global float4* _4, __global const float4* _6)
+{
+    _4[0] = fma(_6[0], _6[1], _6[1]);
+}
+

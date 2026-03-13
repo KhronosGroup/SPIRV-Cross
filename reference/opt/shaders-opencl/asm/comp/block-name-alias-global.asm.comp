@@ -1,0 +1,48 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct A
+{
+    int a;
+    int b;
+};
+
+typedef struct A A;
+
+struct A_1
+{
+    A Data[1];
+};
+
+typedef struct A_1 A_1;
+
+struct A_2
+{
+    A Data[1024];
+};
+
+typedef struct A_2 A_2;
+
+struct B
+{
+    A Data[1];
+};
+
+typedef struct B B;
+
+struct B_1
+{
+    A Data[1024];
+};
+
+typedef struct B_1 B_1;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global A* C1, A_2 C2, __global A* C3, B_1 C4)
+{
+    C1[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a = C2.Data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a;
+    C1[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].b = C2.Data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].b;
+    C3[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a = C4.Data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a;
+    C3[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].b = C4.Data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].b;
+}
+
