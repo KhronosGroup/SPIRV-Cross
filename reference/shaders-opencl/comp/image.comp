@@ -1,0 +1,11 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(read_only image2d_t uImageIn, write_only image2d_t uImageOut)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    float4 v = read_imagef(uImageIn, as_int2(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).xy) + (int2)(get_image_width(uImageIn), get_image_height(uImageIn)));
+    write_imagef(uImageOut, as_int2(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).xy), v);
+}
+

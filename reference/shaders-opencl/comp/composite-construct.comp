@@ -1,0 +1,37 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO0
+{
+    float4 as[1];
+};
+
+typedef struct SSBO0 SSBO0;
+
+struct SSBO1
+{
+    float4 bs[1];
+};
+
+typedef struct SSBO1 SSBO1;
+
+constant float4 _43[2] = { (float4)(20.0f), (float4)(40.0f) };
+
+struct Composite
+{
+    float4 a;
+    float4 b;
+};
+
+typedef struct Composite Composite;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global float4* _16, __global float4* _32)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    float4 values[2] = { _16[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x], _32[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] };
+    Composite c = (Composite){ values[0], _43[1] };
+    _16[0] = values[((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0)))];
+    _32[1] = c.b;
+}
+

@@ -1,0 +1,24 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _19
+{
+};
+typedef struct _19 _19;
+
+struct _5
+{
+    int _m0;
+    _19 _m1;
+    _19 _m2;
+    int _m3;
+};
+
+typedef struct _5 _5;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(_5 _3, __global _5* _4)
+{
+    *_4 = _3;
+}
+

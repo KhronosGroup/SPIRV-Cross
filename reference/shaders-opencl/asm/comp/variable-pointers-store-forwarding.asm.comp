@@ -1,0 +1,35 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    int a;
+};
+
+typedef struct foo foo;
+
+struct bar
+{
+    int b;
+};
+
+typedef struct bar bar;
+
+__global int* _24(__global foo* a_1, __global bar* b_1, __private uint3* _3_ptr)
+{
+    #define _3 (*_3_ptr)
+    return (_3.x != 0u) ? &a_1->a : &b_1->b;
+    #undef _3
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* x, __global int* y)
+{
+    uint3 _3 = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    __global int* _34 = _24((__global foo*)x, (__global bar*)y, &_3);
+    __global int* _33 = _34;
+    int _37 = x[0];
+    *_33 = 0;
+    y[0] = _37 + _37;
+}
+

@@ -1,0 +1,106 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct S1
+{
+    int3 a;
+    uint2 b;
+    int4 c;
+    uint d;
+};
+
+typedef struct S1 S1;
+
+struct block
+{
+    uint passed;
+};
+
+typedef struct block block;
+
+bool compare_ivec3( int3* a,  int3* b)
+{
+    return all((*a) == (*b));
+}
+
+bool compare_uvec2( uint2* a_1,  uint2* b_1)
+{
+    return all((*a_1) == (*b_1));
+}
+
+bool compare_bvec4( int4* a_2,  int4* b_2)
+{
+    return all((*a_2) == (*b_2));
+}
+
+bool compare_uint( uint* a_3,  uint* b_3)
+{
+    return (*a_3) == (*b_3);
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _132)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local S1 s1;
+    s1.a = (int3)(6, 8, 8);
+    s1.b = (uint2)(4u);
+    s1.c = (int4)(false, false, false, true);
+    s1.d = 6u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    bool allOk = true;
+    bool _99;
+    if (allOk)
+    {
+        int3 param = (int3)(6, 8, 8);
+        int3 param_1 = s1.a;
+        _99 = compare_ivec3(&param, &param_1);
+    }
+    else
+    {
+        _99 = allOk;
+    }
+    allOk = _99;
+    bool _108;
+    if (allOk)
+    {
+        uint2 param_2 = (uint2)(4u);
+        uint2 param_3 = s1.b;
+        _108 = compare_uvec2(&param_2, &param_3);
+    }
+    else
+    {
+        _108 = allOk;
+    }
+    allOk = _108;
+    bool _117;
+    if (allOk)
+    {
+        int4 param_4 = (int4)(false, false, false, true);
+        int4 param_5 = s1.c;
+        _117 = compare_bvec4(&param_4, &param_5);
+    }
+    else
+    {
+        _117 = allOk;
+    }
+    allOk = _117;
+    bool _126;
+    if (allOk)
+    {
+        uint param_6 = 6u;
+        uint param_7 = s1.d;
+        _126 = compare_uint(&param_6, &param_7);
+    }
+    else
+    {
+        _126 = allOk;
+    }
+    allOk = _126;
+    if (allOk)
+    {
+        _132[0] += as_uint(1);
+    }
+}
+

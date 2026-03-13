@@ -1,0 +1,75 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+void out_test_0( int* cond_5,  int* i_5)
+{
+    if ((*cond_5) == 0)
+    {
+        *i_5 = 40;
+    }
+    else
+    {
+        *i_5 = 60;
+    }
+}
+
+void out_test_1( int* cond_1_1,  int* i_1_1)
+{
+    switch ((*cond_1_1))
+    {
+        case 40:
+        {
+            *i_1_1 = 40;
+            break;
+        }
+        default:
+        {
+            *i_1_1 = 70;
+            break;
+        }
+    }
+}
+
+void inout_test_0( int* cond_2_1,  int* i_2_1)
+{
+    if ((*cond_2_1) == 0)
+    {
+        *i_2_1 = 40;
+    }
+}
+
+void inout_test_1( int* cond_3_1,  int* i_3_1)
+{
+    switch ((*cond_3_1))
+    {
+        case 40:
+        {
+            *i_3_1 = 40;
+            break;
+        }
+    }
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main()
+{
+    int cond_4_1 = 40;
+    int i_4_1 = 50;
+    int param_8 = cond_4_1;
+    int param_1_1 = i_4_1;
+    out_test_0(&param_8, &param_1_1);
+    i_4_1 = param_1_1;
+    int param_2_1 = cond_4_1;
+    int param_3_1 = i_4_1;
+    out_test_1(&param_2_1, &param_3_1);
+    i_4_1 = param_3_1;
+    int param_4_1 = cond_4_1;
+    int param_5_1 = i_4_1;
+    inout_test_0(&param_4_1, &param_5_1);
+    i_4_1 = param_5_1;
+    int param_6_1 = cond_4_1;
+    int param_7_1 = i_4_1;
+    inout_test_1(&param_6_1, &param_7_1);
+    i_4_1 = param_7_1;
+}
+

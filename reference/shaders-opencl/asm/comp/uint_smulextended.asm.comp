@@ -1,0 +1,28 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _4
+{
+    uint _m0[1];
+};
+
+typedef struct _4 _4;
+
+struct _20
+{
+    uint _m0;
+    uint _m1;
+};
+
+typedef struct _20 _20;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _5, __global uint* _6, __global uint* _7, __global uint* _8)
+{
+    _20 _28;
+    _28._m0 = _5[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] * _6[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x];
+    _28._m1 = mul_hi(_5[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x], _6[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x]);
+    _7[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = _28._m0;
+    _8[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = _28._m1;
+}
+

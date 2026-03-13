@@ -1,0 +1,36 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+void set_f(int* f_ptr)
+{
+    #define f (*f_ptr)
+    f = 40;
+    #undef f
+}
+
+void set_shared_u(__local int* u_ptr)
+{
+    #define u (*u_ptr)
+    u = 50;
+    #undef u
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main()
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local int u;
+    int f;
+    set_f(&f);
+    set_shared_u(&u);
+    if (((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0))) == 0u)
+    {
+        f = 10;
+    }
+    else
+    {
+        f = 30;
+        u = 20;
+    }
+}
+

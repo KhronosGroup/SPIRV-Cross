@@ -1,0 +1,55 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float4 mvp;
+    float4 in_data[1];
+};
+
+typedef struct SSBO SSBO;
+
+struct SSBO2
+{
+    float4 out_data[1];
+};
+
+typedef struct SSBO2 SSBO2;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global const SSBO* _24, __global float4* _89)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint ident_1 = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x;
+    float4 idat_1 = _24->in_data[ident_1];
+    int k_1 = 0;
+    for (;;)
+    {
+        int _39 = k_1;
+        int _40 = _39 + 1;
+        k_1 = _40;
+        if (_40 < 10)
+        {
+            idat_1 *= 2.0f;
+            k_1++;
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+    for (uint i_1 = 0u; i_1 < 16u; i_1 += as_uint(1), k_1++)
+    {
+        for (uint j_1 = 0u; j_1 < 30u; j_1 += as_uint(1))
+        {
+            idat_1 = _24->mvp * idat_1;
+        }
+    }
+    do
+    {
+        k_1++;
+    } while (k_1 > 10);
+    _89[ident_1] = idat_1;
+}
+

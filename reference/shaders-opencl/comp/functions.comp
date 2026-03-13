@@ -1,0 +1,15 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+void myfunc(__local int* foo)
+{
+    foo[0] = 13;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main()
+{
+    __local int foo[1337];
+    myfunc(foo);
+}
+

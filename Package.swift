@@ -47,6 +47,8 @@ let package = Package(
                       "shaders-msl",
                       "shaders-msl-no-opt",
                       "shaders-no-opt",
+                      "shaders-opencl",
+                      "shaders-opencl-no-opt",
                       "shaders-other",
                       "shaders-reflection",
                       "shaders-ue4",

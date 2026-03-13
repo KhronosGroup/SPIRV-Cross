@@ -1,0 +1,34 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _3
+{
+    int4 _m0;
+    uint4 _m1;
+};
+
+typedef struct _3 _3;
+
+struct _4
+{
+    uint4 _m0;
+    int4 _m1;
+};
+
+typedef struct _4 _4;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global _3* _5, __global _4* _6)
+{
+    int4 _22 = _5->_m0;
+    uint4 _23 = _5->_m1;
+    _6->_m0 = as_uint4(as_int4(_23) >> _22);
+    _6->_m0 = as_uint4(_22 >> as_int4(_23));
+    _6->_m0 = as_uint4(as_int4(_23) >> as_int4(_23));
+    _6->_m0 = as_uint4(_22 >> _22);
+    _6->_m1 = as_int4(_23) >> as_int4(_23);
+    _6->_m1 = _22 >> _22;
+    _6->_m1 = as_int4(_23) >> _22;
+    _6->_m1 = _22 >> as_int4(_23);
+}
+

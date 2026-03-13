@@ -1,0 +1,78 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _29
+{
+    int _m0[3][3];
+};
+
+typedef struct _29 _29;
+
+struct _7
+{
+    int _m0[1];
+};
+
+typedef struct _7 _7;
+
+constant int3 _32 = (int3)(0);
+constant int _33[3] = { 0, 0, 0 };
+constant int _34[3][3] = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } };
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 0
+#endif
+constant int _3 = SPIRV_CROSS_CONSTANT_ID_0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 0
+#endif
+constant int _4 = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 0
+#endif
+constant int _5 = SPIRV_CROSS_CONSTANT_ID_2;
+#define _36 ({ _3, 0, 0 })
+#define _37 ({ _3, _4, 0 })
+#define _38 ({ _3, _4, _5 })
+#define _39 ({ _4, 0, 0 })
+#define _40 ({ _4, _5, 0 })
+#define _41 ({ _4, _5, _3 })
+#define _42 ({ _5, 0, 0 })
+#define _43 ({ _5, _3, 0 })
+#define _44 ({ _5, _3, _4 })
+#define _45 ({ { _3, _4, _5 }, { 0, 0, 0 }, { 0, 0, 0 } })
+#define _46 ({ { _3, _4, _5 }, { _4, _5, _3 }, { 0, 0, 0 } })
+#define _47 ({ { _3, _4, _5 }, { _4, _5, _3 }, { _5, _3, _4 } })
+#define _48 ((_29){ { { _3, _4, _5 }, { _4, _5, _3 }, { _5, _3, _4 } } })
+#define _49 ((_29){ { { _3, _4, _5 }, { _4, _5, _5 }, { _5, _3, _4 } } })
+#define _50 (_48._m0[0][0])
+#define _51 (_48._m0[1][0])
+#define _52 (_48._m0[0][1])
+#define _53 (_48._m0[2][2])
+#define _54 (_48._m0[2][0])
+#define _55 (_48._m0[1][1])
+#define _56 ((_50 == _51))
+#define _57 ((_52 == _53))
+#define _58 ((_54 == _55))
+#define _59 ((int)(_56))
+#define _60 ((int)(_57))
+#define _61 (_58 ? 2 : 1)
+#define _62 ((int3)(_3, 0, 0))
+#define _63 ((int3)(0, _4, 0))
+#define _64 ((int3)(0, 0, _5))
+#define _65 ((int3)(_62.x, 0, _62.z))
+#define _66 ((int3)(0, _63.y, _63.x))
+#define _67 ((int3)(_64.z, 0, _64.z))
+#define _68 ((int3)(_65.y, _65.x, _66.y))
+#define _69 ((int3)(_67.z, _68.y, _68.z))
+#define _70 (_69.x)
+#define _71 (_69.y)
+#define _72 (_69.z)
+#define _73 ((_70 - _71))
+#define _74 ((_73 * _72))
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* _8, __global int* _9)
+{
+    _9[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = _8[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] + ((((1 - _59) * _60) * (_61 - 1)) * _74);
+}
+

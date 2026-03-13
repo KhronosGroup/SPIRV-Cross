@@ -1,0 +1,42 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float2 m22;
+    float3 m23;
+    float4 m24;
+    float2 m32;
+    float3 m33;
+    float4 m34;
+    float2 m42;
+    float3 m43;
+    float4 m44;
+};
+
+typedef struct SSBO SSBO;
+
+struct ReadSSBO
+{
+    float2 v2;
+    float3 v3;
+    float4 v4;
+};
+
+typedef struct ReadSSBO ReadSSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _21, __global const ReadSSBO* _26)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _21->m22 = _26->v2 * _26->v2.x;
+    _21->m23 = _26->v3 * _26->v2.x;
+    _21->m24 = _26->v4 * _26->v2.x;
+    _21->m32 = _26->v2 * _26->v3.x;
+    _21->m33 = _26->v3 * _26->v3.x;
+    _21->m34 = _26->v4 * _26->v3.x;
+    _21->m42 = _26->v2 * _26->v4.x;
+    _21->m43 = _26->v3 * _26->v4.x;
+    _21->m44 = _26->v4 * _26->v4.x;
+}
+

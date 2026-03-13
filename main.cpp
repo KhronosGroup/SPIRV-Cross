@@ -780,6 +780,8 @@ struct CLIArguments
 	uint32_t opencl_version = 120;
 	bool opencl_enable_fp64 = false;
 	bool opencl_enable_64bit_atomics = false;
+	bool opencl_enable_subgroups = false;
+	bool opencl_enable_shuffle = false;
 };
 
 static void print_version()
@@ -1361,6 +1363,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		CompilerOpenCL::Options ocl_opts = ocl_comp->get_opencl_options();
 		ocl_opts.opencl_version = args.opencl_version;
 		ocl_opts.enable_fp64 = args.opencl_enable_fp64;
+		ocl_opts.enable_subgroups = args.opencl_enable_subgroups;
+		ocl_opts.enable_shuffle = args.opencl_enable_shuffle;
 		ocl_comp->set_opencl_options(ocl_opts);
 	}
 	else if (args.hlsl)
@@ -1993,6 +1997,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--opencl-version", [&args](CLIParser &parser) { args.opencl_version = parser.next_uint(); });
 	cbs.add("--opencl-fp64", [&args](CLIParser &) { args.opencl_enable_fp64 = true; });
 	cbs.add("--opencl-64bit-atomics", [&args](CLIParser &) { args.opencl_enable_64bit_atomics = true; });
+	cbs.add("--opencl-subgroups", [&args](CLIParser &) { args.opencl_enable_subgroups = true; });
+	cbs.add("--opencl-shuffle", [&args](CLIParser &) { args.opencl_enable_shuffle = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point",
 	        [&args](CLIParser &parser)

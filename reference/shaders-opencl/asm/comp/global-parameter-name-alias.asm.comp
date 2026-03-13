@@ -1,0 +1,30 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct ssbo
+{
+    uint _data[1];
+};
+
+typedef struct ssbo ssbo;
+
+void Load( uint* size, __global const uint* ssbo)
+{
+    int byteAddrTemp = as_int((*size) >> as_uint(2));
+    uint4 data = (uint4)(ssbo[byteAddrTemp], ssbo[byteAddrTemp + 1], ssbo[byteAddrTemp + 2], ssbo[byteAddrTemp + 3]);
+}
+
+void _main( uint3* id, __global const uint* ssbo)
+{
+    uint param = 4u;
+    Load(&param, ssbo);
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global const uint* ssbo)
+{
+    uint3 id_1 = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    uint3 param_1 = id_1;
+    _main(&param_1, ssbo);
+}
+

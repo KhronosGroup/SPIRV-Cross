@@ -1,0 +1,22 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct bufA
+{
+    uint _data[1];
+};
+
+typedef struct bufA bufA;
+
+void _main(__global uint* bufA, __global uint* bufB)
+{
+    bufA[0] = 0u;
+    bufB[0] = 0u;
+}
+
+__attribute__((reqd_work_group_size(8, 8, 1)))
+__kernel void comp_main(__global uint* bufA, __global uint* bufB)
+{
+    _main(bufA, bufB);
+}
+

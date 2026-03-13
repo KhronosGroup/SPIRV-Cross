@@ -46,10 +46,16 @@ public:
 		bool enable_fp64 = false;
 		// Enable cl_khr_int64_extended_atomics extension
 		bool enable_64bit_atomics = false;
+		// Enable cl_khr_subgroups extension
+		bool enable_subgroups = false;
+		// Enable cl_khr_subgroup_shuffle extension
+		bool enable_shuffle = false;
 
 		void set_opencl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
 		{
 			opencl_version = make_opencl_version(major, minor, patch);
+			if (opencl_version >= 200 && opencl_version < 300)
+				enable_subgroups = true;
 		}
 
 		bool supports_opencl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0) const
@@ -98,12 +104,30 @@ protected:
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_instruction(const Instruction &instruction) override;
+	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index,
+	                                bool ptr_chain_is_resolved) override;
+	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
+	void add_function_overload(const SPIRFunction &func) override;
+	void emit_struct(SPIRType &type) override;
+	std::string type_to_glsl_constructor(const SPIRType &type) override;
+	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id, StorageClass lhs_storage,
+	                     StorageClass rhs_storage) override;
+	std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
+	                                bool inside_struct_scope = false) override;
+	std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector) override;
+	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
+	std::string to_atomic_ptr_expression(uint32_t id) override;
+	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                  uint32_t count) override;
 	virtual bool builtin_translates_to_nonarray(BuiltIn builtin) const override;
 	std::string get_variable_address_space(const SPIRVariable &argument);
 	std::string get_type_address_space(const SPIRType &type, uint32_t id, bool argument = false);
 	const char *to_restrict(uint32_t id, bool space);
+	uint32_t get_physical_type_id_stride(TypeID type_id) const override;
 
 	void replace_illegal_names() override;
+	void emit_function_local_declarations(SPIRFunction &func) override;
+	void emit_function_local_epilogue(SPIRFunction &func) override;
 
 	Options opencl_options;
 
@@ -114,6 +138,37 @@ protected:
 
 	std::unordered_set<uint32_t> constant_macro_ids;
 
+	// Expression IDs that were produced by subscripting a flattened SSBO pointer (e.g. ptr[idx]).
+	// These are C values (not pointers), so subsequent member accesses must use '.' not '->'.
+	std::unordered_set<uint32_t> subscripted_deref_exprs;
+
+	// Set when packHalf2x16/unpackHalf2x16 polyfill helpers are needed.
+	bool needs_half_pack_polyfill = false;
+	bool needs_half_unpack_polyfill = false;
+	// Set when a default sampler is needed for combined image+sampler usage.
+	bool needs_default_sampler = false;
+
+	// For each non-entry function, the ordered list of flattened buffer var IDs to thread as extra params.
+	std::unordered_map<uint32_t, SmallVector<uint32_t>> func_flattened_args;
+	// Map from flattened buffer var ID to its OpenCL type declaration prefix ("__global T*" etc.)
+	std::unordered_map<uint32_t, std::string> flattened_var_type_decl;
+
+	// For each non-entry function, workgroup/private global vars accessed and needing pointer threading.
+	std::unordered_map<uint32_t, SmallVector<uint32_t>> func_workgroup_args;
+	// Map from workgroup/private var ID to its pointer type declaration prefix
+	std::unordered_map<uint32_t, std::string> workgroup_var_ptr_type;
+	// Set of scalar (non-array) workgroup/private vars that need #define dereference inside callees
+	std::unordered_set<uint32_t> workgroup_scalar_vars;
+
+	// Input builtin variables threaded to non-entry functions (BuiltIn enum → variable ID)
+	std::unordered_map<uint32_t, uint32_t> threaded_input_builtins;
+	// Input builtin variables materialized as local vars in the entry point (BuiltIn enum → variable ID)
+	std::unordered_map<uint32_t, uint32_t> entry_point_materialized_builtins;
+	// Guard flag to avoid circular reference during builtin materialization emission
+	bool emitting_builtin_materialization = false;
+
+	void compute_kernel_resources();
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 	void emit_workgroup_size_attribute();
 
 	std::string entry_point_args(bool append_comma);

@@ -613,6 +613,12 @@ ignore_clang = False
 def validate_shader_opencl(shader, opt, paths):
     shader = reference_path(shader[0], shader[1], opt)
     extensions = []
+    if '.double.' in shader:
+        extensions.append('cl_khr_fp64')
+    if '.subgroup.' in shader:
+        extensions.append('cl_khr_subgroups')
+    if '.shuffle.' in shader:
+        extensions.append('cl_khr_subgroup_shuffle')
 
     global ignore_clang
     try:
@@ -675,8 +681,17 @@ def cross_compile_opencl(shader, spirv, opt, iterations, paths):
     opencl_args = [spirv_cross_path, '--output', opencl_path, spirv_path, '--opencl', '--iterations', str(iterations)]
     opencl_args.append('--opencl-version')
     opencl_args.append(path_to_opencl_standard_cli(shader))
+    if '.double.' in shader:
+        opencl_args.append('--opencl-fp64')
+    if '.subgroup.' in shader:
+        opencl_args.append('--opencl-subgroups')
+    if '.shuffle.' in shader:
+        opencl_args.append('--opencl-shuffle')
 
-    subprocess.check_call(opencl_args)
+    if shader_is_invalid_spirv(shader):
+        subprocess.run(opencl_args)
+    else:
+        subprocess.check_call(opencl_args)
 
     if not shader_is_invalid_spirv(opencl_path):
         subprocess.check_call([paths.spirv_val, '--allow-localsizeid', '--scalar-block-layout', '--target-env', spirv_env, spirv_path])

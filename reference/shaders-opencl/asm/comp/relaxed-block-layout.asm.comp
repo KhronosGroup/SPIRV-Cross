@@ -1,0 +1,23 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    uint bar;
+    float3 baz;
+    uchar quux;
+    uchar4 blah;
+    half2 wibble;
+};
+
+typedef struct foo foo;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global foo* _10)
+{
+    _10->bar = ((uint3)(get_local_id(0), get_local_id(1), get_local_id(2))).x;
+    _10->baz = convert_float3(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))));
+    _10->blah = convert_uchar4((uint4)(convert_uint4(_10->blah).xyz + ((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))), 0u));
+    _10->wibble = convert_half2(convert_float2(_10->wibble) * convert_float2(((uint3)(get_num_groups(0), get_num_groups(1), get_num_groups(2))).xy));
+}
+

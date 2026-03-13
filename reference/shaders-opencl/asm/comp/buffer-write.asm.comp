@@ -1,0 +1,16 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct cb
+{
+    float value;
+};
+
+typedef struct cb cb;
+
+__attribute__((reqd_work_group_size(32, 1, 1)))
+__kernel void comp_main(cb _8, write_only image1d_buffer_t _buffer)
+{
+    write_imagef(_buffer, as_int((32u * ((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x) + ((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0)))), (float4)(_8.value));
+}
+

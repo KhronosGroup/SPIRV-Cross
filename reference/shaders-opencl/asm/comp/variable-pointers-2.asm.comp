@@ -1,0 +1,68 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    int a[128];
+    uint b;
+    float2 c;
+};
+
+typedef struct foo foo;
+
+struct bar
+{
+    int d;
+};
+
+typedef struct bar bar;
+
+__global foo* select_buffer(__global foo* a_1_1, bar cb)
+{
+    return (cb.d != 0) ? a_1_1 : NULL;
+}
+
+__private uint3* select_input(__private uint3* _3_ptr, __private uint3* _4_ptr, bar cb)
+{
+    #define _3 (*_3_ptr)
+    #define _4 (*_4_ptr)
+    return (cb.d != 0) ? &_3 : &_4;
+    #undef _3
+    #undef _4
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global foo* buf, bar cb)
+{
+    uint3 _3 = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    uint3 _4 = ((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)));
+    __global foo* _44 = select_buffer((__global foo*)buf, cb);
+    __global foo* _65 = _44;
+    __private uint3* _45 = select_input(&_3, &_4, cb);
+    __global foo* _66 = _65;
+    __global int* _49;
+    __global int* _52;
+    _49 = &_66->a[0u];
+    _52 = &buf->a[0u];
+    int _54;
+    int _55;
+    for (;;)
+    {
+        _54 = *_49;
+        _55 = *_52;
+        if (_54 != _55)
+        {
+            int _63 = (_54 + _55) + as_int((*_45).x);
+            *_49 = _63;
+            *_52 = _63;
+            _49 = &_49[1u];
+            _52 = &_52[1u];
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+

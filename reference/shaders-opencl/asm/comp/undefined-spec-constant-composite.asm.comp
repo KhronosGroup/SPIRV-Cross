@@ -1,0 +1,46 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _21
+{
+    int _m0;
+    int _m1;
+};
+
+typedef struct _21 _21;
+
+struct _5
+{
+    int _m0[10];
+};
+
+typedef struct _5 _5;
+
+struct _7
+{
+    int _m0[10];
+};
+
+typedef struct _7 _7;
+
+constant int _29 = 0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 0
+#endif
+constant int _9 = SPIRV_CROSS_CONSTANT_ID_0;
+constant _21 _30 = (_21){ _9, _29 };
+
+int _42( int* _44,  _21* _45,  _21* _46)
+{
+    return ((*_44) + _45->_m0) + _46->_m1;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* _6, __global int* _8)
+{
+    int _34 = _8[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x];
+    _21 _35 = _30;
+    _21 _36 = (_21){ _29, 200 };
+    _6[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = _42(&_34, &_35, &_36);
+}
+

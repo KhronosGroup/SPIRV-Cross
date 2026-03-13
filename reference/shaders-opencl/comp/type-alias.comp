@@ -1,0 +1,61 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct S0
+{
+    float4 a;
+};
+
+typedef struct S0 S0;
+
+struct S1
+{
+    float4 a;
+};
+
+typedef struct S1 S1;
+
+struct SSBO0
+{
+    S0 s0s[1];
+};
+
+typedef struct SSBO0 SSBO0;
+
+struct SSBO1
+{
+    S1 s1s[1];
+};
+
+typedef struct SSBO1 SSBO1;
+
+struct SSBO2
+{
+    float4 outputs[1];
+};
+
+typedef struct SSBO2 SSBO2;
+
+float4 overload( S0* s0)
+{
+    return s0->a;
+}
+
+float4 overload_1( S1* s1)
+{
+    return s1->a;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global S0* _36, __global S1* _55, __global float4* _66)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    S0 s0_1;
+    s0_1.a = _36[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a;
+    S1 s1_1;
+    s1_1.a = _55[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].a;
+    S0 param = s0_1;
+    S1 param_1 = s1_1;
+    _66[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = overload(&param) + overload_1(&param_1);
+}
+

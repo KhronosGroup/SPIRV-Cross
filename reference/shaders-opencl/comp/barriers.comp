@@ -1,0 +1,80 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+void barrier_shared()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE);
+}
+
+void full_barrier()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+}
+
+void image_barrier()
+{
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+}
+
+void buffer_barrier()
+{
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+}
+
+void group_barrier()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+}
+
+void barrier_shared_exec()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+void full_barrier_exec()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+void image_barrier_exec()
+{
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+void buffer_barrier_exec()
+{
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+void group_barrier_exec()
+{
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+void exec_barrier()
+{
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+__attribute__((reqd_work_group_size(4, 1, 1)))
+__kernel void comp_main()
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    barrier_shared();
+    full_barrier();
+    image_barrier();
+    buffer_barrier();
+    group_barrier();
+    barrier_shared_exec();
+    full_barrier_exec();
+    image_barrier_exec();
+    buffer_barrier_exec();
+    group_barrier_exec();
+    exec_barrier();
+}
+

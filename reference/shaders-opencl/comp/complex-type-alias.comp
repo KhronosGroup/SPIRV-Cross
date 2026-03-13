@@ -1,0 +1,56 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Foo0
+{
+    float a;
+};
+
+typedef struct Foo0 Foo0;
+
+struct Foo1
+{
+    Foo0 a;
+};
+
+typedef struct Foo1 Foo1;
+
+struct Foo2
+{
+    Foo1 a;
+    float weight;
+};
+
+typedef struct Foo2 Foo2;
+
+struct SSBO
+{
+    Foo2 outputs[1];
+};
+
+typedef struct SSBO SSBO;
+
+void Zero( Foo0* v_1)
+{
+    v_1->a = 0.0f;
+}
+
+__attribute__((reqd_work_group_size(8, 8, 1)))
+__kernel void comp_main(__global Foo2* _53)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local Foo2 coeffs[64];
+    Foo2 data_1;
+    data_1.weight = 0.0f;
+    Foo0 param_1;
+    Zero(&param_1);
+    data_1.a.a = param_1;
+    coeffs[((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0)))] = data_1;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (((uint)(get_local_id(2) * get_local_size(0) * get_local_size(1) + get_local_id(1) * get_local_size(0) + get_local_id(0))) == 0u)
+    {
+        _53[((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x].a.a.a = coeffs[0].a.a.a;
+        _53[((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x].weight = coeffs[0].weight;
+    }
+}
+
