@@ -759,6 +759,9 @@ protected:
 	bool block_is_pure(const SPIRBlock &block);
 	bool function_is_control_dependent(const SPIRFunction &func);
 	bool block_is_control_dependent(const SPIRBlock &block);
+	uint32_t maybe_get_called_function_id(const Instruction &instruction) const;
+	SPIRFunction* maybe_get_called_function(const Instruction &instruction);
+	const SPIRFunction* maybe_get_called_function(const Instruction &instruction) const;
 
 	bool execution_is_branchless(const SPIRBlock &from, const SPIRBlock &to) const;
 	bool execution_is_direct_branch(const SPIRBlock &from, const SPIRBlock &to) const;
