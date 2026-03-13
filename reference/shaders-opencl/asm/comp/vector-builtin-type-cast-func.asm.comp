@@ -8,12 +8,13 @@ struct cb1_struct
 
 typedef struct cb1_struct cb1_struct;
 
+#define _RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID (*_RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID_ptr)
 int2 get_texcoord( int2* base,  int2* index, __private int3* _RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID_ptr)
 {
-    #define _RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID (*_RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID_ptr)
     return ((*base) * as_int3(_RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID).xy) + (*index);
-    #undef _RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID
 }
+
+#undef _RESERVED_IDENTIFIER_FIXUP_gl_LocalInvocationID
 
 __attribute__((reqd_work_group_size(16, 16, 1)))
 __kernel void comp_main(write_only image2d_t u0, cb1_struct cb0_1)

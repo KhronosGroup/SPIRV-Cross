@@ -396,23 +396,13 @@ protected:
 	static bool is_supported_subgroup_op_in_opengl(Op op, const uint32_t *ops);
 
 	void reset(uint32_t iteration_count);
-	void emit_function(SPIRFunction &func, const Bitset &return_flags);
+	virtual void emit_function(SPIRFunction &func, const Bitset &return_flags);
 
 	bool has_extension(const std::string &ext) const;
 	void require_extension_internal(const std::string &ext);
 
 	// Virtualize methods which need to be overridden by subclass targets like C++ and such.
 	virtual void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags);
-	// Called right after the opening { of a non-entry helper function body.
-	// Override to emit per-function preamble declarations (e.g. #define aliases).
-	virtual void emit_function_local_declarations(SPIRFunction &)
-	{
-	}
-	// Called right before the closing } of a non-entry helper function body.
-	// Override to clean up anything emitted by emit_function_local_declarations.
-	virtual void emit_function_local_epilogue(SPIRFunction &)
-	{
-	}
 
 	SPIRBlock *current_emitting_block = nullptr;
 	SmallVector<SPIRBlock *> current_emitting_switch_stack;

@@ -126,8 +126,10 @@ protected:
 	uint32_t get_physical_type_id_stride(TypeID type_id) const override;
 
 	void replace_illegal_names() override;
-	void emit_function_local_declarations(SPIRFunction &func) override;
-	void emit_function_local_epilogue(SPIRFunction &func) override;
+	void emit_function(SPIRFunction &func, const Bitset &return_flags) override;
+	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 
 	Options opencl_options;
 

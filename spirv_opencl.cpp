@@ -159,6 +159,31 @@ void CompilerOpenCL::emit_header()
 		statement("#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable");
 	statement("");
 
+	// Emit FP_CONTRACT pragma based on ContractionOff execution mode and FPFastMathDefault.
+	{
+		auto &ep = get_entry_point();
+		bool contract = true;
+
+		if (ep.flags.get(ExecutionModeContractionOff))
+			contract = false;
+
+		for (auto &fp_pair : ep.fp_fast_math_defaults)
+		{
+			if (fp_pair.second)
+			{
+				uint32_t flags = get<SPIRConstant>(fp_pair.second).scalar();
+				if (!(flags & FPFastMathModeAllowContractMask))
+					contract = false;
+			}
+		}
+
+		if (!contract)
+		{
+			statement("#pragma OPENCL FP_CONTRACT OFF");
+			statement("");
+		}
+	}
+
 	for (auto &header : header_lines)
 		statement(header);
 	if (!header_lines.empty())
@@ -1594,12 +1619,11 @@ void CompilerOpenCL::append_global_func_args(const SPIRFunction &func, uint32_t 
 	}
 }
 
-void CompilerOpenCL::emit_function_local_declarations(SPIRFunction &func)
+void CompilerOpenCL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 {
-	// For helper functions that access workgroup/private global scalar variables via pointer params:
-	// emit #define var_name (*var_name_ptr) so that existing expressions (e.g. "u = 50;")
-	// transparently dereference the pointer parameter.
+	// Emit #define macros before the function for workgroup scalar pointer aliasing.
 	auto wg_it = func_workgroup_args.find(func.self);
+	bool has_defines = false;
 	if (wg_it != func_workgroup_args.end())
 	{
 		for (auto var_id : wg_it->second)
@@ -1608,22 +1632,36 @@ void CompilerOpenCL::emit_function_local_declarations(SPIRFunction &func)
 			{
 				auto var_name = to_name(var_id);
 				statement("#define ", var_name, " (*", var_name, "_ptr)");
+				has_defines = true;
 			}
 		}
 	}
-}
 
-void CompilerOpenCL::emit_function_local_epilogue(SPIRFunction &func)
-{
-	auto wg_it = func_workgroup_args.find(func.self);
-	if (wg_it != func_workgroup_args.end())
+	CompilerGLSL::emit_function(func, return_flags);
+
+	// Emit #undef after the function.
+	if (has_defines)
 	{
 		for (auto var_id : wg_it->second)
 		{
 			if (workgroup_scalar_vars.count(var_id))
 				statement("#undef ", to_name(var_id));
 		}
+		statement("");
 	}
+}
+
+void CompilerOpenCL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                        const string &qualifier, uint32_t)
+{
+	auto &membertype = get<SPIRType>(member_type_id);
+	// OpenCL C does not use GLSL layout qualifiers or interpolation qualifiers.
+	statement(qualifier, variable_decl(membertype, to_member_name(type, index)), ";");
+}
+
+void CompilerOpenCL::emit_block_hints(const SPIRBlock &)
+{
+	// OpenCL C has no control-flow hint attributes; suppress SPIRV_CROSS_BRANCH/FLATTEN etc.
 }
 
 void CompilerOpenCL::emit_specialization_constants_and_structs()
@@ -1850,7 +1888,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	auto opencl_atomic = [this, ops](const char *opencl_op)
 	{
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], opencl_op);
 	};
 
@@ -2091,12 +2129,12 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 
 	case OpAtomicExchange:
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], "atomic_xchg");
 		break;
 	case OpAtomicCompareExchange:
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		// OpenCL atomic_cmpxchg(&ptr, expected, desired)
 		forced_temporaries.insert(ops[1]);
 		emit_op(ops[0], ops[1],
@@ -2112,7 +2150,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpAtomicISub:
 	{
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		forced_temporaries.insert(ops[1]);
 		auto expr = join("atomic_sub(", to_atomic_ptr_expression(ops[2]), ", ", to_enclosed_expression(ops[5]), ")");
 		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[5]));
@@ -2139,7 +2177,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpAtomicLoad:
 	{
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		auto &type = expression_type(ops[2]);
 		forced_temporaries.insert(ops[1]);
 		bool unsigned_type = (type.basetype == SPIRType::UInt);
@@ -2151,7 +2189,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpAtomicStore:
 	{
 		if (check_atomic_image(ops[0]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		statement("atomic_xchg(", to_atomic_ptr_expression(ops[0]), ", ", to_expression(ops[3]), ");");
 		flush_all_atomic_capable_variables();
 		break;
@@ -2160,7 +2198,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpAtomicIDecrement:
 	{
 		if (check_atomic_image(ops[2]))
-			SPIRV_CROSS_THROW("Image atomics not yet implemented for OpenCL.");
+			SPIRV_CROSS_THROW("Image atomics are not supported in OpenCL.");
 		forced_temporaries.insert(ops[1]);
 		auto &type = expression_type(ops[2]);
 		bool unsigned_type = (type.basetype == SPIRType::UInt);
@@ -2653,6 +2691,29 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 
 		emit_op(result_type, result_id, size_expr, true);
 		inherit_expression_dependencies(result_id, image_id);
+		break;
+	}
+
+	case OpPtrEqual:
+	case OpPtrNotEqual:
+	case OpPtrDiff:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t op0 = ops[2];
+		uint32_t op1 = ops[3];
+		const char *op = "";
+		if (opcode == OpPtrEqual)
+			op = "==";
+		else if (opcode == OpPtrNotEqual)
+			op = "!=";
+		else if (opcode == OpPtrDiff)
+			op = "-";
+		bool forward = should_forward(op0) && should_forward(op1);
+		emit_op(result_type, result_id, join(to_pointer_expression(op0), " ", op, " ", to_pointer_expression(op1)),
+		        forward);
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
 		break;
 	}
 

@@ -22,14 +22,15 @@ __global foo* select_buffer(__global foo* a_1_1, bar cb)
     return (cb.d != 0) ? a_1_1 : NULL;
 }
 
+#define _3 (*_3_ptr)
+#define _4 (*_4_ptr)
 __private uint3* select_input(__private uint3* _3_ptr, __private uint3* _4_ptr, bar cb)
 {
-    #define _3 (*_3_ptr)
-    #define _4 (*_4_ptr)
     return (cb.d != 0) ? &_3 : &_4;
-    #undef _3
-    #undef _4
 }
+
+#undef _3
+#undef _4
 
 __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main(__global foo* buf, bar cb)

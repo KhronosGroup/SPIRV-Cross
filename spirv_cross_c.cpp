@@ -170,6 +170,9 @@ struct spvc_compiler_options_s : ScratchMemoryAllocation
 #if SPIRV_CROSS_C_API_HLSL
 	CompilerHLSL::Options hlsl;
 #endif
+#if SPIRV_CROSS_C_API_OPENCL
+	CompilerOpenCL::Options opencl;
+#endif
 };
 
 struct spvc_set_s : ScratchMemoryAllocation
@@ -391,6 +394,14 @@ spvc_result spvc_compiler_create_compiler_options(spvc_compiler compiler, spvc_c
 			opt->backend_flags |= SPVC_COMPILER_OPTION_HLSL_BIT | SPVC_COMPILER_OPTION_COMMON_BIT;
 			opt->glsl = static_cast<CompilerHLSL *>(compiler->compiler.get())->get_common_options();
 			opt->hlsl = static_cast<CompilerHLSL *>(compiler->compiler.get())->get_hlsl_options();
+			break;
+#endif
+
+#if SPIRV_CROSS_C_API_OPENCL
+		case SPVC_BACKEND_OPENCL:
+			opt->backend_flags |= SPVC_COMPILER_OPTION_OPENCL_BIT | SPVC_COMPILER_OPTION_COMMON_BIT;
+			opt->glsl = static_cast<CompilerOpenCL *>(compiler->compiler.get())->get_common_options();
+			opt->opencl = static_cast<CompilerOpenCL *>(compiler->compiler.get())->get_opencl_options();
 			break;
 #endif
 
@@ -797,6 +808,24 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		break;
 #endif
 
+#if SPIRV_CROSS_C_API_OPENCL
+	case SPVC_COMPILER_OPTION_OPENCL_VERSION:
+		options->opencl.opencl_version = value;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_FP64:
+		options->opencl.enable_fp64 = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_64BIT_ATOMICS:
+		options->opencl.enable_64bit_atomics = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_SUBGROUPS:
+		options->opencl.enable_subgroups = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_SHUFFLE:
+		options->opencl.enable_shuffle = value != 0;
+		break;
+#endif
+
 	default:
 		options->context->report_error("Unknown option.");
 		return SPVC_ERROR_INVALID_ARGUMENT;
@@ -827,6 +856,13 @@ spvc_result spvc_compiler_install_compiler_options(spvc_compiler compiler, spvc_
 	case SPVC_BACKEND_MSL:
 		static_cast<CompilerMSL &>(*compiler->compiler).set_common_options(options->glsl);
 		static_cast<CompilerMSL &>(*compiler->compiler).set_msl_options(options->msl);
+		break;
+#endif
+
+#if SPIRV_CROSS_C_API_OPENCL
+	case SPVC_BACKEND_OPENCL:
+		static_cast<CompilerOpenCL &>(*compiler->compiler).set_common_options(options->glsl);
+		static_cast<CompilerOpenCL &>(*compiler->compiler).set_opencl_options(options->opencl);
 		break;
 #endif
 

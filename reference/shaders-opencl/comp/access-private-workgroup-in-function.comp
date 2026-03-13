@@ -1,19 +1,21 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
 
+#define f (*f_ptr)
 void set_f(int* f_ptr)
 {
-    #define f (*f_ptr)
     f = 40;
-    #undef f
 }
 
+#undef f
+
+#define u (*u_ptr)
 void set_shared_u(__local int* u_ptr)
 {
-    #define u (*u_ptr)
     u = 50;
-    #undef u
 }
+
+#undef u
 
 __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main()
