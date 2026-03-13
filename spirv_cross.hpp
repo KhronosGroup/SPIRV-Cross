@@ -957,6 +957,7 @@ protected:
 	uint32_t clip_distance_count = 0;
 	uint32_t cull_distance_count = 0;
 	bool position_invariant = false;
+	int position_input_count = 0;
 
 	void analyze_parameter_preservation(
 	    SPIRFunction &entry, const CFG &cfg,
