@@ -477,6 +477,19 @@ void CompilerOpenCL::emit_resources()
 		statement("");
 	}
 
+	// Polyfill for bitfieldReverse (32-bit scalar only — vectors call per-component).
+	if (needs_bitreverse_polyfill)
+	{
+		statement("uint spvBitReverse(uint v) {");
+		statement("    v = ((v >> 1u) & 0x55555555u) | ((v & 0x55555555u) << 1u);");
+		statement("    v = ((v >> 2u) & 0x33333333u) | ((v & 0x33333333u) << 2u);");
+		statement("    v = ((v >> 4u) & 0x0F0F0F0Fu) | ((v & 0x0F0F0F0Fu) << 4u);");
+		statement("    v = ((v >> 8u) & 0x00FF00FFu) | ((v & 0x00FF00FFu) << 8u);");
+		statement("    return (v >> 16u) | (v << 16u);");
+		statement("}");
+		statement("");
+	}
+
 	// Default sampler for combined image+sampler usage (OpenCL C requires file-scope const sampler_t).
 	if (needs_default_sampler)
 	{
@@ -854,6 +867,9 @@ string CompilerOpenCL::get_type_address_space(const SPIRType &type, uint32_t id,
 	case StorageClassWorkgroup:
 		addr_space = "__local";
 		break;
+	case StorageClassPhysicalStorageBuffer:
+		addr_space = "__global";
+		break;
 	case StorageClassInput:
 		// Input builtins materialized as __private local variables.
 		addr_space = "__private";
@@ -1209,6 +1225,132 @@ void CompilerOpenCL::emit_glsl_op(uint32_t result_type, uint32_t result_id, uint
 		emit_unary_func_op(result_type, result_id, args[0], "spvUnpackHalf2x16");
 		break;
 
+	case GLSLstd450SAbs:
+	{
+		// OpenCL abs() on integer types returns unsigned. Need bitcast back to signed if result is signed.
+		auto &out_type = get<SPIRType>(result_type);
+		auto &expr_type = expression_type(args[0]);
+
+		// Cast input to signed if needed.
+		string input_expr;
+		auto expected_basetype = to_signed_basetype(expr_type.width);
+		if (expr_type.basetype != expected_basetype)
+			input_expr = bitcast_expression(expected_basetype, args[0]);
+		else
+			input_expr = to_expression(args[0]);
+
+		string expr = join("abs(", input_expr, ")");
+
+		// abs() returns unsigned in OpenCL. Cast to result type if it's signed.
+		auto unsigned_basetype = to_unsigned_basetype(expr_type.width);
+		if (out_type.basetype != unsigned_basetype)
+		{
+			// Build the unsigned return type to bitcast from.
+			SPIRType abs_ret_type = out_type;
+			abs_ret_type.basetype = unsigned_basetype;
+			expr = join(bitcast_glsl_op(out_type, abs_ret_type), "(", expr, ")");
+		}
+
+		emit_op(result_type, result_id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(result_id, args[0]);
+		break;
+	}
+
+	case GLSLstd450SSign:
+	{
+		// OpenCL has no integer sign(). Use clamp(x, -1, 1).
+		auto &expr_type = expression_type(args[0]);
+		auto &out_type = get<SPIRType>(result_type);
+
+		auto expected_basetype = to_signed_basetype(expr_type.width);
+		string input_expr;
+		if (expr_type.basetype != expected_basetype)
+			input_expr = bitcast_expression(expected_basetype, args[0]);
+		else
+			input_expr = to_expression(args[0]);
+
+		string expr = join("clamp(", input_expr, ", -1, 1)");
+
+		// Cast to result type if needed (e.g. result is unsigned).
+		if (out_type.basetype != expected_basetype)
+		{
+			SPIRType signed_type = out_type;
+			signed_type.basetype = expected_basetype;
+			expr = join(bitcast_glsl_op(out_type, signed_type), "(", expr, ")");
+		}
+
+		emit_op(result_type, result_id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(result_id, args[0]);
+		break;
+	}
+
+	case GLSLstd450FindSMsb:
+	{
+		// GLSL findMSB for signed: position of highest bit that differs from sign bit.
+		// OpenCL: (W-1) - clz(x ^ (x >> (W-1)))
+		// x >> (W-1) is arithmetic shift: 0 for positive, -1 for negative.
+		// x ^ -1 = ~x, x ^ 0 = x. So this gives clz(x) for positive, clz(~x) for negative.
+		auto &expr_type = expression_type(args[0]);
+		auto &out_type = get<SPIRType>(result_type);
+		uint32_t width = expr_type.width;
+
+		// Input must be signed for arithmetic right shift.
+		auto signed_basetype = to_signed_basetype(width);
+		SPIRType signed_type = expr_type;
+		signed_type.basetype = signed_basetype;
+
+		string input_expr;
+		if (expr_type.basetype != signed_basetype)
+			input_expr = bitcast_expression(signed_basetype, args[0]);
+		else
+			input_expr = to_enclosed_expression(args[0]);
+
+		string xor_expr = join(input_expr, " ^ (", input_expr, " >> ", width - 1, ")");
+		string expr = join(width - 1, " - clz(", xor_expr, ")");
+
+		// clz on signed type returns signed, so result is signed. Cast if output is unsigned.
+		if (out_type.basetype != signed_basetype)
+			expr = join(bitcast_glsl_op(out_type, signed_type), "(", expr, ")");
+
+		emit_op(result_type, result_id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(result_id, args[0]);
+		break;
+	}
+
+	case GLSLstd450FindUMsb:
+	{
+		// GLSL findMSB for unsigned: position of highest set bit, -1 for 0.
+		// OpenCL: (W-1) - clz(x). clz(0) = W, so result = -1 for 0.
+		auto &expr_type = expression_type(args[0]);
+		auto &out_type = get<SPIRType>(result_type);
+		uint32_t width = expr_type.width;
+
+		auto unsigned_basetype = to_unsigned_basetype(width);
+		string input_expr;
+		if (expr_type.basetype != unsigned_basetype)
+			input_expr = bitcast_expression(unsigned_basetype, args[0]);
+		else
+			input_expr = to_expression(args[0]);
+
+		// Cast to signed for the subtraction so result can be -1.
+		auto signed_basetype = to_signed_basetype(width);
+		SPIRType signed_type = out_type;
+		signed_type.basetype = signed_basetype;
+		string clz_expr = join("as_", type_to_glsl(signed_type), "(clz(", input_expr, "))");
+
+		string expr = join(width - 1, " - ", clz_expr);
+
+		// findMSB returns int (signed). Cast if output type differs.
+		if (out_type.basetype != signed_basetype)
+		{
+			expr = join(bitcast_glsl_op(out_type, signed_type), "(", expr, ")");
+		}
+
+		emit_op(result_type, result_id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(result_id, args[0]);
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, result_id, op, args, count);
 		break;
@@ -1222,6 +1364,13 @@ std::string CompilerOpenCL::bitcast_glsl_op(const SPIRType &out_type, const SPIR
 	// Same basetype: no-op
 	if (out_type.basetype == in_type.basetype)
 		return "";
+
+	// Pointer types are handled by emit_instruction for OpBitcast.
+	// If we get here as a fallback, use a simple C-style cast.
+	if (is_pointer(out_type))
+		return join("(", type_to_glsl(out_type), ")");
+	if (is_pointer(in_type))
+		return "as_ulong";
 
 	// All bitcasts (float↔int, int↔uint, half↔short, etc.) use as_TYPE() in OpenCL C.
 	// type_to_glsl gives us the full type name including vector size (e.g. "float4", "uint").
@@ -1656,7 +1805,16 @@ void CompilerOpenCL::emit_struct_member(const SPIRType &type, uint32_t member_ty
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 	// OpenCL C does not use GLSL layout qualifiers or interpolation qualifiers.
-	statement(qualifier, variable_decl(membertype, to_member_name(type, index)), ";");
+	// PhysicalStorageBuffer pointers in structs must be emitted as ulong since
+	// OpenCL C does not allow pointer types in kernel parameter structs.
+	if (is_pointer(membertype) && membertype.storage == StorageClassPhysicalStorageBuffer)
+	{
+		statement(qualifier, "ulong ", to_member_name(type, index), ";");
+	}
+	else
+	{
+		statement(qualifier, variable_decl(membertype, to_member_name(type, index)), ";");
+	}
 }
 
 void CompilerOpenCL::emit_block_hints(const SPIRBlock &)
@@ -1947,6 +2105,26 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(result_id, ptr);
 			break;
 		}
+		// When loading a PhysicalStorageBuffer pointer from a struct member that was
+		// emitted as ulong (because OpenCL doesn't allow pointer types in kernel struct params),
+		// cast the loaded ulong value to the typed pointer.
+		{
+			auto &result_type_obj = get<SPIRType>(ops[0]);
+			if (is_pointer(result_type_obj) && result_type_obj.storage == StorageClassPhysicalStorageBuffer)
+			{
+				auto *expr = maybe_get<SPIRExpression>(ptr);
+				if (expr && expr->access_chain)
+				{
+					uint32_t result_type = ops[0];
+					uint32_t result_id = ops[1];
+					auto ptr_type_str = type_to_glsl(result_type_obj);
+					emit_op(result_type, result_id, join("((", ptr_type_str, ")(", to_expression(ptr), "))"),
+					        should_forward(ptr));
+					inherit_expression_dependencies(result_id, ptr);
+					break;
+				}
+			}
+		}
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
@@ -2210,6 +2388,269 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		flush_all_atomic_capable_variables();
 		break;
 	}
+	case OpBitCount:
+	{
+		// GLSL bitCount → OpenCL popcount.
+		// popcount returns the same type as its input in OpenCL (unlike GLSL which returns int).
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t arg = ops[2];
+		auto &in_type = expression_type(arg);
+		auto &out_type = get<SPIRType>(result_type);
+
+		string expr = join("popcount(", to_expression(arg), ")");
+
+		// Cast result if types differ (e.g. popcount(int4) → uint4 needs as_uint4).
+		if (out_type.basetype != in_type.basetype)
+		{
+			expr = join(bitcast_glsl_op(out_type, in_type), "(", expr, ")");
+		}
+
+		emit_op(result_type, result_id, expr, should_forward(arg));
+		inherit_expression_dependencies(result_id, arg);
+		break;
+	}
+
+	case OpBitReverse:
+	{
+		// GLSL bitfieldReverse → no OpenCL builtin.
+		// Use scalar polyfill, call per-component for vectors.
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t arg = ops[2];
+		auto &type = get<SPIRType>(result_type);
+
+		if (!needs_bitreverse_polyfill)
+		{
+			needs_bitreverse_polyfill = true;
+			force_recompile();
+		}
+
+		auto unsigned_basetype = to_unsigned_basetype(type.width);
+		string input_expr = bitcast_expression(unsigned_basetype, arg);
+
+		string expr;
+		if (type.vecsize > 1)
+		{
+			// Call scalar polyfill per component.
+			SPIRType uint_type = type;
+			uint_type.basetype = unsigned_basetype;
+			expr = join("(", type_to_glsl(uint_type), ")(");
+			for (uint32_t i = 0; i < type.vecsize; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				expr += join("spvBitReverse(", input_expr, ".s", i, ")");
+			}
+			expr += ")";
+		}
+		else
+			expr = join("spvBitReverse(", input_expr, ")");
+
+		// Cast back to signed if needed.
+		if (type.basetype != unsigned_basetype)
+		{
+			SPIRType uint_type = type;
+			uint_type.basetype = unsigned_basetype;
+			expr = join(bitcast_glsl_op(type, uint_type), "(", expr, ")");
+		}
+
+		emit_op(result_type, result_id, expr, should_forward(arg));
+		inherit_expression_dependencies(result_id, arg);
+		break;
+	}
+
+	case OpBitFieldSExtract:
+	case OpBitFieldUExtract:
+	{
+		// GLSL bitfieldExtract(value, offset, bits) → OpenCL: manual extraction.
+		// Unsigned: (value >> offset) & ((1u << bits) - 1u)
+		// Signed:   (int)((value >> offset) << (W - bits)) >> (W - bits)  [arithmetic shift for sign-extend]
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t value = ops[2];
+		uint32_t offset_id = ops[3];
+		uint32_t bits_id = ops[4];
+		auto &type = get<SPIRType>(result_type);
+		uint32_t width = type.width;
+
+		bool is_signed_extract = (opcode == OpBitFieldSExtract);
+
+		if (is_signed_extract)
+		{
+			auto signed_basetype = to_signed_basetype(width);
+			string val_expr = bitcast_expression(signed_basetype, value);
+			// Sign-extending extract: shift left to put field at MSB, then arithmetic shift right.
+			// result = (val << (W - bits - offset)) >> (W - bits)
+			// Simplified: extract bits, then sign-extend.
+			string expr = join("(", val_expr, " << (", width, " - ", to_expression(bits_id), " - ",
+			                   to_expression(offset_id), ")) >> (", width, " - ", to_expression(bits_id), ")");
+
+			if (type.basetype != signed_basetype)
+			{
+				SPIRType signed_type = type;
+				signed_type.basetype = signed_basetype;
+				expr = join(bitcast_glsl_op(type, signed_type), "(", expr, ")");
+			}
+
+			emit_op(result_type, result_id, expr, should_forward(value));
+		}
+		else
+		{
+			auto unsigned_basetype = to_unsigned_basetype(width);
+			string val_expr = bitcast_expression(unsigned_basetype, value);
+			SPIRType uint_type = type;
+			uint_type.basetype = unsigned_basetype;
+			auto utype = type_to_glsl(uint_type);
+			string expr = join("(", val_expr, " >> ", to_expression(offset_id), ") & ((", utype, ")(1u << ",
+			                   to_expression(bits_id), ") - (", utype, ")1u)");
+
+			if (type.basetype != unsigned_basetype)
+				expr = join(bitcast_glsl_op(type, uint_type), "(", expr, ")");
+
+			emit_op(result_type, result_id, expr, should_forward(value));
+		}
+		inherit_expression_dependencies(result_id, value);
+		inherit_expression_dependencies(result_id, offset_id);
+		inherit_expression_dependencies(result_id, bits_id);
+		break;
+	}
+
+	case OpBitFieldInsert:
+	{
+		// GLSL bitfieldInsert(base, insert, offset, bits) → OpenCL: manual insertion.
+		// mask = ((1u << bits) - 1u) << offset
+		// result = (base & ~mask) | ((insert << offset) & mask)
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t base_id = ops[2];
+		uint32_t insert_id = ops[3];
+		uint32_t offset_id = ops[4];
+		uint32_t bits_id = ops[5];
+		auto &type = get<SPIRType>(result_type);
+
+		auto unsigned_basetype = to_unsigned_basetype(type.width);
+		string base_expr = bitcast_expression(unsigned_basetype, base_id);
+		string insert_expr = bitcast_expression(unsigned_basetype, insert_id);
+
+		SPIRType uint_type = type;
+		uint_type.basetype = unsigned_basetype;
+		auto utype = type_to_glsl(uint_type);
+
+		string mask =
+		    join("((", utype, ")(1u << ", to_expression(bits_id), ") - (", utype, ")1u) << ", to_expression(offset_id));
+		string expr = join("(", base_expr, " & ~(", mask, ")) | ((", insert_expr, " << ", to_expression(offset_id),
+		                   ") & (", mask, "))");
+
+		if (type.basetype != unsigned_basetype)
+			expr = join(bitcast_glsl_op(type, uint_type), "(", expr, ")");
+
+		emit_op(result_type, result_id, expr, should_forward(base_id) && should_forward(insert_id));
+		inherit_expression_dependencies(result_id, base_id);
+		inherit_expression_dependencies(result_id, insert_id);
+		inherit_expression_dependencies(result_id, offset_id);
+		inherit_expression_dependencies(result_id, bits_id);
+		break;
+	}
+
+	case OpBitcast:
+	{
+		auto &out_type = get<SPIRType>(ops[0]);
+		auto &in_type = expression_type(ops[2]);
+
+		// Bitcast involving pointer types needs special handling in OpenCL C.
+		if (is_pointer(out_type) || is_pointer(in_type))
+		{
+			uint32_t result_type = ops[0];
+			uint32_t result_id = ops[1];
+			uint32_t arg = ops[2];
+
+			string expr;
+			if (is_pointer(out_type) && !is_pointer(in_type))
+			{
+				// Non-pointer → pointer: cast via ulong if input is a vector (e.g. uvec2).
+				auto ptr_type_str = type_to_glsl(out_type);
+				if (in_type.vecsize > 1)
+					expr = join("((", ptr_type_str, ")as_ulong(", to_expression(arg), "))");
+				else
+					expr = join("((", ptr_type_str, ")(", to_expression(arg), "))");
+			}
+			else if (!is_pointer(out_type) && is_pointer(in_type))
+			{
+				// Pointer → non-pointer: cast to ulong, then to target type.
+				if (out_type.vecsize > 1)
+					expr = join("as_", type_to_glsl(out_type), "((ulong)(", to_expression(arg), "))");
+				else
+					expr = join("(", type_to_glsl(out_type), ")((ulong)(", to_expression(arg), "))");
+			}
+			else
+			{
+				// Pointer → pointer: direct C-style cast.
+				expr = join("((", type_to_glsl(out_type), ")(", to_expression(arg), "))");
+			}
+
+			emit_op(result_type, result_id, std::move(expr), should_forward(arg));
+			inherit_expression_dependencies(result_id, arg);
+			break;
+		}
+
+		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
+
+	case OpPtrAccessChain:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t base_id = ops[2];
+
+		auto &base_type = expression_type(base_id);
+		TypeID base_type_id = expression_type_id(base_id);
+
+		// Check if custom stride pointer arithmetic is needed.
+		if (has_decoration(base_type_id, DecorationArrayStride))
+		{
+			TypeID pointee_type_id = get_pointee_type_id(base_type_id);
+			uint32_t physical_stride = get_physical_type_id_stride(pointee_type_id);
+			uint32_t requested_stride = get_decoration(base_type_id, DecorationArrayStride);
+
+			if (physical_stride != requested_stride)
+			{
+				// Custom stride: use pointer arithmetic via ulong cast.
+				// *((__global T*)((ulong)ptr + index * stride))
+				uint32_t index_id = ops[3];
+				auto &pointee_type = get<SPIRType>(pointee_type_id);
+				auto &ptr_type = get<SPIRType>(base_type_id);
+				auto addr_space = get_type_address_space(ptr_type, 0);
+
+				string base_expr = to_enclosed_expression(base_id);
+				string intptr_expr =
+				    join("(ulong)(", base_expr, ") + ", to_enclosed_expression(index_id), " * ", requested_stride);
+				string ptr_cast = join("(", addr_space, " ", type_to_glsl(pointee_type), "*)(", intptr_expr, ")");
+				string expr = join("*(", ptr_cast, ")");
+
+				auto &e = set<SPIRExpression>(result_id, std::move(expr), result_type, should_forward(base_id));
+				auto *backing_var = maybe_get_backing_variable(base_id);
+				e.loaded_from = backing_var ? backing_var->self : ID(base_id);
+				e.access_chain = true;
+				forwarded_temporaries.insert(result_id);
+				suppressed_usage_tracking.insert(result_id);
+				inherit_expression_dependencies(result_id, base_id);
+				inherit_expression_dependencies(result_id, index_id);
+
+				// Mark as packed if the vector stride differs from natural alignment.
+				if (is_vector(pointee_type) && requested_stride != physical_stride)
+					set_extended_decoration(result_id, SPIRVCrossDecorationPhysicalTypePacked);
+
+				break;
+			}
+		}
+
+		// No custom stride — fall through to base class.
+		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	{
@@ -2260,6 +2701,16 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				}
 				handled = true;
 			}
+			else if (length == 5 && !is_single_member && struct_type && !struct_type->array.empty())
+			{
+				// Array of multi-member SSBOs: ptr[array_idx].member_name
+				// ops[3] = array index (dynamic), ops[4] = member index (constant)
+				uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
+				auto mbr_name = to_member_name(*struct_type, mbr_idx);
+				expr = join(to_name(base_id), "[", to_expression(ops[3]), "].", mbr_name);
+				is_subscript_deref = true;
+				handled = true;
+			}
 			else if (length == 5 && !is_single_member && struct_type)
 			{
 				// Multi-member SSBO: ptr->member_name[element_idx]
@@ -2274,6 +2725,13 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 			{
 				// Single-member SSBO flattened to T*: accessing the one member gives element 0.
 				expr = join(to_name(base_id), "[0]");
+				is_subscript_deref = true;
+				handled = true;
+			}
+			else if (length == 4 && !is_single_member && struct_type && !struct_type->array.empty())
+			{
+				// Array of multi-member SSBOs: ptr[array_idx] (result is struct)
+				expr = join(to_name(base_id), "[", to_expression(ops[3]), "]");
 				is_subscript_deref = true;
 				handled = true;
 			}
@@ -2714,6 +3172,136 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		        forward);
 		inherit_expression_dependencies(result_id, op0);
 		inherit_expression_dependencies(result_id, op1);
+		break;
+	}
+
+	case OpSDot:
+	case OpUDot:
+	case OpSUDot:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t vec1 = ops[2];
+		uint32_t vec2 = ops[3];
+
+		auto &input_type1 = expression_type(vec1);
+		auto &input_type2 = expression_type(vec2);
+		auto &type = get<SPIRType>(result_type);
+
+		string vec1input, vec2input;
+		uint32_t input_size = input_type1.vecsize;
+
+		if (instruction.length == 5)
+		{
+			if (ops[4] == PackedVectorFormatPackedVectorFormat4x8Bit)
+			{
+				string type1 = opcode == OpSDot || opcode == OpSUDot ? "char4" : "uchar4";
+				vec1input = join("as_", type1, "(", to_expression(vec1), ")");
+				string type2 = opcode == OpSDot ? "char4" : "uchar4";
+				vec2input = join("as_", type2, "(", to_expression(vec2), ")");
+				input_size = 4;
+			}
+			else
+				SPIRV_CROSS_THROW("Packed vector formats other than 4x8Bit for integer dot product is not supported.");
+		}
+		else
+		{
+			SPIRType::BaseType vec1_expected_type =
+			    opcode != OpUDot ? to_signed_basetype(input_type1.width) : to_unsigned_basetype(input_type1.width);
+			SPIRType::BaseType vec2_expected_type =
+			    opcode != OpSDot ? to_unsigned_basetype(input_type2.width) : to_signed_basetype(input_type2.width);
+
+			vec1input = bitcast_expression(vec1_expected_type, vec1);
+			vec2input = bitcast_expression(vec2_expected_type, vec2);
+		}
+
+		// Emit inline sum of component-wise products:
+		// (result_type)(a.s0) * (result_type)(b.s0) + ... + (result_type)(a.sN) * (result_type)(b.sN)
+		auto result_type_str = type_to_glsl(type);
+		string exp;
+		for (uint32_t i = 0; i < input_size; i++)
+		{
+			if (i > 0)
+				exp += " + ";
+			string comp = input_size > 1 ? join(".s", i) : "";
+			exp +=
+			    join("(", result_type_str, ")(", vec1input, comp, ") * (", result_type_str, ")(", vec2input, comp, ")");
+		}
+
+		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
+		inherit_expression_dependencies(id, vec1);
+		inherit_expression_dependencies(id, vec2);
+		break;
+	}
+
+	case OpSDotAccSat:
+	case OpUDotAccSat:
+	case OpSUDotAccSat:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t vec1 = ops[2];
+		uint32_t vec2 = ops[3];
+		uint32_t acc = ops[4];
+
+		auto input_type1 = expression_type(vec1);
+		auto input_type2 = expression_type(vec2);
+		auto &type = get<SPIRType>(result_type);
+
+		string vec1input, vec2input;
+		uint32_t input_size = input_type1.vecsize;
+
+		if (instruction.length == 6)
+		{
+			if (ops[5] == PackedVectorFormatPackedVectorFormat4x8Bit)
+			{
+				string type1 = opcode == OpSDotAccSat || opcode == OpSUDotAccSat ? "char4" : "uchar4";
+				vec1input = join("as_", type1, "(", to_expression(vec1), ")");
+				string type2 = opcode == OpSDotAccSat ? "char4" : "uchar4";
+				vec2input = join("as_", type2, "(", to_expression(vec2), ")");
+				input_size = 4;
+			}
+			else
+				SPIRV_CROSS_THROW("Packed vector formats other than 4x8Bit for integer dot product is not supported.");
+		}
+		else
+		{
+			SPIRType::BaseType vec1_expected_type = opcode != OpUDotAccSat ? to_signed_basetype(input_type1.width) :
+			                                                                 to_unsigned_basetype(input_type1.width);
+			SPIRType::BaseType vec2_expected_type = opcode != OpSDotAccSat ? to_unsigned_basetype(input_type2.width) :
+			                                                                 to_signed_basetype(input_type2.width);
+
+			vec1input = bitcast_expression(vec1_expected_type, vec1);
+			vec2input = bitcast_expression(vec2_expected_type, vec2);
+		}
+
+		SPIRType::BaseType pre_saturate_type =
+		    opcode != OpUDotAccSat ? to_signed_basetype(type.width) : to_unsigned_basetype(type.width);
+
+		// Use the pre-saturate type for internal computation so add_sat arguments match.
+		SPIRType sat_type = type;
+		sat_type.basetype = pre_saturate_type;
+		auto sat_type_str = type_to_glsl(sat_type);
+		auto result_type_str = type_to_glsl(type);
+
+		// Build dot product expression: sum of component-wise products
+		string dot_exp;
+		for (uint32_t i = 0; i < input_size; i++)
+		{
+			if (i > 0)
+				dot_exp += " + ";
+			string comp = input_size > 1 ? join(".s", i) : "";
+			dot_exp +=
+			    join("(", sat_type_str, ")(", vec1input, comp, ") * (", sat_type_str, ")(", vec2input, comp, ")");
+		}
+
+		// Wrap with add_sat and cast to result type
+		string exp =
+		    join("(", result_type_str, ")add_sat(", dot_exp, ", ", bitcast_expression(pre_saturate_type, acc), ")");
+
+		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
+		inherit_expression_dependencies(id, vec1);
+		inherit_expression_dependencies(id, vec2);
 		break;
 	}
 

@@ -147,6 +147,8 @@ protected:
 	// Set when packHalf2x16/unpackHalf2x16 polyfill helpers are needed.
 	bool needs_half_pack_polyfill = false;
 	bool needs_half_unpack_polyfill = false;
+	// Set when bitfieldReverse polyfill is needed.
+	bool needs_bitreverse_polyfill = false;
 	// Set when a default sampler is needed for combined image+sampler usage.
 	bool needs_default_sampler = false;
 
