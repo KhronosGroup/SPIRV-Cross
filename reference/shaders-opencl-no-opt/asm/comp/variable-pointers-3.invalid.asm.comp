@@ -7,6 +7,6 @@ __kernel void comp_main()
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
     __local float2 test[64];
     float _21 = convert_float(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x);
-    (true ? &((&test)[0u])[2u].x : &((&test)[0u])[2u].x)[1u] = _21;
+    (true ? &((__local float*)&((&test)[0u])[2u])[0u] : &((__local float*)&((&test)[0u])[2u])[0u])[1u] = _21;
 }
 

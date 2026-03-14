@@ -2574,6 +2574,43 @@ std::string CompilerOpenCL::to_atomic_ptr_expression(uint32_t id)
 	return to_expression(id);
 }
 
+bool CompilerOpenCL::prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
+                                                            StorageClass storage, bool &is_packed)
+{
+	// In OpenCL C, you cannot take the address of a vector component (e.g. &vec.x is invalid).
+	// Cast the vector expression to a scalar pointer so that element access uses array indexing.
+	if (storage == StorageClassStorageBuffer || storage == StorageClassWorkgroup)
+	{
+		const char *addr_space = storage == StorageClassWorkgroup ? "__local" : "__global";
+		expr = join("((", addr_space, " ", type_to_glsl(type), "*)&", enclose_expression(expr), ")");
+		is_packed = true;
+		return true;
+	}
+	else
+		return false;
+}
+
+void CompilerOpenCL::emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                        const char *op)
+{
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id, join(to_ptr_expression(op0), " ", op, " ", to_ptr_expression(op1)), forward);
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+string CompilerOpenCL::to_ptr_expression(uint32_t id, bool register_expression_read)
+{
+	auto *e = maybe_get<SPIRExpression>(id);
+	// If need_transpose is set, bypass the transpose wrapper and use the raw expression,
+	// since we're taking the address and comparing pointers, not values.
+	auto expr =
+	    enclose_expression(e && e->need_transpose ? e->expression : to_expression(id, register_expression_read));
+	if (!should_dereference(id))
+		expr = address_of_expression(expr);
+	return expr;
+}
+
 // Task #3: In OpenCL C, pointer-to-struct member access uses -> instead of .
 // ptr_chain_is_resolved == false means this is the first member access from the base.
 bool CompilerOpenCL::should_dereference(uint32_t id)
@@ -4843,27 +4880,16 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpPtrEqual:
-	case OpPtrNotEqual:
-	case OpPtrDiff:
-	{
-		uint32_t result_type = ops[0];
-		uint32_t result_id = ops[1];
-		uint32_t op0 = ops[2];
-		uint32_t op1 = ops[3];
-		const char *op = "";
-		if (opcode == OpPtrEqual)
-			op = "==";
-		else if (opcode == OpPtrNotEqual)
-			op = "!=";
-		else if (opcode == OpPtrDiff)
-			op = "-";
-		bool forward = should_forward(op0) && should_forward(op1);
-		emit_op(result_type, result_id, join(to_pointer_expression(op0), " ", op, " ", to_pointer_expression(op1)),
-		        forward);
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
+		emit_binary_ptr_op(ops[0], ops[1], ops[2], ops[3], "==");
 		break;
-	}
+
+	case OpPtrNotEqual:
+		emit_binary_ptr_op(ops[0], ops[1], ops[2], ops[3], "!=");
+		break;
+
+	case OpPtrDiff:
+		emit_binary_ptr_op(ops[0], ops[1], ops[2], ops[3], "-");
+		break;
 
 	case OpSDot:
 	case OpUDot:
