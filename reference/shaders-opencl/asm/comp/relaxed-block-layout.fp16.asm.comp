@@ -1,5 +1,6 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
 struct foo
 {

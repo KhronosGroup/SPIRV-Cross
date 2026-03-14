@@ -112,6 +112,7 @@ string CompilerOpenCL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 	backend.supports_spec_constant_array_size = false;
+	backend.matrix_column_accessor = "columns";
 
 	fixup_anonymous_struct_names();
 	fixup_type_alias();
@@ -124,16 +125,31 @@ string CompilerOpenCL::compile()
 	set_enabled_interface_variables(get_active_interface_variables());
 	reorder_type_alias();
 
+	// Pre-scan: discover all matrix types used in the IR so that typedefs
+	// and helpers can be emitted in the first pass without forcing a recompile.
+	prepass_discover_matrix_types();
+
 	uint32_t pass_count = 0;
 	do
 	{
+		auto prev_matrix_types = used_matrix_types;
+		auto prev_helpers = need_mul_mat_vec.size() + need_mul_vec_mat.size() + need_mul_mat_mat.size() +
+		                    need_mul_mat_scalar.size() + need_transpose.size() + need_outer_product.size();
+
 		reset(pass_count);
 		buffer.reset();
 
 		emit_header();
+		emit_matrix_typedefs();
 		emit_specialization_constants_and_structs();
+		emit_matrix_helpers();
 		emit_resources();
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
+
+		auto new_helpers = need_mul_mat_vec.size() + need_mul_vec_mat.size() + need_mul_mat_mat.size() +
+		                   need_mul_mat_scalar.size() + need_transpose.size() + need_outer_product.size();
+		if (used_matrix_types != prev_matrix_types || new_helpers != prev_helpers)
+			force_recompile();
 
 		pass_count++;
 	} while (is_forcing_recompilation());
@@ -153,6 +169,8 @@ void CompilerOpenCL::emit_header()
 
 	if (opencl_options.opencl_version >= 200)
 		statement("#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable");
+	if (opencl_options.enable_fp16)
+		statement("#pragma OPENCL EXTENSION cl_khr_fp16 : enable");
 	if (opencl_options.enable_fp64)
 		statement("#pragma OPENCL EXTENSION cl_khr_fp64 : enable");
 	if (opencl_options.enable_64bit_atomics && opencl_options.opencl_version >= 200)
@@ -486,6 +504,227 @@ void CompilerOpenCL::emit_resources()
 		statement("    v = ((v >> 4u) & 0x0F0F0F0Fu) | ((v & 0x0F0F0F0Fu) << 4u);");
 		statement("    v = ((v >> 8u) & 0x00FF00FFu) | ((v & 0x00FF00FFu) << 8u);");
 		statement("    return (v >> 16u) | (v << 16u);");
+		statement("}");
+		statement("");
+	}
+
+	// FindLSB polyfill: GLSL findLSB returns the bit position of the lowest set bit, or -1 if 0.
+	// OpenCL 2.0+ has ctz() but OpenCL 1.2 does not. Use (x & -x) to isolate lowest bit,
+	// then 31 - clz() to get its position.
+	if (needs_findlsb_polyfill)
+	{
+		statement("static int spvFindLSB(uint x) {");
+		statement("    if (x == 0u) return -1;");
+		statement("    return 31 - as_int(clz(x & (0u - x)));");
+		statement("}");
+		statement("");
+	}
+
+	// Pack/Unpack Snorm/Unorm polyfills.
+	if (needs_pack_snorm_4x8)
+	{
+		statement("static uint spvPackSnorm4x8(float4 v) {");
+		statement("    char4 packed = convert_char4_sat_rte(v * 127.0f);");
+		statement("    return as_uint(packed);");
+		statement("}");
+		statement("");
+	}
+	if (needs_pack_unorm_4x8)
+	{
+		statement("static uint spvPackUnorm4x8(float4 v) {");
+		statement("    uchar4 packed = convert_uchar4_sat_rte(v * 255.0f);");
+		statement("    return as_uint(packed);");
+		statement("}");
+		statement("");
+	}
+	if (needs_pack_snorm_2x16)
+	{
+		statement("static uint spvPackSnorm2x16(float2 v) {");
+		statement("    short2 packed = convert_short2_sat_rte(v * 32767.0f);");
+		statement("    return as_uint(packed);");
+		statement("}");
+		statement("");
+	}
+	if (needs_pack_unorm_2x16)
+	{
+		statement("static uint spvPackUnorm2x16(float2 v) {");
+		statement("    ushort2 packed = convert_ushort2_sat_rte(v * 65535.0f);");
+		statement("    return as_uint(packed);");
+		statement("}");
+		statement("");
+	}
+	if (needs_unpack_snorm_4x8)
+	{
+		statement("static float4 spvUnpackSnorm4x8(uint v) {");
+		statement("    char4 packed = as_char4(v);");
+		statement("    return max(convert_float4(packed) / 127.0f, (float4)(-1.0f));");
+		statement("}");
+		statement("");
+	}
+	if (needs_unpack_unorm_4x8)
+	{
+		statement("static float4 spvUnpackUnorm4x8(uint v) {");
+		statement("    uchar4 packed = as_uchar4(v);");
+		statement("    return convert_float4(packed) / 255.0f;");
+		statement("}");
+		statement("");
+	}
+	if (needs_unpack_snorm_2x16)
+	{
+		statement("static float2 spvUnpackSnorm2x16(uint v) {");
+		statement("    short2 packed = as_short2(v);");
+		statement("    return max(convert_float2(packed) / 32767.0f, (float2)(-1.0f));");
+		statement("}");
+		statement("");
+	}
+	if (needs_unpack_unorm_2x16)
+	{
+		statement("static float2 spvUnpackUnorm2x16(uint v) {");
+		statement("    ushort2 packed = as_ushort2(v);");
+		statement("    return convert_float2(packed) / 65535.0f;");
+		statement("}");
+		statement("");
+	}
+
+	// Determinant polyfills using struct-wrapped matrix types (unique names per size for C).
+	if (needs_determinant_2)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 2, 2);
+		statement("static float spvDeterminant2(", mat, " m) {");
+		statement("    return m.columns[0].x * m.columns[1].y - m.columns[0].y * m.columns[1].x;");
+		statement("}");
+		statement("");
+	}
+	if (needs_determinant_3)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 3, 3);
+		statement("static float spvDeterminant3(", mat, " m) {");
+		statement("    return dot(m.columns[0], (float3)("
+		          "m.columns[1].y * m.columns[2].z - m.columns[1].z * m.columns[2].y, "
+		          "m.columns[1].z * m.columns[2].x - m.columns[1].x * m.columns[2].z, "
+		          "m.columns[1].x * m.columns[2].y - m.columns[1].y * m.columns[2].x));");
+		statement("}");
+		statement("");
+	}
+	if (needs_determinant_4)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 4, 4);
+		statement("static float spvDeterminant4(", mat, " m) {");
+		statement(
+		    "    return dot(m.columns[0], (float4)("
+		    "m.columns[2].y * m.columns[3].z * m.columns[1].w - m.columns[3].y * m.columns[2].z * m.columns[1].w + "
+		    "m.columns[3].y * m.columns[1].z * m.columns[2].w - m.columns[1].y * m.columns[3].z * m.columns[2].w - "
+		    "m.columns[2].y * m.columns[1].z * m.columns[3].w + m.columns[1].y * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[3].x * m.columns[2].z * m.columns[1].w - m.columns[2].x * m.columns[3].z * m.columns[1].w - "
+		    "m.columns[3].x * m.columns[1].z * m.columns[2].w + m.columns[1].x * m.columns[3].z * m.columns[2].w + "
+		    "m.columns[2].x * m.columns[1].z * m.columns[3].w - m.columns[1].x * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[2].x * m.columns[3].y * m.columns[1].w - m.columns[3].x * m.columns[2].y * m.columns[1].w + "
+		    "m.columns[3].x * m.columns[1].y * m.columns[2].w - m.columns[1].x * m.columns[3].y * m.columns[2].w - "
+		    "m.columns[2].x * m.columns[1].y * m.columns[3].w + m.columns[1].x * m.columns[2].y * m.columns[3].w, "
+		    "m.columns[3].x * m.columns[2].y * m.columns[1].z - m.columns[2].x * m.columns[3].y * m.columns[1].z - "
+		    "m.columns[3].x * m.columns[1].y * m.columns[2].z + m.columns[1].x * m.columns[3].y * m.columns[2].z + "
+		    "m.columns[2].x * m.columns[1].y * m.columns[3].z - m.columns[1].x * m.columns[2].y * m.columns[3].z));");
+		statement("}");
+		statement("");
+	}
+
+	// Matrix inverse polyfills.
+	if (needs_inverse_2)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 2, 2);
+		statement("static ", mat, " spvInverse2(", mat, " m) {");
+		statement("    float d = 1.0f / (m.columns[0].x * m.columns[1].y - m.columns[1].x * m.columns[0].y);");
+		statement("    return (", mat,
+		          "){ { (float2)(m.columns[1].y * d, -m.columns[0].y * d), (float2)(-m.columns[1].x * d, "
+		          "m.columns[0].x * d) } };");
+		statement("}");
+		statement("");
+	}
+	if (needs_inverse_3)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 3, 3);
+		statement("static ", mat, " spvInverse3(", mat, " m) {");
+		statement("    float3 t = (float3)("
+		          "m.columns[1].y * m.columns[2].z - m.columns[1].z * m.columns[2].y, "
+		          "m.columns[1].z * m.columns[2].x - m.columns[1].x * m.columns[2].z, "
+		          "m.columns[1].x * m.columns[2].y - m.columns[1].y * m.columns[2].x);");
+		statement("    float d = 1.0f / dot(m.columns[0], t);");
+		statement("    return (", mat,
+		          "){ { t * d, "
+		          "(float3)(m.columns[0].z * m.columns[2].y - m.columns[0].y * m.columns[2].z, "
+		          "m.columns[0].x * m.columns[2].z - m.columns[0].z * m.columns[2].x, "
+		          "m.columns[0].y * m.columns[2].x - m.columns[0].x * m.columns[2].y) * d, "
+		          "(float3)(m.columns[0].y * m.columns[1].z - m.columns[0].z * m.columns[1].y, "
+		          "m.columns[0].z * m.columns[1].x - m.columns[0].x * m.columns[1].z, "
+		          "m.columns[0].x * m.columns[1].y - m.columns[0].y * m.columns[1].x) * d } };");
+		statement("}");
+		statement("");
+	}
+	if (needs_inverse_4)
+	{
+		auto mat = opencl_matrix_type_name(SPIRType::Float, 4, 4);
+		statement("static ", mat, " spvInverse4(", mat, " m) {");
+		statement(
+		    "    float4 t = (float4)("
+		    "m.columns[2].y * m.columns[3].z * m.columns[1].w - m.columns[3].y * m.columns[2].z * m.columns[1].w + "
+		    "m.columns[3].y * m.columns[1].z * m.columns[2].w - m.columns[1].y * m.columns[3].z * m.columns[2].w - "
+		    "m.columns[2].y * m.columns[1].z * m.columns[3].w + m.columns[1].y * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[3].x * m.columns[2].z * m.columns[1].w - m.columns[2].x * m.columns[3].z * m.columns[1].w - "
+		    "m.columns[3].x * m.columns[1].z * m.columns[2].w + m.columns[1].x * m.columns[3].z * m.columns[2].w + "
+		    "m.columns[2].x * m.columns[1].z * m.columns[3].w - m.columns[1].x * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[2].x * m.columns[3].y * m.columns[1].w - m.columns[3].x * m.columns[2].y * m.columns[1].w + "
+		    "m.columns[3].x * m.columns[1].y * m.columns[2].w - m.columns[1].x * m.columns[3].y * m.columns[2].w - "
+		    "m.columns[2].x * m.columns[1].y * m.columns[3].w + m.columns[1].x * m.columns[2].y * m.columns[3].w, "
+		    "m.columns[3].x * m.columns[2].y * m.columns[1].z - m.columns[2].x * m.columns[3].y * m.columns[1].z - "
+		    "m.columns[3].x * m.columns[1].y * m.columns[2].z + m.columns[1].x * m.columns[3].y * m.columns[2].z + "
+		    "m.columns[2].x * m.columns[1].y * m.columns[3].z - m.columns[1].x * m.columns[2].y * m.columns[3].z);");
+		statement(
+		    "    ", mat, " r = (", mat,
+		    "){ { "
+		    "(float4)(t.x, "
+		    "m.columns[3].y * m.columns[2].z * m.columns[0].w - m.columns[2].y * m.columns[3].z * m.columns[0].w - "
+		    "m.columns[3].y * m.columns[0].z * m.columns[2].w + m.columns[0].y * m.columns[3].z * m.columns[2].w + "
+		    "m.columns[2].y * m.columns[0].z * m.columns[3].w - m.columns[0].y * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[1].y * m.columns[3].z * m.columns[0].w - m.columns[3].y * m.columns[1].z * m.columns[0].w + "
+		    "m.columns[3].y * m.columns[0].z * m.columns[1].w - m.columns[0].y * m.columns[3].z * m.columns[1].w - "
+		    "m.columns[1].y * m.columns[0].z * m.columns[3].w + m.columns[0].y * m.columns[1].z * m.columns[3].w, "
+		    "m.columns[2].y * m.columns[1].z * m.columns[0].w - m.columns[1].y * m.columns[2].z * m.columns[0].w - "
+		    "m.columns[2].y * m.columns[0].z * m.columns[1].w + m.columns[0].y * m.columns[2].z * m.columns[1].w + "
+		    "m.columns[1].y * m.columns[0].z * m.columns[2].w - m.columns[0].y * m.columns[1].z * m.columns[2].w), "
+		    "(float4)(t.y, "
+		    "m.columns[2].x * m.columns[3].z * m.columns[0].w - m.columns[3].x * m.columns[2].z * m.columns[0].w + "
+		    "m.columns[3].x * m.columns[0].z * m.columns[2].w - m.columns[0].x * m.columns[3].z * m.columns[2].w - "
+		    "m.columns[2].x * m.columns[0].z * m.columns[3].w + m.columns[0].x * m.columns[2].z * m.columns[3].w, "
+		    "m.columns[3].x * m.columns[1].z * m.columns[0].w - m.columns[1].x * m.columns[3].z * m.columns[0].w - "
+		    "m.columns[3].x * m.columns[0].z * m.columns[1].w + m.columns[0].x * m.columns[3].z * m.columns[1].w + "
+		    "m.columns[1].x * m.columns[0].z * m.columns[3].w - m.columns[0].x * m.columns[1].z * m.columns[3].w, "
+		    "m.columns[1].x * m.columns[2].z * m.columns[0].w - m.columns[2].x * m.columns[1].z * m.columns[0].w + "
+		    "m.columns[2].x * m.columns[0].z * m.columns[1].w - m.columns[0].x * m.columns[2].z * m.columns[1].w - "
+		    "m.columns[1].x * m.columns[0].z * m.columns[2].w + m.columns[0].x * m.columns[1].z * m.columns[2].w), "
+		    "(float4)(t.z, "
+		    "m.columns[3].x * m.columns[2].y * m.columns[0].w - m.columns[2].x * m.columns[3].y * m.columns[0].w - "
+		    "m.columns[3].x * m.columns[0].y * m.columns[2].w + m.columns[0].x * m.columns[3].y * m.columns[2].w + "
+		    "m.columns[2].x * m.columns[0].y * m.columns[3].w - m.columns[0].x * m.columns[2].y * m.columns[3].w, "
+		    "m.columns[1].x * m.columns[3].y * m.columns[0].w - m.columns[3].x * m.columns[1].y * m.columns[0].w + "
+		    "m.columns[3].x * m.columns[0].y * m.columns[1].w - m.columns[0].x * m.columns[3].y * m.columns[1].w - "
+		    "m.columns[1].x * m.columns[0].y * m.columns[3].w + m.columns[0].x * m.columns[1].y * m.columns[3].w, "
+		    "m.columns[2].x * m.columns[1].y * m.columns[0].w - m.columns[1].x * m.columns[2].y * m.columns[0].w - "
+		    "m.columns[2].x * m.columns[0].y * m.columns[1].w + m.columns[0].x * m.columns[2].y * m.columns[1].w + "
+		    "m.columns[1].x * m.columns[0].y * m.columns[2].w - m.columns[0].x * m.columns[1].y * m.columns[2].w), "
+		    "(float4)(t.w, "
+		    "m.columns[2].x * m.columns[3].y * m.columns[0].z - m.columns[3].x * m.columns[2].y * m.columns[0].z + "
+		    "m.columns[3].x * m.columns[0].y * m.columns[2].z - m.columns[0].x * m.columns[3].y * m.columns[2].z - "
+		    "m.columns[2].x * m.columns[0].y * m.columns[3].z + m.columns[0].x * m.columns[2].y * m.columns[3].z, "
+		    "m.columns[3].x * m.columns[1].y * m.columns[0].z - m.columns[1].x * m.columns[3].y * m.columns[0].z - "
+		    "m.columns[3].x * m.columns[0].y * m.columns[1].z + m.columns[0].x * m.columns[3].y * m.columns[1].z + "
+		    "m.columns[1].x * m.columns[0].y * m.columns[3].z - m.columns[0].x * m.columns[1].y * m.columns[3].z, "
+		    "m.columns[1].x * m.columns[2].y * m.columns[0].z - m.columns[2].x * m.columns[1].y * m.columns[0].z + "
+		    "m.columns[2].x * m.columns[0].y * m.columns[1].z - m.columns[0].x * m.columns[2].y * m.columns[1].z - "
+		    "m.columns[1].x * m.columns[0].y * m.columns[2].z + m.columns[0].x * m.columns[1].y * m.columns[2].z) } "
+		    "};");
+		statement("    float d = 1.0f / dot(m.columns[0], t);");
+		statement("    r.columns[0] *= d; r.columns[1] *= d; r.columns[2] *= d; r.columns[3] *= d;");
+		statement("    return r;");
 		statement("}");
 		statement("");
 	}
@@ -1008,6 +1247,8 @@ string CompilerOpenCL::type_to_glsl(const SPIRType &type, uint32_t id, bool memb
 		type_name = "ulong";
 		break;
 	case SPIRType::Half:
+		if (!opencl_options.enable_fp16)
+			SPIRV_CROSS_THROW("Half requires cl_khr_fp16.");
 		type_name = "half";
 		break;
 	case SPIRType::Float:
@@ -1023,6 +1264,13 @@ string CompilerOpenCL::type_to_glsl(const SPIRType &type, uint32_t id, bool memb
 		return "unknown_type";
 	}
 
+	// Matrix? (columns > 1)
+	if (type.columns > 1)
+	{
+		used_matrix_types.insert(make_matrix_key(type));
+		return opencl_matrix_type_name(type);
+	}
+
 	// Vector?
 	if (type.vecsize > 1)
 		type_name += to_string(type.vecsize);
@@ -1033,6 +1281,366 @@ string CompilerOpenCL::type_to_glsl(const SPIRType &type, uint32_t id, bool memb
 string CompilerOpenCL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	return type_to_glsl(type, id, false);
+}
+
+CompilerOpenCL::MatrixTypeKey CompilerOpenCL::make_matrix_key(const SPIRType &type)
+{
+	return { type.basetype, type.vecsize, type.columns };
+}
+
+string CompilerOpenCL::opencl_column_type_name(SPIRType::BaseType basetype, uint32_t vecsize)
+{
+	string name;
+	switch (basetype)
+	{
+	case SPIRType::Float:
+		name = "float";
+		break;
+	case SPIRType::Double:
+		name = "double";
+		break;
+	case SPIRType::Half:
+		name = "half";
+		break;
+	default:
+		name = "float";
+		break;
+	}
+	if (vecsize > 1)
+		name += to_string(vecsize);
+	return name;
+}
+
+string CompilerOpenCL::opencl_matrix_type_name(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	string prefix = "spv";
+	if (basetype == SPIRType::Double)
+		prefix += "D";
+	else if (basetype == SPIRType::Half)
+		prefix += "H";
+	prefix += "Mat";
+	if (columns == vecsize)
+		return prefix + to_string(columns);
+	return prefix + to_string(columns) + "x" + to_string(vecsize);
+}
+
+string CompilerOpenCL::opencl_matrix_type_name(const SPIRType &type)
+{
+	return opencl_matrix_type_name(type.basetype, type.vecsize, type.columns);
+}
+
+string CompilerOpenCL::opencl_matrix_short_name(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	// Returns e.g. "Mat4", "DMat4", "HMat4", "Mat4x3", "DMat4x3"
+	string prefix;
+	if (basetype == SPIRType::Double)
+		prefix = "D";
+	else if (basetype == SPIRType::Half)
+		prefix = "H";
+	prefix += "Mat";
+	if (columns == vecsize)
+		return prefix + to_string(columns);
+	return prefix + to_string(columns) + "x" + to_string(vecsize);
+}
+
+string CompilerOpenCL::opencl_vector_short_name(SPIRType::BaseType basetype, uint32_t vecsize)
+{
+	// Returns e.g. "Vec4", "DVec4", "HVec4", "Scalar" for vecsize 1
+	if (vecsize == 1)
+	{
+		if (basetype == SPIRType::Double)
+			return "DScalar";
+		if (basetype == SPIRType::Half)
+			return "HScalar";
+		return "Scalar";
+	}
+	string prefix;
+	if (basetype == SPIRType::Double)
+		prefix = "D";
+	else if (basetype == SPIRType::Half)
+		prefix = "H";
+	return prefix + "Vec" + to_string(vecsize);
+}
+
+void CompilerOpenCL::prepass_discover_matrix_types()
+{
+	used_matrix_types.clear();
+	need_mul_mat_vec.clear();
+	need_mul_vec_mat.clear();
+	need_mul_mat_mat.clear();
+	need_mul_mat_scalar.clear();
+	need_transpose.clear();
+	need_outer_product.clear();
+
+	// Scan all types for matrix members.
+	ir.for_each_typed_id<SPIRType>(
+	    [&](uint32_t, SPIRType &type)
+	    {
+		    if (type.columns > 1 && type.basetype != SPIRType::Struct)
+			    used_matrix_types.insert(make_matrix_key(type));
+		    for (auto &member_type_id : type.member_types)
+		    {
+			    auto &member_type = get<SPIRType>(member_type_id);
+			    if (member_type.columns > 1)
+				    used_matrix_types.insert(make_matrix_key(member_type));
+		    }
+	    });
+
+	// Scan all instructions for matrix operations to discover helpers needed.
+	// We can resolve the matrix type from the SPIR-V type of operands at pre-scan time.
+	auto get_id_type = [&](uint32_t id) -> const SPIRType &
+	{
+		// For value IDs, look up the type from variable, constant, or the instruction result.
+		auto *var = maybe_get<SPIRVariable>(id);
+		if (var)
+			return get_variable_data_type(*var);
+		auto *c = maybe_get<SPIRConstant>(id);
+		if (c)
+			return get<SPIRType>(c->constant_type);
+		// For instruction results, the type is stored in the expression or type_id.
+		if (ir.ids[id].get_type() == TypeExpression)
+			return get<SPIRType>(get<SPIRExpression>(id).expression_type);
+		// For types themselves
+		if (ir.ids[id].get_type() == TypeType)
+			return get<SPIRType>(id);
+		// Fallback: check if there's a result type mapping
+		return get<SPIRType>(id);
+	};
+
+	ir.for_each_typed_id<SPIRFunction>(
+	    [&](uint32_t, SPIRFunction &f)
+	    {
+		    for (auto &block_id : f.blocks)
+		    {
+			    auto &block = get<SPIRBlock>(block_id);
+			    for (auto &instruction : block.ops)
+			    {
+				    auto ops = stream(instruction);
+				    auto opcode = static_cast<Op>(instruction.op);
+
+				    // Helper lambda to resolve the type of a SPIR-V value ID from the instruction.
+				    // For OpMatrixTimesVector etc., ops[2] and ops[3] are value IDs whose types
+				    // may not be directly available at pre-scan time. Instead, we check the
+				    // instruction result type to infer what's needed.
+				    switch (opcode)
+				    {
+				    case OpMatrixTimesVector:
+				    {
+					    // ops[0] = result type (vector), ops[2] = matrix, ops[3] = vector
+					    // The matrix type is not directly available from ops[2] here.
+					    // We infer from the result: result is vec(vecsize), matrix has same vecsize.
+					    // But we need the column count too. Let's look up the variable type.
+					    // At pre-scan time, not all IDs have resolved types, so we'll rely on
+					    // the recompile mechanism for helpers that can't be pre-discovered.
+					    break;
+				    }
+				    case OpOuterProduct:
+				    {
+					    auto &res_type = get<SPIRType>(ops[0]);
+					    if (res_type.columns > 1)
+					    {
+						    used_matrix_types.insert(make_matrix_key(res_type));
+						    auto col_short = opencl_vector_short_name(res_type.basetype, res_type.vecsize);
+						    auto row_short = opencl_vector_short_name(res_type.basetype, res_type.columns);
+						    (void)col_short;
+						    (void)row_short;
+						    need_outer_product.insert(make_matrix_key(res_type));
+					    }
+					    break;
+				    }
+				    case OpTranspose:
+				    {
+					    auto &res_type = get<SPIRType>(ops[0]);
+					    if (res_type.columns > 1)
+					    {
+						    used_matrix_types.insert(make_matrix_key(res_type));
+						    // The input type has swapped dimensions.
+						    MatrixTypeKey input_key = { res_type.basetype, res_type.columns, res_type.vecsize };
+						    used_matrix_types.insert(input_key);
+						    need_transpose.insert(input_key);
+					    }
+					    break;
+				    }
+				    case OpMatrixTimesScalar:
+				    case OpMatrixTimesMatrix:
+				    case OpVectorTimesMatrix:
+					    // These will be discovered during emit_instruction and trigger recompile if needed.
+					    break;
+				    default:
+					    break;
+				    }
+			    }
+		    }
+	    });
+}
+
+void CompilerOpenCL::emit_matrix_typedefs()
+{
+	if (used_matrix_types.empty())
+		return;
+
+	for (auto &key : used_matrix_types)
+	{
+		auto col_type = opencl_column_type_name(key.basetype, key.vecsize);
+		auto mat_name = opencl_matrix_type_name(key.basetype, key.vecsize, key.columns);
+		statement("typedef struct { ", col_type, " columns[", key.columns, "]; } ", mat_name, ";");
+	}
+	statement("");
+}
+
+void CompilerOpenCL::emit_matrix_helpers()
+{
+	for (auto &key : need_mul_mat_vec)
+		emit_mul_mat_vec_helper(key.basetype, key.vecsize, key.columns);
+	for (auto &key : need_mul_vec_mat)
+		emit_mul_vec_mat_helper(key.basetype, key.vecsize, key.columns);
+	for (auto &key : need_mul_mat_mat)
+		emit_mul_mat_mat_helper(key.first, key.second);
+	for (auto &key : need_mul_mat_scalar)
+		emit_mul_mat_scalar_helper(key.basetype, key.vecsize, key.columns);
+	for (auto &key : need_transpose)
+		emit_transpose_helper(key.basetype, key.vecsize, key.columns);
+	for (auto &key : need_outer_product)
+		emit_outer_product_helper(key.basetype, key.vecsize, key.columns);
+}
+
+void CompilerOpenCL::emit_mul_mat_vec_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	auto mat_type = opencl_matrix_type_name(basetype, vecsize, columns);
+	auto vec_result = opencl_column_type_name(basetype, vecsize);
+	auto vec_arg = opencl_column_type_name(basetype, columns);
+	auto mat_short = opencl_matrix_short_name(basetype, vecsize, columns);
+	auto vec_short = opencl_vector_short_name(basetype, columns);
+	string func_name = "spvMul" + mat_short + vec_short;
+
+	statement("static ", vec_result, " ", func_name, "(", mat_type, " m, ", vec_arg, " v)");
+	begin_scope();
+	string expr = "return ";
+	const char *swizzles[] = { "x",  "y",  "z",  "w",  "s4", "s5", "s6", "s7",
+		                       "s8", "s9", "sa", "sb", "sc", "sd", "se", "sf" };
+	for (uint32_t i = 0; i < columns; i++)
+	{
+		if (i > 0)
+			expr += " + ";
+		expr += "m.columns[" + to_string(i) + "]";
+		if (columns > 1)
+			expr += string(" * v.") + swizzles[i];
+	}
+	expr += ";";
+	statement(expr);
+	end_scope();
+	statement("");
+}
+
+void CompilerOpenCL::emit_mul_vec_mat_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	auto mat_type = opencl_matrix_type_name(basetype, vecsize, columns);
+	auto in_vec = opencl_column_type_name(basetype, vecsize);
+	auto out_vec = opencl_column_type_name(basetype, columns);
+	auto vec_short = opencl_vector_short_name(basetype, vecsize);
+	auto mat_short = opencl_matrix_short_name(basetype, vecsize, columns);
+	string func_name = "spvMul" + vec_short + mat_short;
+
+	statement("static ", out_vec, " ", func_name, "(", in_vec, " v, ", mat_type, " m)");
+	begin_scope();
+	string expr = "return (" + out_vec + ")(";
+	for (uint32_t i = 0; i < columns; i++)
+	{
+		if (i > 0)
+			expr += ", ";
+		expr += "dot(v, m.columns[" + to_string(i) + "])";
+	}
+	expr += ");";
+	statement(expr);
+	end_scope();
+	statement("");
+}
+
+void CompilerOpenCL::emit_mul_mat_mat_helper(const MatrixTypeKey &a, const MatrixTypeKey &b)
+{
+	auto mat_a_type = opencl_matrix_type_name(a.basetype, a.vecsize, a.columns);
+	auto mat_b_type = opencl_matrix_type_name(b.basetype, b.vecsize, b.columns);
+	auto result_type = opencl_matrix_type_name(a.basetype, a.vecsize, b.columns);
+	auto mat_a_short = opencl_matrix_short_name(a.basetype, a.vecsize, a.columns);
+	auto mat_b_short = opencl_matrix_short_name(b.basetype, b.vecsize, b.columns);
+	string func_name = "spvMul" + mat_a_short + mat_b_short;
+
+	auto mv_vec_short = opencl_vector_short_name(a.basetype, a.columns);
+	string mul_mv_func = "spvMul" + mat_a_short + mv_vec_short;
+
+	statement("static ", result_type, " ", func_name, "(", mat_a_type, " a, ", mat_b_type, " b)");
+	begin_scope();
+	statement(result_type, " r;");
+	for (uint32_t i = 0; i < b.columns; i++)
+		statement("r.columns[", i, "] = ", mul_mv_func, "(a, b.columns[", i, "]);");
+	statement("return r;");
+	end_scope();
+	statement("");
+}
+
+void CompilerOpenCL::emit_mul_mat_scalar_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	auto mat_type = opencl_matrix_type_name(basetype, vecsize, columns);
+	auto scalar_type = opencl_column_type_name(basetype, 1);
+	auto mat_short = opencl_matrix_short_name(basetype, vecsize, columns);
+	string func_name = "spvMul" + mat_short + "Scalar";
+
+	statement("static ", mat_type, " ", func_name, "(", mat_type, " m, ", scalar_type, " s)");
+	begin_scope();
+	statement(mat_type, " r;");
+	for (uint32_t i = 0; i < columns; i++)
+		statement("r.columns[", i, "] = m.columns[", i, "] * s;");
+	statement("return r;");
+	end_scope();
+	statement("");
+}
+
+void CompilerOpenCL::emit_transpose_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	auto in_type = opencl_matrix_type_name(basetype, vecsize, columns);
+	auto out_type = opencl_matrix_type_name(basetype, columns, vecsize);
+	auto in_short = opencl_matrix_short_name(basetype, vecsize, columns);
+	string func_name = "spvTranspose" + in_short;
+	const char *swizzles[] = { "x", "y", "z", "w" };
+
+	statement("static ", out_type, " ", func_name, "(", in_type, " m)");
+	begin_scope();
+	statement(out_type, " r;");
+	for (uint32_t i = 0; i < vecsize; i++)
+	{
+		string expr = "r.columns[" + to_string(i) + "] = (" + opencl_column_type_name(basetype, columns) + ")(";
+		for (uint32_t j = 0; j < columns; j++)
+		{
+			if (j > 0)
+				expr += ", ";
+			expr += "m.columns[" + to_string(j) + "]." + swizzles[i];
+		}
+		expr += ");";
+		statement(expr);
+	}
+	statement("return r;");
+	end_scope();
+	statement("");
+}
+
+void CompilerOpenCL::emit_outer_product_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns)
+{
+	auto mat_type = opencl_matrix_type_name(basetype, vecsize, columns);
+	auto col_type = opencl_column_type_name(basetype, vecsize);
+	auto row_type = opencl_column_type_name(basetype, columns);
+	auto col_short = opencl_vector_short_name(basetype, vecsize);
+	auto row_short = opencl_vector_short_name(basetype, columns);
+	string func_name = "spvOuterProduct" + col_short + row_short;
+	const char *swizzles[] = { "x", "y", "z", "w" };
+
+	statement("static ", mat_type, " ", func_name, "(", col_type, " c, ", row_type, " r)");
+	begin_scope();
+	statement(mat_type, " m;");
+	for (uint32_t i = 0; i < columns; i++)
+		statement("m.columns[", i, "] = c * r.", swizzles[i], ";");
+	statement("return m;");
+	end_scope();
+	statement("");
 }
 
 string CompilerOpenCL::image_type_glsl(const SPIRType &type, uint32_t id, bool member)
@@ -1122,6 +1730,46 @@ uint32_t CompilerOpenCL::get_physical_type_id_stride(TypeID type_id) const
 	return vecsize * type.columns * (type.width / 8u);
 }
 
+bool CompilerOpenCL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
+{
+	// OpenCL backend uses struct-wrapped matrices with transpose helpers,
+	// so we can handle non-square row-major matrices (unlike the base GLSL class).
+	if (!has_member_decoration(type.self, index, DecorationRowMajor))
+		return false;
+
+	const auto mbr_type = get<SPIRType>(type.member_types[index]);
+	if (mbr_type.columns <= 1)
+		return false;
+
+	return true;
+}
+
+string CompilerOpenCL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
+                                                bool is_packed, bool relaxed)
+{
+	strip_enclosed_expression(exp_str);
+	if (!is_matrix(exp_type))
+	{
+		// Column access from a row-major matrix — delegate to base class unrolling.
+		return CompilerGLSL::convert_row_major_matrix(std::move(exp_str), exp_type, physical_type_id, is_packed,
+		                                              relaxed);
+	}
+
+	// Full matrix transpose: use our spvTranspose helper.
+	// The expression string is in the physical (transposed) layout.
+	// exp_type is the SPIR-V logical type. The physical type has swapped dimensions.
+	// We transpose FROM physical TO logical: spvTranspose_PhysType_(phys_expr) -> logical_type
+	uint32_t phys_vecsize = exp_type.columns;
+	uint32_t phys_columns = exp_type.vecsize;
+	auto phys_short = opencl_matrix_short_name(exp_type.basetype, phys_vecsize, phys_columns);
+	MatrixTypeKey phys_key = { exp_type.basetype, phys_vecsize, phys_columns };
+	need_transpose.insert(phys_key);
+	used_matrix_types.insert(phys_key);
+	used_matrix_types.insert(make_matrix_key(exp_type));
+
+	return join("spvTranspose", phys_short, "(", exp_str, ")");
+}
+
 std::string CompilerOpenCL::type_to_glsl_constructor(const SPIRType &type)
 {
 	string ret = CompilerGLSL::type_to_glsl_constructor(type);
@@ -1136,20 +1784,40 @@ std::string CompilerOpenCL::constant_expression(const SPIRConstant &c, bool insi
                                                 bool inside_struct_scope)
 {
 	auto &type = get<SPIRType>(c.constant_type);
-	if (c.replicated && type.op != OpTypeArray)
+
+	// Matrix constant: emit as struct compound literal.
+	if (type.columns > 1)
 	{
-		auto sub_expr = to_expression(c.subconstants[0]);
-		if (type.op == OpTypeMatrix)
+		auto mat_name = opencl_matrix_type_name(type);
+		string expr = "(" + mat_name + "){ { ";
+		if (c.replicated)
 		{
-			// OpenCL C has no native matrix type; matrices are represented as their column vector type.
-			// For a replicated matrix constant, just use the column value directly.
-			return sub_expr;
+			auto sub_expr = to_expression(c.subconstants[0]);
+			for (uint32_t i = 0; i < type.columns; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				expr += sub_expr;
+			}
 		}
 		else
 		{
-			// Vector replicate: (float4)(scalar)
-			return join(type_to_glsl_constructor(type), "(", sub_expr, ")");
+			for (uint32_t i = 0; i < type.columns; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				expr += constant_expression_vector(c, i);
+			}
 		}
+		expr += " } }";
+		return expr;
+	}
+
+	if (c.replicated && type.op != OpTypeArray)
+	{
+		auto sub_expr = to_expression(c.subconstants[0]);
+		// Vector replicate: (float4)(scalar)
+		return join(type_to_glsl_constructor(type), "(", sub_expr, ")");
 	}
 	return CompilerGLSL::constant_expression(c, inside_block_like_struct_scope, inside_struct_scope);
 }
@@ -1351,6 +2019,432 @@ void CompilerOpenCL::emit_glsl_op(uint32_t result_type, uint32_t result_id, uint
 		break;
 	}
 
+	case GLSLstd450InverseSqrt:
+		emit_unary_func_op(result_type, result_id, args[0], "rsqrt");
+		break;
+
+	case GLSLstd450RoundEven:
+		emit_unary_func_op(result_type, result_id, args[0], "rint");
+		break;
+
+	case GLSLstd450Fract:
+	{
+		// OpenCL fract() requires a pointer argument. Use (x - floor(x)) inline.
+		auto expr = join("(", to_expression(args[0]), " - floor(", to_expression(args[0]), "))");
+		emit_op(result_type, result_id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(result_id, args[0]);
+		break;
+	}
+
+	case GLSLstd450Atan2:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "atan2");
+		break;
+
+	case GLSLstd450Radians:
+		emit_unary_func_op(result_type, result_id, args[0], "radians");
+		break;
+
+	case GLSLstd450Degrees:
+		emit_unary_func_op(result_type, result_id, args[0], "degrees");
+		break;
+
+	case GLSLstd450FindILsb:
+	{
+		if (!needs_findlsb_polyfill)
+		{
+			needs_findlsb_polyfill = true;
+			force_recompile();
+		}
+		auto &input_type = expression_type(args[0]);
+		auto &out_type = get<SPIRType>(result_type);
+		// spvFindLSB takes uint. Cast input to uint if signed, and handle vector by component.
+		if (input_type.vecsize > 1)
+		{
+			// Vector: apply per-component using .s0, .s1, etc.
+			string expr = "(" + type_to_glsl(out_type) + ")(";
+			const char *swizzles[] = { "x", "y", "z", "w" };
+			for (uint32_t i = 0; i < input_type.vecsize; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				if (input_type.basetype == SPIRType::Int)
+					expr += join("spvFindLSB(as_uint(", to_expression(args[0]), ".", swizzles[i], "))");
+				else
+					expr += join("spvFindLSB(", to_expression(args[0]), ".", swizzles[i], ")");
+			}
+			expr += ")";
+			emit_op(result_type, result_id, expr, should_forward(args[0]));
+			inherit_expression_dependencies(result_id, args[0]);
+		}
+		else
+		{
+			string input_expr;
+			if (input_type.basetype == SPIRType::Int)
+				input_expr = join("spvFindLSB(as_uint(", to_expression(args[0]), "))");
+			else
+				input_expr = join("spvFindLSB(", to_expression(args[0]), ")");
+			emit_op(result_type, result_id, input_expr, should_forward(args[0]));
+			inherit_expression_dependencies(result_id, args[0]);
+		}
+		break;
+	}
+
+	case GLSLstd450FaceForward:
+	{
+		// OpenCL C has no faceforward(). Implement inline.
+		// faceforward(N, I, Nref) = dot(Nref, I) < 0 ? N : -N
+		auto &type = get<SPIRType>(result_type);
+		if (type.vecsize == 1)
+		{
+			auto expr = join("(", to_expression(args[2]), " * ", to_expression(args[1]), " < 0.0f ? ",
+			                 to_expression(args[0]), " : -", to_expression(args[0]), ")");
+			emit_op(result_type, result_id, expr,
+			        should_forward(args[0]) && should_forward(args[1]) && should_forward(args[2]));
+		}
+		else
+		{
+			auto expr = join("(dot(", to_expression(args[2]), ", ", to_expression(args[1]), ") < 0.0f ? ",
+			                 to_expression(args[0]), " : -", to_expression(args[0]), ")");
+			emit_op(result_type, result_id, expr,
+			        should_forward(args[0]) && should_forward(args[1]) && should_forward(args[2]));
+		}
+		for (uint32_t i = 0; i < 3; i++)
+			inherit_expression_dependencies(result_id, args[i]);
+		break;
+	}
+
+	case GLSLstd450Reflect:
+	{
+		// OpenCL C has no reflect(). Implement inline.
+		// reflect(I, N) = I - 2 * dot(N, I) * N
+		auto &type = get<SPIRType>(result_type);
+		if (type.vecsize == 1)
+		{
+			auto expr = join(to_enclosed_expression(args[0]), " - 2.0f * ", to_enclosed_expression(args[1]), " * ",
+			                 to_enclosed_expression(args[0]), " * ", to_enclosed_expression(args[1]));
+			emit_op(result_type, result_id, expr, should_forward(args[0]) && should_forward(args[1]));
+		}
+		else
+		{
+			auto expr = join(to_expression(args[0]), " - 2.0f * dot(", to_expression(args[1]), ", ",
+			                 to_expression(args[0]), ") * ", to_expression(args[1]));
+			emit_op(result_type, result_id, expr, should_forward(args[0]) && should_forward(args[1]));
+		}
+		inherit_expression_dependencies(result_id, args[0]);
+		inherit_expression_dependencies(result_id, args[1]);
+		break;
+	}
+
+	case GLSLstd450Refract:
+	{
+		// OpenCL C has no refract(). Implement inline.
+		// refract(I, N, eta): k = 1 - eta^2*(1 - dot(N,I)^2); k < 0 ? 0 : eta*I - (eta*dot(N,I)+sqrt(k))*N
+		auto &type = get<SPIRType>(result_type);
+		forced_temporaries.insert(result_id);
+		auto type_name = type_to_glsl(type);
+		emit_op(result_type, result_id, join("(", type_name, ")(0.0f)"), false);
+		auto I = to_expression(args[0]);
+		auto N = to_expression(args[1]);
+		auto eta = to_expression(args[2]);
+		auto res = to_expression(result_id);
+		statement("{");
+		if (type.vecsize == 1)
+		{
+			statement("    float spv_NdotI = ", N, " * ", I, ";");
+		}
+		else
+		{
+			statement("    float spv_NdotI = dot(", N, ", ", I, ");");
+		}
+		statement("    float spv_k = 1.0f - ", eta, " * ", eta, " * (1.0f - spv_NdotI * spv_NdotI);");
+		statement("    if (spv_k >= 0.0f)");
+		statement("        ", res, " = ", eta, " * ", I, " - (", eta, " * spv_NdotI + sqrt(spv_k)) * ", N, ";");
+		statement("}");
+		break;
+	}
+
+	case GLSLstd450Length:
+	{
+		auto &type = expression_type(args[0]);
+		if (type.vecsize == 1)
+			emit_unary_func_op(result_type, result_id, args[0], "fabs");
+		else
+			emit_unary_func_op(result_type, result_id, args[0], "length");
+		break;
+	}
+
+	case GLSLstd450Distance:
+	{
+		auto &type = expression_type(args[0]);
+		if (type.vecsize == 1)
+		{
+			auto expr = join("fabs(", to_expression(args[0]), " - ", to_expression(args[1]), ")");
+			emit_op(result_type, result_id, expr, should_forward(args[0]) && should_forward(args[1]));
+			inherit_expression_dependencies(result_id, args[0]);
+			inherit_expression_dependencies(result_id, args[1]);
+		}
+		else
+			emit_binary_func_op(result_type, result_id, args[0], args[1], "distance");
+		break;
+	}
+
+	case GLSLstd450Normalize:
+	{
+		auto &type = expression_type(args[0]);
+		if (type.vecsize == 1)
+			emit_unary_func_op(result_type, result_id, args[0], "sign");
+		else
+			emit_unary_func_op(result_type, result_id, args[0], "normalize");
+		break;
+	}
+
+	case GLSLstd450PackSnorm4x8:
+		if (!needs_pack_snorm_4x8)
+		{
+			needs_pack_snorm_4x8 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvPackSnorm4x8");
+		break;
+	case GLSLstd450PackUnorm4x8:
+		if (!needs_pack_unorm_4x8)
+		{
+			needs_pack_unorm_4x8 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvPackUnorm4x8");
+		break;
+	case GLSLstd450PackSnorm2x16:
+		if (!needs_pack_snorm_2x16)
+		{
+			needs_pack_snorm_2x16 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvPackSnorm2x16");
+		break;
+	case GLSLstd450PackUnorm2x16:
+		if (!needs_pack_unorm_2x16)
+		{
+			needs_pack_unorm_2x16 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvPackUnorm2x16");
+		break;
+	case GLSLstd450UnpackSnorm4x8:
+		if (!needs_unpack_snorm_4x8)
+		{
+			needs_unpack_snorm_4x8 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvUnpackSnorm4x8");
+		break;
+	case GLSLstd450UnpackUnorm4x8:
+		if (!needs_unpack_unorm_4x8)
+		{
+			needs_unpack_unorm_4x8 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvUnpackUnorm4x8");
+		break;
+	case GLSLstd450UnpackSnorm2x16:
+		if (!needs_unpack_snorm_2x16)
+		{
+			needs_unpack_snorm_2x16 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvUnpackSnorm2x16");
+		break;
+	case GLSLstd450UnpackUnorm2x16:
+		if (!needs_unpack_unorm_2x16)
+		{
+			needs_unpack_unorm_2x16 = true;
+			force_recompile();
+		}
+		emit_unary_func_op(result_type, result_id, args[0], "spvUnpackUnorm2x16");
+		break;
+
+	case GLSLstd450Determinant:
+	{
+		auto *e = maybe_get<SPIRExpression>(args[0]);
+		bool old_transpose = e && e->need_transpose;
+		if (old_transpose)
+			e->need_transpose = false;
+
+		auto &type = expression_type(args[0]);
+		assert(type.vecsize == type.columns);
+		const char *func = "spvDeterminant2";
+		if (type.vecsize == 2)
+		{
+			if (!needs_determinant_2)
+			{
+				needs_determinant_2 = true;
+				force_recompile();
+			}
+		}
+		else if (type.vecsize == 3)
+		{
+			func = "spvDeterminant3";
+			if (!needs_determinant_3)
+			{
+				needs_determinant_3 = true;
+				force_recompile();
+			}
+		}
+		else if (type.vecsize == 4)
+		{
+			func = "spvDeterminant4";
+			if (!needs_determinant_4)
+			{
+				needs_determinant_4 = true;
+				force_recompile();
+			}
+		}
+
+		emit_unary_func_op(result_type, result_id, args[0], func);
+
+		if (old_transpose)
+			e->need_transpose = true;
+		break;
+	}
+
+	case GLSLstd450MatrixInverse:
+	{
+		auto *a = maybe_get<SPIRExpression>(args[0]);
+		bool old_transpose = a && a->need_transpose;
+		if (old_transpose)
+			a->need_transpose = false;
+
+		auto &type = get<SPIRType>(result_type);
+		assert(type.vecsize == type.columns);
+		const char *inv_func = "spvInverse2";
+		if (type.vecsize == 2)
+		{
+			if (!needs_inverse_2)
+			{
+				needs_inverse_2 = true;
+				force_recompile();
+			}
+		}
+		else if (type.vecsize == 3)
+		{
+			inv_func = "spvInverse3";
+			if (!needs_inverse_3)
+			{
+				needs_inverse_3 = true;
+				force_recompile();
+			}
+		}
+		else if (type.vecsize == 4)
+		{
+			inv_func = "spvInverse4";
+			if (!needs_inverse_4)
+			{
+				needs_inverse_4 = true;
+				force_recompile();
+			}
+		}
+
+		bool forward = should_forward(args[0]);
+		auto &expr_out =
+		    emit_op(result_type, result_id, join(inv_func, "(", to_unpacked_expression(args[0]), ")"), forward);
+		inherit_expression_dependencies(result_id, args[0]);
+
+		if (old_transpose)
+		{
+			expr_out.need_transpose = true;
+			a->need_transpose = true;
+		}
+		break;
+	}
+
+	// NMin / NMax / NClamp: OpenCL fmin/fmax propagate NaN correctly, use them directly.
+	case GLSLstd450NMin:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "fmin");
+		break;
+	case GLSLstd450NMax:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "fmax");
+		break;
+	case GLSLstd450NClamp:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+		break;
+
+	case GLSLstd450Frexp:
+	{
+		// OpenCL frexp signature matches GLSL: frexp(x, &exp)
+		register_call_out_argument(args[1]);
+		forced_temporaries.insert(result_id);
+		emit_op(result_type, result_id, join("frexp(", to_expression(args[0]), ", &", to_expression(args[1]), ")"),
+		        false);
+		break;
+	}
+
+	case GLSLstd450FrexpStruct:
+	{
+		auto &type = get<SPIRType>(result_type);
+		emit_uninitialized_temporary_expression(result_type, result_id);
+		statement(to_expression(result_id), ".", to_member_name(type, 0), " = frexp(", to_expression(args[0]), ", &",
+		          to_expression(result_id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
+	case GLSLstd450Ldexp:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "ldexp");
+		break;
+
+	case GLSLstd450Cross:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "cross");
+		break;
+
+	case GLSLstd450FSign:
+		emit_unary_func_op(result_type, result_id, args[0], "sign");
+		break;
+
+	case GLSLstd450FAbs:
+		emit_unary_func_op(result_type, result_id, args[0], "fabs");
+		break;
+
+	case GLSLstd450FMin:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "fmin");
+		break;
+	case GLSLstd450FMax:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "fmax");
+		break;
+	case GLSLstd450FClamp:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+		break;
+	case GLSLstd450SMin:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "min");
+		break;
+	case GLSLstd450SMax:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "max");
+		break;
+	case GLSLstd450UMin:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "min");
+		break;
+	case GLSLstd450UMax:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "max");
+		break;
+	case GLSLstd450SClamp:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+		break;
+	case GLSLstd450UClamp:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+		break;
+
+	case GLSLstd450FMix:
+	case GLSLstd450IMix:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "mix");
+		break;
+	case GLSLstd450Step:
+		emit_binary_func_op(result_type, result_id, args[0], args[1], "step");
+		break;
+	case GLSLstd450SmoothStep:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "smoothstep");
+		break;
+	case GLSLstd450Fma:
+		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "fma");
+		break;
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, result_id, op, args, count);
 		break;
@@ -1410,6 +2504,21 @@ std::string CompilerOpenCL::to_atomic_ptr_expression(uint32_t id)
 
 // Task #3: In OpenCL C, pointer-to-struct member access uses -> instead of .
 // ptr_chain_is_resolved == false means this is the first member access from the base.
+bool CompilerOpenCL::should_dereference(uint32_t id)
+{
+	// In OpenCL C, function parameters with StorageClassFunction pointer types
+	// are emitted as actual pointers (T*), so they need dereferencing for
+	// member/component access (e.g., (*a).x instead of a.x).
+	const auto &type = expression_type(id);
+	if (is_pointer(type) && type.storage == StorageClassFunction)
+	{
+		auto *var = maybe_get<SPIRVariable>(id);
+		if (var && var->parameter != nullptr)
+			return true;
+	}
+	return CompilerGLSL::should_dereference(id);
+}
+
 std::string CompilerOpenCL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index,
                                                 bool ptr_chain_is_resolved)
 {
@@ -1439,7 +2548,19 @@ std::string CompilerOpenCL::to_member_reference(uint32_t base, const SPIRType &t
 			{
 				return join("->", to_member_name(type, index));
 			}
-			// StorageClassUniform (UBO): emitted by value in OpenCL — use '.'
+			// StorageClassUniform with BufferBlock decoration is a legacy SSBO (GLSL 430 style),
+			// emitted as __global T* in OpenCL C — use ->.
+			// Plain Uniform with Block decoration is a UBO, emitted by value — use '.'.
+			if (sc == StorageClassUniform)
+			{
+				auto *var = maybe_get_backing_variable(base);
+				if (var)
+				{
+					auto &var_type = get<SPIRType>(var->basetype);
+					if (has_decoration(var_type.self, DecorationBufferBlock))
+						return join("->", to_member_name(type, index));
+				}
+			}
 		}
 	}
 	return join(".", to_member_name(type, index));
@@ -1800,6 +2921,67 @@ void CompilerOpenCL::emit_function(SPIRFunction &func, const Bitset &return_flag
 	}
 }
 
+void CompilerOpenCL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression)
+{
+	auto &type = expression_type(rhs_expression);
+	auto *lhs_e = maybe_get<SPIRExpression>(lhs_expression);
+
+	// In OpenCL C, we cannot assign to a function return value (rvalue).
+	// The base class wraps the LHS in convert_row_major_matrix() which produces
+	// spvTranspose(lhs) = rhs, which is invalid C.
+	// Instead, transpose the RHS and store directly to the LHS.
+	if (is_matrix(type) && lhs_e && lhs_e->need_transpose)
+	{
+		lhs_e->need_transpose = false;
+
+		auto *rhs_e = maybe_get<SPIRExpression>(rhs_expression);
+		if (rhs_e && rhs_e->need_transpose)
+		{
+			// Both sides need transpose — they cancel out.
+			rhs_e->need_transpose = false;
+			statement(to_expression(lhs_expression), " = ", to_unpacked_row_major_matrix_expression(rhs_expression),
+			          ";");
+			rhs_e->need_transpose = true;
+		}
+		else
+		{
+			// Transpose the RHS before storing.
+			auto &rhs_type = expression_type(rhs_expression);
+			auto rhs_short = opencl_matrix_short_name(rhs_type.basetype, rhs_type.vecsize, rhs_type.columns);
+			MatrixTypeKey rhs_key = { rhs_type.basetype, rhs_type.vecsize, rhs_type.columns };
+			need_transpose.insert(rhs_key);
+			used_matrix_types.insert(rhs_key);
+			// The LHS is in physical (transposed) layout, so we transpose the logical RHS to physical.
+			statement(to_expression(lhs_expression), " = spvTranspose", rhs_short, "(",
+			          to_unpacked_expression(rhs_expression), ");");
+		}
+
+		lhs_e->need_transpose = true;
+		register_write(lhs_expression);
+	}
+	else if (lhs_e && lhs_e->need_transpose)
+	{
+		// Storing a column to a row-major matrix. Unroll the write.
+		lhs_e->need_transpose = false;
+		for (uint32_t c = 0; c < type.vecsize; c++)
+		{
+			auto lhs_expr = to_dereferenced_expression(lhs_expression);
+			auto column_index = lhs_expr.find_last_of('[');
+			if (column_index != string::npos)
+			{
+				statement(lhs_expr.insert(column_index, join('[', c, ']')), " = ",
+				          to_extract_component_expression(rhs_expression, c), ";");
+			}
+		}
+		lhs_e->need_transpose = true;
+		register_write(lhs_expression);
+	}
+	else
+	{
+		CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
+	}
+}
+
 void CompilerOpenCL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
                                         const string &qualifier, uint32_t)
 {
@@ -1810,6 +2992,30 @@ void CompilerOpenCL::emit_struct_member(const SPIRType &type, uint32_t member_ty
 	if (is_pointer(membertype) && membertype.storage == StorageClassPhysicalStorageBuffer)
 	{
 		statement(qualifier, "ulong ", to_member_name(type, index), ";");
+	}
+	else if (has_member_decoration(type.self, index, DecorationRowMajor))
+	{
+		// Row-major matrix: the physical layout has transposed dimensions.
+		// Emit the member with the physical (transposed) type so struct layout matches buffer.
+		// Walk through array nesting to find the inner matrix type.
+		const auto *inner = &membertype;
+		while (is_array(*inner))
+			inner = &get<SPIRType>(inner->parent_type);
+
+		if (inner->columns > 1)
+		{
+			auto phys_type_name = opencl_matrix_type_name(inner->basetype, inner->columns, inner->vecsize);
+			MatrixTypeKey phys_key = { inner->basetype, inner->columns, inner->vecsize };
+			used_matrix_types.insert(phys_key);
+
+			statement(qualifier, phys_type_name, " ", to_member_name(type, index), type_to_array_glsl(membertype, 0),
+			          ";");
+		}
+		else
+		{
+			// Not actually a matrix member, fall through to default.
+			statement(qualifier, variable_decl(membertype, to_member_name(type, index)), ";");
+		}
 	}
 	else
 	{
@@ -2188,24 +3394,240 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	// OpOuterProduct: no OpenCL builtin and no native matrix type.
-	// The result matrix type is represented as its column vector type in OpenCL C.
-	// Emit only the first column (col_vec * row_vec.x).
+	// OpOuterProduct: use struct-wrapped matrix helper.
 	case OpOuterProduct:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t result_id = ops[1];
 		uint32_t col_vec = ops[2]; // column vector
 		uint32_t row_vec = ops[3]; // row vector
+		auto &res_type = get<SPIRType>(result_type);
+		auto &col_type = expression_type(col_vec);
 		auto &row_type = expression_type(row_vec);
 
-		// First column of the outer product: col_vec * row_vec.x
-		string first_row_elem =
-		    row_type.vecsize > 1 ? join(to_expression(row_vec), ".", index_to_swizzle(0)) : to_expression(row_vec);
-		string expr = join(to_expression(col_vec), " * ", first_row_elem);
-		emit_op(result_type, result_id, expr, should_forward(col_vec) && should_forward(row_vec));
-		inherit_expression_dependencies(result_id, col_vec);
-		inherit_expression_dependencies(result_id, row_vec);
+		need_outer_product.insert(make_matrix_key(res_type));
+		// Ensure the result matrix type is registered.
+		used_matrix_types.insert(make_matrix_key(res_type));
+
+		auto col_short = opencl_vector_short_name(col_type.basetype, col_type.vecsize);
+		auto row_short = opencl_vector_short_name(row_type.basetype, row_type.vecsize);
+		string func_name = "spvOuterProduct" + col_short + row_short;
+
+		emit_binary_func_op(result_type, result_id, col_vec, row_vec, func_name.c_str());
+		break;
+	}
+
+	// Matrix arithmetic operations using struct-wrapped matrix helpers.
+	case OpMatrixTimesVector:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t mat_id = ops[2];
+		uint32_t vec_id = ops[3];
+		auto &mat_type = expression_type(mat_id);
+
+		auto *e = maybe_get<SPIRExpression>(mat_id);
+		if (e && e->need_transpose)
+		{
+			// Transposed M * v = v * M_untransposed.
+			// mat_type is the SPIR-V type (e.g., mat2x3 = 2 cols, vecsize=3).
+			// The untransposed (physical) matrix is mat3x2 = 3 cols, vecsize=2.
+			e->need_transpose = false;
+			uint32_t phys_cols = mat_type.vecsize;
+			uint32_t phys_rows = mat_type.columns;
+			MatrixTypeKey phys_key = { mat_type.basetype, phys_rows, phys_cols };
+			need_mul_vec_mat.insert(phys_key);
+			used_matrix_types.insert(phys_key);
+
+			auto vec_short = opencl_vector_short_name(mat_type.basetype, phys_rows);
+			auto mat_short = opencl_matrix_short_name(mat_type.basetype, phys_rows, phys_cols);
+			string func_name = "spvMul" + vec_short + mat_short;
+
+			string expr =
+			    join(func_name, "(", to_expression(vec_id), ", ", to_unpacked_row_major_matrix_expression(mat_id), ")");
+			bool forward = should_forward(mat_id) && should_forward(vec_id);
+			emit_op(result_type, result_id, expr, forward);
+			e->need_transpose = true;
+		}
+		else
+		{
+			auto key = make_matrix_key(mat_type);
+			need_mul_mat_vec.insert(key);
+
+			auto mat_short = opencl_matrix_short_name(mat_type.basetype, mat_type.vecsize, mat_type.columns);
+			auto vec_short = opencl_vector_short_name(mat_type.basetype, mat_type.columns);
+			string func_name = "spvMul" + mat_short + vec_short;
+
+			emit_binary_func_op(result_type, result_id, mat_id, vec_id, func_name.c_str());
+		}
+		inherit_expression_dependencies(result_id, mat_id);
+		inherit_expression_dependencies(result_id, vec_id);
+		break;
+	}
+
+	case OpVectorTimesMatrix:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t vec_id = ops[2];
+		uint32_t mat_id = ops[3];
+		auto &mat_type = expression_type(mat_id);
+
+		auto *e = maybe_get<SPIRExpression>(mat_id);
+		if (e && e->need_transpose)
+		{
+			// v * M^T = M_untransposed * v.
+			// mat_type is the SPIR-V type (e.g., mat2x3 = 2 cols, vecsize=3).
+			// The untransposed (physical) matrix is mat3x2 = 3 cols, vecsize=2.
+			e->need_transpose = false;
+			uint32_t phys_cols = mat_type.vecsize;
+			uint32_t phys_rows = mat_type.columns;
+			MatrixTypeKey phys_key = { mat_type.basetype, phys_rows, phys_cols };
+			need_mul_mat_vec.insert(phys_key);
+			used_matrix_types.insert(phys_key);
+
+			auto mat_short = opencl_matrix_short_name(mat_type.basetype, phys_rows, phys_cols);
+			auto vec_short = opencl_vector_short_name(mat_type.basetype, phys_rows);
+			string func_name = "spvMul" + mat_short + vec_short;
+
+			string expr =
+			    join(func_name, "(", to_unpacked_row_major_matrix_expression(mat_id), ", ", to_expression(vec_id), ")");
+			bool forward = should_forward(mat_id) && should_forward(vec_id);
+			emit_op(result_type, result_id, expr, forward);
+			e->need_transpose = true;
+		}
+		else
+		{
+			auto key = make_matrix_key(mat_type);
+			need_mul_vec_mat.insert(key);
+
+			auto vec_short = opencl_vector_short_name(mat_type.basetype, mat_type.vecsize);
+			auto mat_short = opencl_matrix_short_name(mat_type.basetype, mat_type.vecsize, mat_type.columns);
+			string func_name = "spvMul" + vec_short + mat_short;
+
+			emit_binary_func_op(result_type, result_id, vec_id, mat_id, func_name.c_str());
+		}
+		inherit_expression_dependencies(result_id, vec_id);
+		inherit_expression_dependencies(result_id, mat_id);
+		break;
+	}
+
+	case OpMatrixTimesMatrix:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t a_id = ops[2];
+		uint32_t b_id = ops[3];
+		auto &a_type = expression_type(a_id);
+		auto &b_type = expression_type(b_id);
+
+		auto *ea = maybe_get<SPIRExpression>(a_id);
+		auto *eb = maybe_get<SPIRExpression>(b_id);
+
+		if (ea && eb && ea->need_transpose && eb->need_transpose)
+		{
+			// (A^T * B^T) = (B * A)^T
+			// Physical (untransposed) matrices have swapped dimensions.
+			ea->need_transpose = false;
+			eb->need_transpose = false;
+
+			MatrixTypeKey phys_b = { b_type.basetype, b_type.columns, b_type.vecsize };
+			MatrixTypeKey phys_a = { a_type.basetype, a_type.columns, a_type.vecsize };
+			need_mul_mat_mat.insert({ phys_b, phys_a });
+			need_mul_mat_vec.insert(phys_b);
+			used_matrix_types.insert(phys_b);
+			used_matrix_types.insert(phys_a);
+
+			auto mat_b_short = opencl_matrix_short_name(phys_b.basetype, phys_b.vecsize, phys_b.columns);
+			auto mat_a_short = opencl_matrix_short_name(phys_a.basetype, phys_a.vecsize, phys_a.columns);
+			string func_name = "spvMul" + mat_b_short + mat_a_short;
+
+			string expr = join(func_name, "(", to_unpacked_row_major_matrix_expression(b_id), ", ",
+			                   to_unpacked_row_major_matrix_expression(a_id), ")");
+			bool forward = should_forward(a_id) && should_forward(b_id);
+			emit_transposed_op(result_type, result_id, expr, forward);
+
+			ea->need_transpose = true;
+			eb->need_transpose = true;
+		}
+		else
+		{
+			auto key_a = make_matrix_key(a_type);
+			auto key_b = make_matrix_key(b_type);
+			need_mul_mat_mat.insert({ key_a, key_b });
+			// Also need the MatVec helper for the inner multiplication.
+			need_mul_mat_vec.insert(key_a);
+
+			auto mat_a_short = opencl_matrix_short_name(a_type.basetype, a_type.vecsize, a_type.columns);
+			auto mat_b_short = opencl_matrix_short_name(b_type.basetype, b_type.vecsize, b_type.columns);
+			string func_name = "spvMul" + mat_a_short + mat_b_short;
+
+			emit_binary_func_op(result_type, result_id, a_id, b_id, func_name.c_str());
+		}
+		inherit_expression_dependencies(result_id, a_id);
+		inherit_expression_dependencies(result_id, b_id);
+		break;
+	}
+
+	case OpMatrixTimesScalar:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t mat_id = ops[2];
+		uint32_t scalar_id = ops[3];
+		auto &mat_type = expression_type(mat_id);
+
+		auto *e = maybe_get<SPIRExpression>(mat_id);
+		if (e && e->need_transpose)
+		{
+			// Physical (untransposed) matrix has swapped dimensions.
+			e->need_transpose = false;
+			MatrixTypeKey phys_key = { mat_type.basetype, mat_type.columns, mat_type.vecsize };
+			need_mul_mat_scalar.insert(phys_key);
+			used_matrix_types.insert(phys_key);
+
+			auto mat_short = opencl_matrix_short_name(phys_key.basetype, phys_key.vecsize, phys_key.columns);
+			string func_name = "spvMul" + mat_short + "Scalar";
+
+			string expr = join(func_name, "(", to_unpacked_row_major_matrix_expression(mat_id), ", ",
+			                   to_expression(scalar_id), ")");
+			bool forward = should_forward(mat_id) && should_forward(scalar_id);
+			emit_transposed_op(result_type, result_id, expr, forward);
+			e->need_transpose = true;
+		}
+		else
+		{
+			auto key = make_matrix_key(mat_type);
+			need_mul_mat_scalar.insert(key);
+
+			auto mat_short = opencl_matrix_short_name(mat_type.basetype, mat_type.vecsize, mat_type.columns);
+			string func_name = "spvMul" + mat_short + "Scalar";
+
+			emit_binary_func_op(result_type, result_id, mat_id, scalar_id, func_name.c_str());
+		}
+		inherit_expression_dependencies(result_id, mat_id);
+		inherit_expression_dependencies(result_id, scalar_id);
+		break;
+	}
+
+	case OpTranspose:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t input_id = ops[2];
+		auto &in_type = expression_type(input_id);
+		auto &res_type = get<SPIRType>(result_type);
+
+		auto key = make_matrix_key(in_type);
+		need_transpose.insert(key);
+		// Ensure both input and output matrix types are registered.
+		used_matrix_types.insert(key);
+		used_matrix_types.insert(make_matrix_key(res_type));
+
+		auto in_short = opencl_matrix_short_name(in_type.basetype, in_type.vecsize, in_type.columns);
+		string func_name = "spvTranspose" + in_short;
+
+		emit_unary_func_op(result_type, result_id, input_id, func_name.c_str());
 		break;
 	}
 
@@ -2753,6 +4175,15 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				e.access_chain = true;
 				if (is_subscript_deref)
 					subscripted_deref_exprs.insert(result_id);
+
+				// Propagate row-major transpose flag for matrix members.
+				if (struct_type && length >= 4)
+				{
+					uint32_t mbr_idx = get<SPIRConstant>(ops[3]).scalar();
+					if (member_is_non_native_row_major_matrix(*struct_type, mbr_idx))
+						e.need_transpose = true;
+				}
+
 				forwarded_temporaries.insert(result_id);
 				suppressed_usage_tracking.insert(result_id);
 				for (uint32_t i = 2; i < length; i++)
@@ -2864,6 +4295,41 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCompositeConstruct:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		auto &type = get<SPIRType>(result_type);
+		if (type.columns > 1)
+		{
+			// Matrix composite construct: emit compound literal (spvMat4){ { col0, col1, ... } }
+			const auto *elems = &ops[2];
+			uint32_t length = instruction.length - 2;
+
+			bool forward = true;
+			for (uint32_t i = 0; i < length; i++)
+				forward = forward && should_forward(elems[i]);
+
+			auto mat_name = opencl_matrix_type_name(type);
+			string expr = "(" + mat_name + "){ { ";
+			for (uint32_t i = 0; i < length; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				expr += to_unpacked_expression(elems[i]);
+			}
+			expr += " } }";
+			emit_op(result_type, result_id, expr, forward);
+			for (uint32_t i = 0; i < length; i++)
+				inherit_expression_dependencies(result_id, elems[i]);
+		}
+		else
+		{
+			CompilerGLSL::emit_instruction(instruction);
+		}
+		break;
+	}
+
 	case OpCompositeConstructReplicateEXT:
 	{
 		// GLSL base uses type(value) for vector splat, but OpenCL C needs (type)(value).
@@ -2872,9 +4338,17 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(result_type);
 		if (type.op == OpTypeMatrix)
 		{
-			// OpenCL C has no native matrix type; matrices are represented as their column vector type.
-			// Just use the sub-value directly (representing the first/only column).
-			emit_op(result_type, result_id, to_expression(ops[2]), should_forward(ops[2]));
+			// Struct-wrapped matrix: replicate the column value across all columns.
+			auto mat_name = opencl_matrix_type_name(type);
+			string expr = "(" + mat_name + "){ { ";
+			for (uint32_t i = 0; i < type.columns; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+				expr += to_expression(ops[2]);
+			}
+			expr += " } }";
+			emit_op(result_type, result_id, expr, should_forward(ops[2]));
 			inherit_expression_dependencies(result_id, ops[2]);
 		}
 		else if (type.op != OpTypeArray && type.vecsize > 1)

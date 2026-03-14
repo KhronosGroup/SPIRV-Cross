@@ -1,6 +1,8 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
 
+typedef struct { float4 columns[4]; } spvMat4;
+
 #ifndef SPIRV_CROSS_CONSTANT_ID_0
 #define SPIRV_CROSS_CONSTANT_ID_0 0.0f
 #endif
@@ -21,10 +23,10 @@ __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main(UBO ubo)
 {
     float4 a_1 = (float4)(0.0f);
-    float4 b_1 = (float4)(1.0f);
+    spvMat4 b_1 = (spvMat4){ { (float4)(1.0f), (float4)(1.0f), (float4)(1.0f), (float4)(1.0f) } };
     float4 c_1 = _20;
     float4 _36 = (float4)(ubo.uniform_float);
     float4 d_1 = _36;
-    float4 e_1 = _36;
+    spvMat4 e_1 = (spvMat4){ { _36, _36, _36, _36 } };
 }
 

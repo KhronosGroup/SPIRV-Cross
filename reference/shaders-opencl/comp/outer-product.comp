@@ -1,17 +1,27 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
 
+typedef struct { float2 columns[2]; } spvMat2;
+typedef struct { float3 columns[2]; } spvMat2x3;
+typedef struct { float4 columns[2]; } spvMat2x4;
+typedef struct { float2 columns[3]; } spvMat3x2;
+typedef struct { float3 columns[3]; } spvMat3;
+typedef struct { float4 columns[3]; } spvMat3x4;
+typedef struct { float2 columns[4]; } spvMat4x2;
+typedef struct { float3 columns[4]; } spvMat4x3;
+typedef struct { float4 columns[4]; } spvMat4;
+
 struct SSBO
 {
-    float2 m22;
-    float3 m23;
-    float4 m24;
-    float2 m32;
-    float3 m33;
-    float4 m34;
-    float2 m42;
-    float3 m43;
-    float4 m44;
+    spvMat2 m22;
+    spvMat2x3 m23;
+    spvMat2x4 m24;
+    spvMat3x2 m32;
+    spvMat3 m33;
+    spvMat3x4 m34;
+    spvMat4x2 m42;
+    spvMat4x3 m43;
+    spvMat4 m44;
 };
 
 typedef struct SSBO SSBO;
@@ -25,18 +35,99 @@ struct ReadSSBO
 
 typedef struct ReadSSBO ReadSSBO;
 
+static spvMat2 spvOuterProductVec2Vec2(float2 c, float2 r)
+{
+    spvMat2 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    return m;
+}
+
+static spvMat2x3 spvOuterProductVec3Vec2(float3 c, float2 r)
+{
+    spvMat2x3 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    return m;
+}
+
+static spvMat2x4 spvOuterProductVec4Vec2(float4 c, float2 r)
+{
+    spvMat2x4 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    return m;
+}
+
+static spvMat3x2 spvOuterProductVec2Vec3(float2 c, float3 r)
+{
+    spvMat3x2 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    return m;
+}
+
+static spvMat3 spvOuterProductVec3Vec3(float3 c, float3 r)
+{
+    spvMat3 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    return m;
+}
+
+static spvMat3x4 spvOuterProductVec4Vec3(float4 c, float3 r)
+{
+    spvMat3x4 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    return m;
+}
+
+static spvMat4x2 spvOuterProductVec2Vec4(float2 c, float4 r)
+{
+    spvMat4x2 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    m.columns[3] = c * r.w;
+    return m;
+}
+
+static spvMat4x3 spvOuterProductVec3Vec4(float3 c, float4 r)
+{
+    spvMat4x3 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    m.columns[3] = c * r.w;
+    return m;
+}
+
+static spvMat4 spvOuterProductVec4Vec4(float4 c, float4 r)
+{
+    spvMat4 m;
+    m.columns[0] = c * r.x;
+    m.columns[1] = c * r.y;
+    m.columns[2] = c * r.z;
+    m.columns[3] = c * r.w;
+    return m;
+}
+
 __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main(__global SSBO* _21, __global const ReadSSBO* _26)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
-    _21->m22 = _26->v2 * _26->v2.x;
-    _21->m23 = _26->v3 * _26->v2.x;
-    _21->m24 = _26->v4 * _26->v2.x;
-    _21->m32 = _26->v2 * _26->v3.x;
-    _21->m33 = _26->v3 * _26->v3.x;
-    _21->m34 = _26->v4 * _26->v3.x;
-    _21->m42 = _26->v2 * _26->v4.x;
-    _21->m43 = _26->v3 * _26->v4.x;
-    _21->m44 = _26->v4 * _26->v4.x;
+    _21->m22 = spvOuterProductVec2Vec2(_26->v2, _26->v2);
+    _21->m23 = spvOuterProductVec3Vec2(_26->v3, _26->v2);
+    _21->m24 = spvOuterProductVec4Vec2(_26->v4, _26->v2);
+    _21->m32 = spvOuterProductVec2Vec3(_26->v2, _26->v3);
+    _21->m33 = spvOuterProductVec3Vec3(_26->v3, _26->v3);
+    _21->m34 = spvOuterProductVec4Vec3(_26->v4, _26->v3);
+    _21->m42 = spvOuterProductVec2Vec4(_26->v2, _26->v4);
+    _21->m43 = spvOuterProductVec3Vec4(_26->v3, _26->v4);
+    _21->m44 = spvOuterProductVec4Vec4(_26->v4, _26->v4);
 }
 

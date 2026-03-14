@@ -1,0 +1,131 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[3]; } spvMat3x2;
+
+struct S1
+{
+    float4 a;
+    spvMat3x2 b;
+    int4 c;
+};
+
+typedef struct S1 S1;
+
+struct block
+{
+    uint passed;
+};
+
+typedef struct block block;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _212)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local S1 s1;
+    s1.a = (float4)(1.0f, -5.0f, -9.0f, -5.0f);
+    s1.b = (spvMat3x2){ { (float2)(1.0f, -7.0f), (float2)(1.0f, 2.0f), (float2)(8.0f, 7.0f) } };
+    s1.c = (int4)(false, true, false, false);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    bool _264 = fabs(1.0f - s1.a.x) < 0.0500000007450580596923828125f;
+    bool _241;
+    if (_264)
+    {
+        _241 = fabs((-5.0f) - s1.a.y) < 0.0500000007450580596923828125f;
+    }
+    else
+    {
+        _241 = _264;
+    }
+    bool _249;
+    if (_241)
+    {
+        _249 = fabs((-9.0f) - s1.a.z) < 0.0500000007450580596923828125f;
+    }
+    else
+    {
+        _249 = _241;
+    }
+    bool _257;
+    if (_249)
+    {
+        _257 = fabs((-5.0f) - s1.a.w) < 0.0500000007450580596923828125f;
+    }
+    else
+    {
+        _257 = _249;
+    }
+    bool _197;
+    if (_257)
+    {
+        bool _340 = fabs(1.0f - s1.b.columns[0].x) < 0.0500000007450580596923828125f;
+        bool _333;
+        if (_340)
+        {
+            _333 = fabs((-7.0f) - s1.b.columns[0].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _333 = _340;
+        }
+        bool _306;
+        if (_333)
+        {
+            bool _373 = fabs(1.0f - s1.b.columns[1].x) < 0.0500000007450580596923828125f;
+            bool _366;
+            if (_373)
+            {
+                _366 = fabs(2.0f - s1.b.columns[1].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _366 = _373;
+            }
+            _306 = _366;
+        }
+        else
+        {
+            _306 = _333;
+        }
+        bool _314;
+        if (_306)
+        {
+            bool _406 = fabs(8.0f - s1.b.columns[2].x) < 0.0500000007450580596923828125f;
+            bool _399;
+            if (_406)
+            {
+                _399 = fabs(7.0f - s1.b.columns[2].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _399 = _406;
+            }
+            _314 = _399;
+        }
+        else
+        {
+            _314 = _306;
+        }
+        _197 = _314;
+    }
+    else
+    {
+        _197 = _257;
+    }
+    bool _206;
+    if (_197)
+    {
+        _206 = all((int4)(false, true, false, false) == s1.c);
+    }
+    else
+    {
+        _206 = _197;
+    }
+    if (_206)
+    {
+        _212[0] += as_uint(1);
+    }
+}
+

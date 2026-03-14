@@ -17,9 +17,9 @@ __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main(__global SSBO* _9)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
-    _9->c = distance(_9->a, _9->b);
-    _9->d = length(_9->a);
-    _9->e = normalize(_9->a);
-    _9->f = distance(_9->a - 1.0f, _9->b - 2.0f);
+    _9->c = fabs(_9->a - _9->b);
+    _9->d = fabs(_9->a);
+    _9->e = sign(_9->a);
+    _9->f = fabs(_9->a - 1.0f - _9->b - 2.0f);
 }
 

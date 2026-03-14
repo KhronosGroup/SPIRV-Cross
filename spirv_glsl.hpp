@@ -668,6 +668,9 @@ protected:
 		bool requires_relaxed_precision_analysis = false;
 		bool implicit_c_integer_promotion_rules = false;
 		bool supports_spec_constant_array_size = true;
+		// When non-empty, matrix column access uses this member name instead of raw array indexing.
+		// e.g., "columns" -> m.columns[i] instead of m[i].
+		std::string matrix_column_accessor;
 	} backend;
 
 	virtual void emit_struct(SPIRType &type);
@@ -708,7 +711,7 @@ protected:
 	void flush_undeclared_variables(SPIRBlock &block);
 	void emit_variable_temporary_copies(const SPIRVariable &var);
 
-	bool should_dereference(uint32_t id);
+	virtual bool should_dereference(uint32_t id);
 	bool should_dereference_caller_param(uint32_t id);
 	bool should_forward(uint32_t id) const;
 	bool should_suppress_usage_tracking(uint32_t id) const;

@@ -25,6 +25,7 @@
 #define SPIRV_CROSS_OPENCL_HPP
 
 #include "spirv_glsl.hpp"
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -42,14 +43,20 @@ public:
 	{
 		// OpenCL C version: 120 = 1.2, 200 = 2.0
 		uint32_t opencl_version = make_opencl_version(1, 2);
+		// Enable cl_khr_fp16 (half) extension
+		bool enable_fp16 = false;
 		// Enable cl_khr_fp64 (double) extension
 		bool enable_fp64 = false;
 		// Enable cl_khr_int64_extended_atomics extension
 		bool enable_64bit_atomics = false;
 		// Enable cl_khr_subgroups extension
 		bool enable_subgroups = false;
-		// Enable cl_khr_subgroup_shuffle extension
-		bool enable_shuffle = false;
+		// Enable all subgroup extensions
+		bool enable_subgroups_all = false;
+		// Emulate missing subgroup extensions
+		bool emulate_subgroups = false;
+		// Size of subgroup emulation
+		uint32_t fixed_subgroup_size = 0;
 
 		void set_opencl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
 		{
@@ -104,6 +111,7 @@ protected:
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_instruction(const Instruction &instruction) override;
+	bool should_dereference(uint32_t id) override;
 	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index,
 	                                bool ptr_chain_is_resolved) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
@@ -124,10 +132,14 @@ protected:
 	std::string get_type_address_space(const SPIRType &type, uint32_t id, bool argument = false);
 	const char *to_restrict(uint32_t id, bool space);
 	uint32_t get_physical_type_id_stride(TypeID type_id) const override;
+	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
+	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
+	                                     bool is_packed, bool relaxed) override;
 
 	void replace_illegal_names() override;
 	void emit_function(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression) override;
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 
@@ -151,6 +163,74 @@ protected:
 	bool needs_bitreverse_polyfill = false;
 	// Set when a default sampler is needed for combined image+sampler usage.
 	bool needs_default_sampler = false;
+	// Set when findLSB polyfill is needed.
+	bool needs_findlsb_polyfill = false;
+	// Set when pack/unpack Snorm/Unorm polyfills are needed.
+	bool needs_pack_snorm_4x8 = false;
+	bool needs_pack_unorm_4x8 = false;
+	bool needs_pack_snorm_2x16 = false;
+	bool needs_pack_unorm_2x16 = false;
+	bool needs_unpack_snorm_4x8 = false;
+	bool needs_unpack_unorm_4x8 = false;
+	bool needs_unpack_snorm_2x16 = false;
+	bool needs_unpack_unorm_2x16 = false;
+	// Set when determinant/inverse polyfills are needed (per size).
+	bool needs_determinant_2 = false;
+	bool needs_determinant_3 = false;
+	bool needs_determinant_4 = false;
+	bool needs_inverse_2 = false;
+	bool needs_inverse_3 = false;
+	bool needs_inverse_4 = false;
+
+	// Matrix type support: tracks which matrix signatures (basetype, vecsize, columns) are needed.
+	struct MatrixTypeKey
+	{
+		SPIRType::BaseType basetype;
+		uint32_t vecsize;
+		uint32_t columns;
+		bool operator<(const MatrixTypeKey &o) const
+		{
+			if (basetype != o.basetype)
+				return basetype < o.basetype;
+			if (columns != o.columns)
+				return columns < o.columns;
+			return vecsize < o.vecsize;
+		}
+		bool operator==(const MatrixTypeKey &o) const
+		{
+			return basetype == o.basetype && vecsize == o.vecsize && columns == o.columns;
+		}
+		bool operator!=(const MatrixTypeKey &o) const
+		{
+			return !(*this == o);
+		}
+	};
+	std::set<MatrixTypeKey> used_matrix_types;
+
+	// Flags for which matrix helper functions need to be emitted.
+	std::set<MatrixTypeKey> need_mul_mat_vec; // MatrixTimesVector
+	std::set<MatrixTypeKey> need_mul_vec_mat; // VectorTimesMatrix
+	std::set<std::pair<MatrixTypeKey, MatrixTypeKey>> need_mul_mat_mat; // MatrixTimesMatrix
+	std::set<MatrixTypeKey> need_mul_mat_scalar; // MatrixTimesScalar
+	std::set<MatrixTypeKey> need_transpose; // OpTranspose (key is input matrix type)
+	std::set<MatrixTypeKey> need_outer_product; // OpOuterProduct (key is result matrix type)
+
+	std::string opencl_matrix_type_name(const SPIRType &type);
+	std::string opencl_matrix_type_name(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	std::string opencl_column_type_name(SPIRType::BaseType basetype, uint32_t vecsize);
+	// Short names for building helper function names (e.g. "Mat4", "Vec4", "DVec4").
+	std::string opencl_matrix_short_name(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	std::string opencl_vector_short_name(SPIRType::BaseType basetype, uint32_t vecsize);
+	void emit_matrix_typedefs();
+	void emit_matrix_helpers();
+	void emit_mul_mat_vec_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	void emit_mul_vec_mat_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	void emit_mul_mat_mat_helper(const MatrixTypeKey &a, const MatrixTypeKey &b);
+	void emit_mul_mat_scalar_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	void emit_transpose_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	void emit_outer_product_helper(SPIRType::BaseType basetype, uint32_t vecsize, uint32_t columns);
+	MatrixTypeKey make_matrix_key(const SPIRType &type);
+	void prepass_discover_matrix_types();
 
 	// For each non-entry function, the ordered list of flattened buffer var IDs to thread as extra params.
 	std::unordered_map<uint32_t, SmallVector<uint32_t>> func_flattened_args;

@@ -1,0 +1,19 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float3 columns[3]; } spvMat3;
+
+struct SSBO2
+{
+    spvMat3 out_data[1];
+};
+
+typedef struct SSBO2 SSBO2;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global spvMat3* _22)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _22[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = (spvMat3){ { (float3)(10.0f), (float3)(20.0f), (float3)(40.0f) } };
+}
+

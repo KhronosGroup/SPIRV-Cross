@@ -1,0 +1,598 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[2]; } spvMat2;
+typedef struct { float2 columns[3]; } spvMat3x2;
+typedef struct { float4 columns[4]; } spvMat4;
+
+struct S1
+{
+    uint a;
+    float4 b;
+};
+
+typedef struct S1 S1;
+
+struct sA
+{
+    spvMat4 mA;
+    int3 mB;
+    int4 mC;
+};
+
+typedef struct sA sA;
+
+struct sB
+{
+    int2 mA;
+};
+
+typedef struct sB sB;
+
+struct sC
+{
+    float mA;
+    uint4 mB;
+    float mC;
+};
+
+typedef struct sC sC;
+
+struct sD
+{
+    sA mA;
+    sB mB;
+    sC mC;
+};
+
+typedef struct sD sD;
+
+struct sE
+{
+    sD mA;
+};
+
+typedef struct sE sE;
+
+struct sF
+{
+    uint3 mA;
+    bool mB;
+};
+
+typedef struct sF sF;
+
+struct sG
+{
+    sF mA;
+    spvMat3x2 mB;
+};
+
+typedef struct sG sG;
+
+struct sH
+{
+    sG mA;
+    float2 mB;
+};
+
+typedef struct sH sH;
+
+struct sI
+{
+    spvMat2 mA;
+    int3 mB;
+    int4 mC;
+};
+
+typedef struct sI sI;
+
+struct sJ
+{
+    sI mA;
+    int3 mB;
+};
+
+typedef struct sJ sJ;
+
+struct sK
+{
+    int2 mA;
+    sJ mB;
+    int2 mC;
+};
+
+typedef struct sK sK;
+
+struct S2
+{
+    sE a;
+    int3 b;
+    sH c;
+    sK d;
+};
+
+typedef struct S2 S2;
+
+struct block
+{
+    uint passed;
+};
+
+typedef struct block block;
+
+bool compare_uint( uint* a_15,  uint* b_15)
+{
+    return (*a_15) == (*b_15);
+}
+
+bool compare_float( float* a_1_1,  float* b_1_1)
+{
+    return fabs((*a_1_1) - (*b_1_1)) < 0.0500000007450580596923828125f;
+}
+
+bool compare_vec4( float4* a_2_1,  float4* b_2_1)
+{
+    float param_70 = (*a_2_1).x;
+    float param_1_1 = (*b_2_1).x;
+    bool _147 = compare_float(&param_70, &param_1_1);
+    bool _157;
+    if (_147)
+    {
+        float param_2_1 = (*a_2_1).y;
+        float param_3_1 = (*b_2_1).y;
+        _157 = compare_float(&param_2_1, &param_3_1);
+    }
+    else
+    {
+        _157 = _147;
+    }
+    bool _168;
+    if (_157)
+    {
+        float param_4_1 = (*a_2_1).z;
+        float param_5_1 = (*b_2_1).z;
+        _168 = compare_float(&param_4_1, &param_5_1);
+    }
+    else
+    {
+        _168 = _157;
+    }
+    bool _179;
+    if (_168)
+    {
+        float param_6_1 = (*a_2_1).w;
+        float param_7_1 = (*b_2_1).w;
+        _179 = compare_float(&param_6_1, &param_7_1);
+    }
+    else
+    {
+        _179 = _168;
+    }
+    return _179;
+}
+
+bool compare_mat4( spvMat4* a_3_1,  spvMat4* b_3_1)
+{
+    float4 param_8_1 = (*a_3_1).columns[0];
+    float4 param_9_1 = (*b_3_1).columns[0];
+    bool _239 = compare_vec4(&param_8_1, &param_9_1);
+    bool _249;
+    if (_239)
+    {
+        float4 param_10_1 = (*a_3_1).columns[1];
+        float4 param_11_1 = (*b_3_1).columns[1];
+        _249 = compare_vec4(&param_10_1, &param_11_1);
+    }
+    else
+    {
+        _249 = _239;
+    }
+    bool _259;
+    if (_249)
+    {
+        float4 param_12_1 = (*a_3_1).columns[2];
+        float4 param_13_1 = (*b_3_1).columns[2];
+        _259 = compare_vec4(&param_12_1, &param_13_1);
+    }
+    else
+    {
+        _259 = _249;
+    }
+    bool _270;
+    if (_259)
+    {
+        float4 param_14_1 = (*a_3_1).columns[3];
+        float4 param_15_1 = (*b_3_1).columns[3];
+        _270 = compare_vec4(&param_14_1, &param_15_1);
+    }
+    else
+    {
+        _270 = _259;
+    }
+    return _270;
+}
+
+bool compare_bvec3( int3* a_4_1,  int3* b_4_1)
+{
+    return all((*a_4_1) == (*b_4_1));
+}
+
+bool compare_bvec4( int4* a_5_1,  int4* b_5_1)
+{
+    return all((*a_5_1) == (*b_5_1));
+}
+
+bool compare_bvec2( int2* a_6_1,  int2* b_6_1)
+{
+    return all((*a_6_1) == (*b_6_1));
+}
+
+bool compare_uvec4( uint4* a_7_1,  uint4* b_7_1)
+{
+    return all((*a_7_1) == (*b_7_1));
+}
+
+bool compare_ivec3( int3* a_8_1,  int3* b_8_1)
+{
+    return all((*a_8_1) == (*b_8_1));
+}
+
+bool compare_uvec3( uint3* a_9_1,  uint3* b_9_1)
+{
+    return all((*a_9_1) == (*b_9_1));
+}
+
+bool compare_bool( bool* a_10_1,  bool* b_10_1)
+{
+    return (*a_10_1) == (*b_10_1);
+}
+
+bool compare_vec2( float2* a_11_1,  float2* b_11_1)
+{
+    float param_16_1 = (*a_11_1).x;
+    float param_17_1 = (*b_11_1).x;
+    bool _127 = compare_float(&param_16_1, &param_17_1);
+    bool _138;
+    if (_127)
+    {
+        float param_18_1 = (*a_11_1).y;
+        float param_19_1 = (*b_11_1).y;
+        _138 = compare_float(&param_18_1, &param_19_1);
+    }
+    else
+    {
+        _138 = _127;
+    }
+    return _138;
+}
+
+bool compare_mat3x2( spvMat3x2* a_12_1,  spvMat3x2* b_12_1)
+{
+    float2 param_20_1 = (*a_12_1).columns[0];
+    float2 param_21_1 = (*b_12_1).columns[0];
+    bool _209 = compare_vec2(&param_20_1, &param_21_1);
+    bool _219;
+    if (_209)
+    {
+        float2 param_22_1 = (*a_12_1).columns[1];
+        float2 param_23_1 = (*b_12_1).columns[1];
+        _219 = compare_vec2(&param_22_1, &param_23_1);
+    }
+    else
+    {
+        _219 = _209;
+    }
+    bool _230;
+    if (_219)
+    {
+        float2 param_24_1 = (*a_12_1).columns[2];
+        float2 param_25_1 = (*b_12_1).columns[2];
+        _230 = compare_vec2(&param_24_1, &param_25_1);
+    }
+    else
+    {
+        _230 = _219;
+    }
+    return _230;
+}
+
+bool compare_mat2( spvMat2* a_13_1,  spvMat2* b_13_1)
+{
+    float2 param_26_1 = (*a_13_1).columns[0];
+    float2 param_27_1 = (*b_13_1).columns[0];
+    bool _189 = compare_vec2(&param_26_1, &param_27_1);
+    bool _200;
+    if (_189)
+    {
+        float2 param_28_1 = (*a_13_1).columns[1];
+        float2 param_29_1 = (*b_13_1).columns[1];
+        _200 = compare_vec2(&param_28_1, &param_29_1);
+    }
+    else
+    {
+        _200 = _189;
+    }
+    return _200;
+}
+
+bool compare_ivec2( int2* a_14_1,  int2* b_14_1)
+{
+    return all((*a_14_1) == (*b_14_1));
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _612)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local S1 s1;
+    __local S2 s2;
+    s1.a = 0u;
+    s1.b = (float4)(8.0f, 8.0f, 0.0f, -4.0f);
+    s2.a.mA.mA.mA = (spvMat4){ { (float4)(-5.0f, 9.0f, -4.0f, -6.0f), (float4)(-1.0f, -1.0f, -2.0f, 1.0f), (float4)(6.0f, 5.0f, 7.0f, -2.0f), (float4)(-4.0f, -9.0f, 8.0f, 3.0f) } };
+    s2.a.mA.mA.mB = (int3)(true, false, false);
+    s2.a.mA.mA.mC = (int4)(true, true, true, false);
+    s2.a.mA.mB.mA = (int2)(true);
+    s2.a.mA.mC.mA = 7.0f;
+    s2.a.mA.mC.mB = (uint4)(8u, 6u, 2u, 0u);
+    s2.a.mA.mC.mC = -9.0f;
+    s2.b = (int3)(1, -4, 0);
+    s2.c.mA.mA.mA = (uint3)(4u, 9u, 1u);
+    s2.c.mA.mA.mB = false;
+    s2.c.mA.mB = (spvMat3x2){ { (float2)(3.0f, -5.0f), (float2)(-1.0f, -5.0f), (float2)(-1.0f, -9.0f) } };
+    s2.c.mB = (float2)(-6.0f, -9.0f);
+    s2.d.mA = (int2)(true, false);
+    s2.d.mB.mA.mA = (spvMat2){ { (float2)(-2.0f, 3.0f), (float2)(7.0f, 2.0f) } };
+    s2.d.mB.mA.mB = (int3)(false);
+    s2.d.mB.mA.mC = (int4)(false, false, false, true);
+    s2.d.mB.mB = (int3)(true, false, false);
+    s2.d.mC = (int2)(-9, 0);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    bool allOk_1 = true;
+    bool _435;
+    if (allOk_1)
+    {
+        uint param_30_1 = 0u;
+        uint param_31_1 = s1.a;
+        _435 = compare_uint(&param_30_1, &param_31_1);
+    }
+    else
+    {
+        _435 = allOk_1;
+    }
+    allOk_1 = _435;
+    bool _444;
+    if (allOk_1)
+    {
+        float4 param_32_1 = (float4)(8.0f, 8.0f, 0.0f, -4.0f);
+        float4 param_33_1 = s1.b;
+        _444 = compare_vec4(&param_32_1, &param_33_1);
+    }
+    else
+    {
+        _444 = allOk_1;
+    }
+    allOk_1 = _444;
+    bool _453;
+    if (allOk_1)
+    {
+        spvMat4 param_34_1 = (spvMat4){ { (float4)(-5.0f, 9.0f, -4.0f, -6.0f), (float4)(-1.0f, -1.0f, -2.0f, 1.0f), (float4)(6.0f, 5.0f, 7.0f, -2.0f), (float4)(-4.0f, -9.0f, 8.0f, 3.0f) } };
+        spvMat4 param_35_1 = s2.a.mA.mA.mA;
+        _453 = compare_mat4(&param_34_1, &param_35_1);
+    }
+    else
+    {
+        _453 = allOk_1;
+    }
+    allOk_1 = _453;
+    bool _462;
+    if (allOk_1)
+    {
+        int3 param_36_1 = (int3)(true, false, false);
+        int3 param_37_1 = s2.a.mA.mA.mB;
+        _462 = compare_bvec3(&param_36_1, &param_37_1);
+    }
+    else
+    {
+        _462 = allOk_1;
+    }
+    allOk_1 = _462;
+    bool _471;
+    if (allOk_1)
+    {
+        int4 param_38_1 = (int4)(true, true, true, false);
+        int4 param_39_1 = s2.a.mA.mA.mC;
+        _471 = compare_bvec4(&param_38_1, &param_39_1);
+    }
+    else
+    {
+        _471 = allOk_1;
+    }
+    allOk_1 = _471;
+    bool _480;
+    if (allOk_1)
+    {
+        int2 param_40_1 = (int2)(true);
+        int2 param_41_1 = s2.a.mA.mB.mA;
+        _480 = compare_bvec2(&param_40_1, &param_41_1);
+    }
+    else
+    {
+        _480 = allOk_1;
+    }
+    allOk_1 = _480;
+    bool _489;
+    if (allOk_1)
+    {
+        float param_42_1 = 7.0f;
+        float param_43_1 = s2.a.mA.mC.mA;
+        _489 = compare_float(&param_42_1, &param_43_1);
+    }
+    else
+    {
+        _489 = allOk_1;
+    }
+    allOk_1 = _489;
+    bool _498;
+    if (allOk_1)
+    {
+        uint4 param_44_1 = (uint4)(8u, 6u, 2u, 0u);
+        uint4 param_45_1 = s2.a.mA.mC.mB;
+        _498 = compare_uvec4(&param_44_1, &param_45_1);
+    }
+    else
+    {
+        _498 = allOk_1;
+    }
+    allOk_1 = _498;
+    bool _507;
+    if (allOk_1)
+    {
+        float param_46_1 = -9.0f;
+        float param_47_1 = s2.a.mA.mC.mC;
+        _507 = compare_float(&param_46_1, &param_47_1);
+    }
+    else
+    {
+        _507 = allOk_1;
+    }
+    allOk_1 = _507;
+    bool _516;
+    if (allOk_1)
+    {
+        int3 param_48_1 = (int3)(1, -4, 0);
+        int3 param_49_1 = s2.b;
+        _516 = compare_ivec3(&param_48_1, &param_49_1);
+    }
+    else
+    {
+        _516 = allOk_1;
+    }
+    allOk_1 = _516;
+    bool _525;
+    if (allOk_1)
+    {
+        uint3 param_50_1 = (uint3)(4u, 9u, 1u);
+        uint3 param_51_1 = s2.c.mA.mA.mA;
+        _525 = compare_uvec3(&param_50_1, &param_51_1);
+    }
+    else
+    {
+        _525 = allOk_1;
+    }
+    allOk_1 = _525;
+    bool _534;
+    if (allOk_1)
+    {
+        bool param_52_1 = false;
+        bool param_53_1 = s2.c.mA.mA.mB;
+        _534 = compare_bool(&param_52_1, &param_53_1);
+    }
+    else
+    {
+        _534 = allOk_1;
+    }
+    allOk_1 = _534;
+    bool _543;
+    if (allOk_1)
+    {
+        spvMat3x2 param_54_1 = (spvMat3x2){ { (float2)(3.0f, -5.0f), (float2)(-1.0f, -5.0f), (float2)(-1.0f, -9.0f) } };
+        spvMat3x2 param_55_1 = s2.c.mA.mB;
+        _543 = compare_mat3x2(&param_54_1, &param_55_1);
+    }
+    else
+    {
+        _543 = allOk_1;
+    }
+    allOk_1 = _543;
+    bool _552;
+    if (allOk_1)
+    {
+        float2 param_56_1 = (float2)(-6.0f, -9.0f);
+        float2 param_57_1 = s2.c.mB;
+        _552 = compare_vec2(&param_56_1, &param_57_1);
+    }
+    else
+    {
+        _552 = allOk_1;
+    }
+    allOk_1 = _552;
+    bool _561;
+    if (allOk_1)
+    {
+        int2 param_58_1 = (int2)(true, false);
+        int2 param_59_1 = s2.d.mA;
+        _561 = compare_bvec2(&param_58_1, &param_59_1);
+    }
+    else
+    {
+        _561 = allOk_1;
+    }
+    allOk_1 = _561;
+    bool _570;
+    if (allOk_1)
+    {
+        spvMat2 param_60_1 = (spvMat2){ { (float2)(-2.0f, 3.0f), (float2)(7.0f, 2.0f) } };
+        spvMat2 param_61_1 = s2.d.mB.mA.mA;
+        _570 = compare_mat2(&param_60_1, &param_61_1);
+    }
+    else
+    {
+        _570 = allOk_1;
+    }
+    allOk_1 = _570;
+    bool _579;
+    if (allOk_1)
+    {
+        int3 param_62_1 = (int3)(false);
+        int3 param_63_1 = s2.d.mB.mA.mB;
+        _579 = compare_bvec3(&param_62_1, &param_63_1);
+    }
+    else
+    {
+        _579 = allOk_1;
+    }
+    allOk_1 = _579;
+    bool _588;
+    if (allOk_1)
+    {
+        int4 param_64_1 = (int4)(false, false, false, true);
+        int4 param_65_1 = s2.d.mB.mA.mC;
+        _588 = compare_bvec4(&param_64_1, &param_65_1);
+    }
+    else
+    {
+        _588 = allOk_1;
+    }
+    allOk_1 = _588;
+    bool _597;
+    if (allOk_1)
+    {
+        int3 param_66_1 = (int3)(true, false, false);
+        int3 param_67_1 = s2.d.mB.mB;
+        _597 = compare_bvec3(&param_66_1, &param_67_1);
+    }
+    else
+    {
+        _597 = allOk_1;
+    }
+    allOk_1 = _597;
+    bool _606;
+    if (allOk_1)
+    {
+        int2 param_68_1 = (int2)(-9, 0);
+        int2 param_69_1 = s2.d.mC;
+        _606 = compare_ivec2(&param_68_1, &param_69_1);
+    }
+    else
+    {
+        _606 = allOk_1;
+    }
+    allOk_1 = _606;
+    if (allOk_1)
+    {
+        _612[0] += as_uint(1);
+    }
+}
+

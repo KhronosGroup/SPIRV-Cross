@@ -1,0 +1,463 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[2]; } spvMat2;
+typedef struct { float3 columns[2]; } spvMat2x3;
+typedef struct { float2 columns[3]; } spvMat3x2;
+typedef struct { float3 columns[4]; } spvMat4x3;
+
+struct sA
+{
+    spvMat2x3 mA;
+};
+
+typedef struct sA sA;
+
+struct sB
+{
+    spvMat2 mA;
+    spvMat3x2 mB;
+    uint3 mC;
+};
+
+typedef struct sB sB;
+
+struct sC
+{
+    sA mA;
+    sB mB;
+};
+
+typedef struct sC sC;
+
+struct sD
+{
+    sC mA;
+};
+
+typedef struct sD sD;
+
+struct sE
+{
+    spvMat3x2 mA;
+    spvMat4x3 mB;
+};
+
+typedef struct sE sE;
+
+struct sF
+{
+    sE mA;
+};
+
+typedef struct sF sF;
+
+struct sG
+{
+    sF mA;
+};
+
+typedef struct sG sG;
+
+struct sH
+{
+    int3 mA[2];
+};
+
+typedef struct sH sH;
+
+struct S1
+{
+    sD a;
+    sG b;
+    sH c[2];
+};
+
+typedef struct S1 S1;
+
+struct block
+{
+    uint passed;
+};
+
+typedef struct block block;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _424)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local S1 s1;
+    s1.a.mA.mA.mA = (spvMat2x3){ { (float3)(6.0f, 8.0f, 8.0f), (float3)(0.0f, -4.0f, -5.0f) } };
+    s1.a.mA.mB.mA = (spvMat2){ { (float2)(9.0f, -4.0f), (float2)(-6.0f, -1.0f) } };
+    s1.a.mA.mB.mB = (spvMat3x2){ { (float2)(-1.0f, -2.0f), (float2)(1.0f, 6.0f), (float2)(5.0f, 7.0f) } };
+    s1.a.mA.mB.mC = (uint3)(3u, 1u, 5u);
+    s1.b.mA.mA.mA = (spvMat3x2){ { (float2)(8.0f, 3.0f), (float2)(0.0f, 2.0f), (float2)(1.0f, 8.0f) } };
+    s1.b.mA.mA.mB = (spvMat4x3){ { (float3)(0.0f, 9.0f, -1.0f), (float3)(-1.0f, -7.0f, 7.0f), (float3)(-4.0f, -3.0f, 1.0f), (float3)(-4.0f, -9.0f, 1.0f) } };
+    s1.c[0].mA[0] = (int3)(true, false, false);
+    s1.c[0].mA[1] = (int3)(true, false, false);
+    s1.c[1].mA[0] = (int3)(false);
+    s1.c[1].mA[1] = (int3)(false);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    mem_fence(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    bool _484 = fabs(6.0f - s1.a.mA.mA.mA.columns[0].x) < 0.0500000007450580596923828125f;
+    bool _469;
+    if (_484)
+    {
+        _469 = fabs(8.0f - s1.a.mA.mA.mA.columns[0].y) < 0.0500000007450580596923828125f;
+    }
+    else
+    {
+        _469 = _484;
+    }
+    bool _477;
+    if (_469)
+    {
+        _477 = fabs(8.0f - s1.a.mA.mA.mA.columns[0].z) < 0.0500000007450580596923828125f;
+    }
+    else
+    {
+        _477 = _469;
+    }
+    bool _448;
+    if (_477)
+    {
+        bool _534 = fabs(-s1.a.mA.mA.mA.columns[1].x) < 0.0500000007450580596923828125f;
+        bool _519;
+        if (_534)
+        {
+            _519 = fabs((-4.0f) - s1.a.mA.mA.mA.columns[1].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _519 = _534;
+        }
+        bool _527;
+        if (_519)
+        {
+            _527 = fabs((-5.0f) - s1.a.mA.mA.mA.columns[1].z) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _527 = _519;
+        }
+        _448 = _527;
+    }
+    else
+    {
+        _448 = _477;
+    }
+    bool _346;
+    if (_448)
+    {
+        bool _593 = fabs(9.0f - s1.a.mA.mB.mA.columns[0].x) < 0.0500000007450580596923828125f;
+        bool _586;
+        if (_593)
+        {
+            _586 = fabs((-4.0f) - s1.a.mA.mB.mA.columns[0].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _586 = _593;
+        }
+        bool _567;
+        if (_586)
+        {
+            bool _626 = fabs((-6.0f) - s1.a.mA.mB.mA.columns[1].x) < 0.0500000007450580596923828125f;
+            bool _619;
+            if (_626)
+            {
+                _619 = fabs((-1.0f) - s1.a.mA.mB.mA.columns[1].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _619 = _626;
+            }
+            _567 = _619;
+        }
+        else
+        {
+            _567 = _586;
+        }
+        _346 = _567;
+    }
+    else
+    {
+        _346 = _448;
+    }
+    bool _355;
+    if (_346)
+    {
+        bool _688 = fabs((-1.0f) - s1.a.mA.mB.mB.columns[0].x) < 0.0500000007450580596923828125f;
+        bool _681;
+        if (_688)
+        {
+            _681 = fabs((-2.0f) - s1.a.mA.mB.mB.columns[0].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _681 = _688;
+        }
+        bool _654;
+        if (_681)
+        {
+            bool _721 = fabs(1.0f - s1.a.mA.mB.mB.columns[1].x) < 0.0500000007450580596923828125f;
+            bool _714;
+            if (_721)
+            {
+                _714 = fabs(6.0f - s1.a.mA.mB.mB.columns[1].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _714 = _721;
+            }
+            _654 = _714;
+        }
+        else
+        {
+            _654 = _681;
+        }
+        bool _662;
+        if (_654)
+        {
+            bool _754 = fabs(5.0f - s1.a.mA.mB.mB.columns[2].x) < 0.0500000007450580596923828125f;
+            bool _747;
+            if (_754)
+            {
+                _747 = fabs(7.0f - s1.a.mA.mB.mB.columns[2].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _747 = _754;
+            }
+            _662 = _747;
+        }
+        else
+        {
+            _662 = _654;
+        }
+        _355 = _662;
+    }
+    else
+    {
+        _355 = _346;
+    }
+    bool _364;
+    if (_355)
+    {
+        _364 = all((uint3)(3u, 1u, 5u) == s1.a.mA.mB.mC);
+    }
+    else
+    {
+        _364 = _355;
+    }
+    bool _373;
+    if (_364)
+    {
+        bool _822 = fabs(8.0f - s1.b.mA.mA.mA.columns[0].x) < 0.0500000007450580596923828125f;
+        bool _815;
+        if (_822)
+        {
+            _815 = fabs(3.0f - s1.b.mA.mA.mA.columns[0].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _815 = _822;
+        }
+        bool _788;
+        if (_815)
+        {
+            bool _855 = fabs(-s1.b.mA.mA.mA.columns[1].x) < 0.0500000007450580596923828125f;
+            bool _848;
+            if (_855)
+            {
+                _848 = fabs(2.0f - s1.b.mA.mA.mA.columns[1].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _848 = _855;
+            }
+            _788 = _848;
+        }
+        else
+        {
+            _788 = _815;
+        }
+        bool _796;
+        if (_788)
+        {
+            bool _888 = fabs(1.0f - s1.b.mA.mA.mA.columns[2].x) < 0.0500000007450580596923828125f;
+            bool _881;
+            if (_888)
+            {
+                _881 = fabs(8.0f - s1.b.mA.mA.mA.columns[2].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _881 = _888;
+            }
+            _796 = _881;
+        }
+        else
+        {
+            _796 = _788;
+        }
+        _373 = _796;
+    }
+    else
+    {
+        _373 = _364;
+    }
+    bool _382;
+    if (_373)
+    {
+        bool _970 = fabs(-s1.b.mA.mA.mB.columns[0].x) < 0.0500000007450580596923828125f;
+        bool _955;
+        if (_970)
+        {
+            _955 = fabs(9.0f - s1.b.mA.mA.mB.columns[0].y) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _955 = _970;
+        }
+        bool _963;
+        if (_955)
+        {
+            _963 = fabs((-1.0f) - s1.b.mA.mA.mB.columns[0].z) < 0.0500000007450580596923828125f;
+        }
+        else
+        {
+            _963 = _955;
+        }
+        bool _918;
+        if (_963)
+        {
+            bool _1020 = fabs((-1.0f) - s1.b.mA.mA.mB.columns[1].x) < 0.0500000007450580596923828125f;
+            bool _1005;
+            if (_1020)
+            {
+                _1005 = fabs((-7.0f) - s1.b.mA.mA.mB.columns[1].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1005 = _1020;
+            }
+            bool _1013;
+            if (_1005)
+            {
+                _1013 = fabs(7.0f - s1.b.mA.mA.mB.columns[1].z) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1013 = _1005;
+            }
+            _918 = _1013;
+        }
+        else
+        {
+            _918 = _963;
+        }
+        bool _926;
+        if (_918)
+        {
+            bool _1070 = fabs((-4.0f) - s1.b.mA.mA.mB.columns[2].x) < 0.0500000007450580596923828125f;
+            bool _1055;
+            if (_1070)
+            {
+                _1055 = fabs((-3.0f) - s1.b.mA.mA.mB.columns[2].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1055 = _1070;
+            }
+            bool _1063;
+            if (_1055)
+            {
+                _1063 = fabs(1.0f - s1.b.mA.mA.mB.columns[2].z) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1063 = _1055;
+            }
+            _926 = _1063;
+        }
+        else
+        {
+            _926 = _918;
+        }
+        bool _934;
+        if (_926)
+        {
+            bool _1120 = fabs((-4.0f) - s1.b.mA.mA.mB.columns[3].x) < 0.0500000007450580596923828125f;
+            bool _1105;
+            if (_1120)
+            {
+                _1105 = fabs((-9.0f) - s1.b.mA.mA.mB.columns[3].y) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1105 = _1120;
+            }
+            bool _1113;
+            if (_1105)
+            {
+                _1113 = fabs(1.0f - s1.b.mA.mA.mB.columns[3].z) < 0.0500000007450580596923828125f;
+            }
+            else
+            {
+                _1113 = _1105;
+            }
+            _934 = _1113;
+        }
+        else
+        {
+            _934 = _926;
+        }
+        _382 = _934;
+    }
+    else
+    {
+        _382 = _373;
+    }
+    bool _391;
+    if (_382)
+    {
+        _391 = all((int3)(true, false, false) == s1.c[0].mA[0]);
+    }
+    else
+    {
+        _391 = _382;
+    }
+    bool _400;
+    if (_391)
+    {
+        _400 = all((int3)(true, false, false) == s1.c[0].mA[1]);
+    }
+    else
+    {
+        _400 = _391;
+    }
+    bool _409;
+    if (_400)
+    {
+        _409 = all((int3)(false) == s1.c[1].mA[0]);
+    }
+    else
+    {
+        _409 = _400;
+    }
+    bool _418;
+    if (_409)
+    {
+        _418 = all((int3)(false) == s1.c[1].mA[1]);
+    }
+    else
+    {
+        _418 = _409;
+    }
+    if (_418)
+    {
+        _424[0] += as_uint(1);
+    }
+}
+

@@ -1,0 +1,53 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[2]; } spvMat2;
+typedef struct { float3 columns[3]; } spvMat3;
+typedef struct { float4 columns[4]; } spvMat4;
+
+struct MatrixOut
+{
+    spvMat2 m2out;
+    spvMat3 m3out;
+    spvMat4 m4out;
+};
+
+typedef struct MatrixOut MatrixOut;
+
+struct MatrixIn
+{
+    spvMat2 m2in;
+    spvMat3 m3in;
+    spvMat4 m4in;
+};
+
+typedef struct MatrixIn MatrixIn;
+
+static spvMat2 spvInverse2(spvMat2 m) {
+    float d = 1.0f / (m.columns[0].x * m.columns[1].y - m.columns[1].x * m.columns[0].y);
+    return (spvMat2){ { (float2)(m.columns[1].y * d, -m.columns[0].y * d), (float2)(-m.columns[1].x * d, m.columns[0].x * d) } };
+}
+
+static spvMat3 spvInverse3(spvMat3 m) {
+    float3 t = (float3)(m.columns[1].y * m.columns[2].z - m.columns[1].z * m.columns[2].y, m.columns[1].z * m.columns[2].x - m.columns[1].x * m.columns[2].z, m.columns[1].x * m.columns[2].y - m.columns[1].y * m.columns[2].x);
+    float d = 1.0f / dot(m.columns[0], t);
+    return (spvMat3){ { t * d, (float3)(m.columns[0].z * m.columns[2].y - m.columns[0].y * m.columns[2].z, m.columns[0].x * m.columns[2].z - m.columns[0].z * m.columns[2].x, m.columns[0].y * m.columns[2].x - m.columns[0].x * m.columns[2].y) * d, (float3)(m.columns[0].y * m.columns[1].z - m.columns[0].z * m.columns[1].y, m.columns[0].z * m.columns[1].x - m.columns[0].x * m.columns[1].z, m.columns[0].x * m.columns[1].y - m.columns[0].y * m.columns[1].x) * d } };
+}
+
+static spvMat4 spvInverse4(spvMat4 m) {
+    float4 t = (float4)(m.columns[2].y * m.columns[3].z * m.columns[1].w - m.columns[3].y * m.columns[2].z * m.columns[1].w + m.columns[3].y * m.columns[1].z * m.columns[2].w - m.columns[1].y * m.columns[3].z * m.columns[2].w - m.columns[2].y * m.columns[1].z * m.columns[3].w + m.columns[1].y * m.columns[2].z * m.columns[3].w, m.columns[3].x * m.columns[2].z * m.columns[1].w - m.columns[2].x * m.columns[3].z * m.columns[1].w - m.columns[3].x * m.columns[1].z * m.columns[2].w + m.columns[1].x * m.columns[3].z * m.columns[2].w + m.columns[2].x * m.columns[1].z * m.columns[3].w - m.columns[1].x * m.columns[2].z * m.columns[3].w, m.columns[2].x * m.columns[3].y * m.columns[1].w - m.columns[3].x * m.columns[2].y * m.columns[1].w + m.columns[3].x * m.columns[1].y * m.columns[2].w - m.columns[1].x * m.columns[3].y * m.columns[2].w - m.columns[2].x * m.columns[1].y * m.columns[3].w + m.columns[1].x * m.columns[2].y * m.columns[3].w, m.columns[3].x * m.columns[2].y * m.columns[1].z - m.columns[2].x * m.columns[3].y * m.columns[1].z - m.columns[3].x * m.columns[1].y * m.columns[2].z + m.columns[1].x * m.columns[3].y * m.columns[2].z + m.columns[2].x * m.columns[1].y * m.columns[3].z - m.columns[1].x * m.columns[2].y * m.columns[3].z);
+    spvMat4 r = (spvMat4){ { (float4)(t.x, m.columns[3].y * m.columns[2].z * m.columns[0].w - m.columns[2].y * m.columns[3].z * m.columns[0].w - m.columns[3].y * m.columns[0].z * m.columns[2].w + m.columns[0].y * m.columns[3].z * m.columns[2].w + m.columns[2].y * m.columns[0].z * m.columns[3].w - m.columns[0].y * m.columns[2].z * m.columns[3].w, m.columns[1].y * m.columns[3].z * m.columns[0].w - m.columns[3].y * m.columns[1].z * m.columns[0].w + m.columns[3].y * m.columns[0].z * m.columns[1].w - m.columns[0].y * m.columns[3].z * m.columns[1].w - m.columns[1].y * m.columns[0].z * m.columns[3].w + m.columns[0].y * m.columns[1].z * m.columns[3].w, m.columns[2].y * m.columns[1].z * m.columns[0].w - m.columns[1].y * m.columns[2].z * m.columns[0].w - m.columns[2].y * m.columns[0].z * m.columns[1].w + m.columns[0].y * m.columns[2].z * m.columns[1].w + m.columns[1].y * m.columns[0].z * m.columns[2].w - m.columns[0].y * m.columns[1].z * m.columns[2].w), (float4)(t.y, m.columns[2].x * m.columns[3].z * m.columns[0].w - m.columns[3].x * m.columns[2].z * m.columns[0].w + m.columns[3].x * m.columns[0].z * m.columns[2].w - m.columns[0].x * m.columns[3].z * m.columns[2].w - m.columns[2].x * m.columns[0].z * m.columns[3].w + m.columns[0].x * m.columns[2].z * m.columns[3].w, m.columns[3].x * m.columns[1].z * m.columns[0].w - m.columns[1].x * m.columns[3].z * m.columns[0].w - m.columns[3].x * m.columns[0].z * m.columns[1].w + m.columns[0].x * m.columns[3].z * m.columns[1].w + m.columns[1].x * m.columns[0].z * m.columns[3].w - m.columns[0].x * m.columns[1].z * m.columns[3].w, m.columns[1].x * m.columns[2].z * m.columns[0].w - m.columns[2].x * m.columns[1].z * m.columns[0].w + m.columns[2].x * m.columns[0].z * m.columns[1].w - m.columns[0].x * m.columns[2].z * m.columns[1].w - m.columns[1].x * m.columns[0].z * m.columns[2].w + m.columns[0].x * m.columns[1].z * m.columns[2].w), (float4)(t.z, m.columns[3].x * m.columns[2].y * m.columns[0].w - m.columns[2].x * m.columns[3].y * m.columns[0].w - m.columns[3].x * m.columns[0].y * m.columns[2].w + m.columns[0].x * m.columns[3].y * m.columns[2].w + m.columns[2].x * m.columns[0].y * m.columns[3].w - m.columns[0].x * m.columns[2].y * m.columns[3].w, m.columns[1].x * m.columns[3].y * m.columns[0].w - m.columns[3].x * m.columns[1].y * m.columns[0].w + m.columns[3].x * m.columns[0].y * m.columns[1].w - m.columns[0].x * m.columns[3].y * m.columns[1].w - m.columns[1].x * m.columns[0].y * m.columns[3].w + m.columns[0].x * m.columns[1].y * m.columns[3].w, m.columns[2].x * m.columns[1].y * m.columns[0].w - m.columns[1].x * m.columns[2].y * m.columns[0].w - m.columns[2].x * m.columns[0].y * m.columns[1].w + m.columns[0].x * m.columns[2].y * m.columns[1].w + m.columns[1].x * m.columns[0].y * m.columns[2].w - m.columns[0].x * m.columns[1].y * m.columns[2].w), (float4)(t.w, m.columns[2].x * m.columns[3].y * m.columns[0].z - m.columns[3].x * m.columns[2].y * m.columns[0].z + m.columns[3].x * m.columns[0].y * m.columns[2].z - m.columns[0].x * m.columns[3].y * m.columns[2].z - m.columns[2].x * m.columns[0].y * m.columns[3].z + m.columns[0].x * m.columns[2].y * m.columns[3].z, m.columns[3].x * m.columns[1].y * m.columns[0].z - m.columns[1].x * m.columns[3].y * m.columns[0].z - m.columns[3].x * m.columns[0].y * m.columns[1].z + m.columns[0].x * m.columns[3].y * m.columns[1].z + m.columns[1].x * m.columns[0].y * m.columns[3].z - m.columns[0].x * m.columns[1].y * m.columns[3].z, m.columns[1].x * m.columns[2].y * m.columns[0].z - m.columns[2].x * m.columns[1].y * m.columns[0].z + m.columns[2].x * m.columns[0].y * m.columns[1].z - m.columns[0].x * m.columns[2].y * m.columns[1].z - m.columns[1].x * m.columns[0].y * m.columns[2].z + m.columns[0].x * m.columns[1].y * m.columns[2].z) } };
+    float d = 1.0f / dot(m.columns[0], t);
+    r.columns[0] *= d; r.columns[1] *= d; r.columns[2] *= d; r.columns[3] *= d;
+    return r;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global MatrixOut* _15, __global const MatrixIn* _20)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _15->m2out = spvInverse2(_20->m2in);
+    _15->m3out = spvInverse3(_20->m3in);
+    _15->m4out = spvInverse4(_20->m4in);
+}
+

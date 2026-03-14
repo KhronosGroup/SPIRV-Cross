@@ -812,6 +812,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_OPENCL_VERSION:
 		options->opencl.opencl_version = value;
 		break;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_FP16:
+		options->opencl.enable_fp16 = value != 0;
+		break;
 	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_FP64:
 		options->opencl.enable_fp64 = value != 0;
 		break;
@@ -821,8 +824,14 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_SUBGROUPS:
 		options->opencl.enable_subgroups = value != 0;
 		break;
-	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_SHUFFLE:
-		options->opencl.enable_shuffle = value != 0;
+	case SPVC_COMPILER_OPTION_OPENCL_ENABLE_SUBGROUPS_ALL:
+		options->opencl.enable_subgroups_all = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_EMULATE_SUBGROUPS:
+		options->opencl.emulate_subgroups = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_OPENCL_FIXED_SUBGROUP_SIZE:
+		options->opencl.fixed_subgroup_size = value;
 		break;
 #endif
 

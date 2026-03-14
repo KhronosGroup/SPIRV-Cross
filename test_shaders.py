@@ -613,12 +613,22 @@ ignore_clang = False
 def validate_shader_opencl(shader, opt, paths):
     shader = reference_path(shader[0], shader[1], opt)
     extensions = []
-    if '.double.' in shader:
+    if '.fp16.' in shader:
+        extensions.append('cl_khr_fp16')
+    if '.fp64.' in shader:
         extensions.append('cl_khr_fp64')
-    if '.subgroup.' in shader:
+    if '.subgroups-emulate.' in shader:
+        if '.subgroups.' in shader:
+            extensions.append('cl_khr_subgroups')
+    elif '.subgroups.' in shader:
         extensions.append('cl_khr_subgroups')
-    if '.shuffle.' in shader:
+        extensions.append('cl_khr_subgroup_ballot')
+        extensions.append('cl_khr_subgroup_clustered_reduce')
+        extensions.append('cl_khr_subgroup_non_uniform_arithmetic')
+        extensions.append('cl_khr_subgroup_non_uniform_vote')
+        extensions.append('cl_khr_subgroup_rotate')
         extensions.append('cl_khr_subgroup_shuffle')
+        extensions.append('cl_khr_subgroup_shuffle_relative')
 
     global ignore_clang
     try:
@@ -681,12 +691,16 @@ def cross_compile_opencl(shader, spirv, opt, iterations, paths):
     opencl_args = [spirv_cross_path, '--output', opencl_path, spirv_path, '--opencl', '--iterations', str(iterations)]
     opencl_args.append('--opencl-version')
     opencl_args.append(path_to_opencl_standard_cli(shader))
-    if '.double.' in shader:
+    if '.fp16.' in shader:
+        opencl_args.append('--opencl-fp16')
+    if '.fp64.' in shader:
         opencl_args.append('--opencl-fp64')
-    if '.subgroup.' in shader:
-        opencl_args.append('--opencl-subgroups')
-    if '.shuffle.' in shader:
-        opencl_args.append('--opencl-shuffle')
+    if '.subgroups.' in shader:
+        opencl_args.append('--opencl-subgroups-all')
+    if '.subgroups-emulate.' in shader:
+        opencl_args.append('--opencl-emulate-subgroups')
+        opencl_args.append('--opencl-fixed-subgroup-size')
+        opencl_args.append('32')
 
     if shader_is_invalid_spirv(shader):
         subprocess.run(opencl_args)

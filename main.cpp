@@ -778,10 +778,13 @@ struct CLIArguments
 
 	bool opencl = false;
 	uint32_t opencl_version = 120;
+	bool opencl_enable_fp16 = false;
 	bool opencl_enable_fp64 = false;
 	bool opencl_enable_64bit_atomics = false;
 	bool opencl_enable_subgroups = false;
-	bool opencl_enable_shuffle = false;
+	bool opencl_enable_subgroups_all = false;
+	bool opencl_emulate_subgroups = false;
+	uint32_t opencl_fixed_subgroup_size = 0;
 };
 
 static void print_version()
@@ -1362,9 +1365,12 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		auto *ocl_comp = static_cast<CompilerOpenCL *>(compiler.get());
 		CompilerOpenCL::Options ocl_opts = ocl_comp->get_opencl_options();
 		ocl_opts.opencl_version = args.opencl_version;
+		ocl_opts.enable_fp16 = args.opencl_enable_fp16;
 		ocl_opts.enable_fp64 = args.opencl_enable_fp64;
 		ocl_opts.enable_subgroups = args.opencl_enable_subgroups;
-		ocl_opts.enable_shuffle = args.opencl_enable_shuffle;
+		ocl_opts.enable_subgroups_all = args.opencl_enable_subgroups_all;
+		ocl_opts.emulate_subgroups = args.opencl_emulate_subgroups;
+		ocl_opts.fixed_subgroup_size = args.opencl_fixed_subgroup_size;
 		ocl_comp->set_opencl_options(ocl_opts);
 	}
 	else if (args.hlsl)
@@ -1995,10 +2001,14 @@ static int main_inner(int argc, char *argv[])
 	        });
 	cbs.add("--opencl", [&args](CLIParser &) { args.opencl = true; });
 	cbs.add("--opencl-version", [&args](CLIParser &parser) { args.opencl_version = parser.next_uint(); });
+	cbs.add("--opencl-fp16", [&args](CLIParser &) { args.opencl_enable_fp16 = true; });
 	cbs.add("--opencl-fp64", [&args](CLIParser &) { args.opencl_enable_fp64 = true; });
 	cbs.add("--opencl-64bit-atomics", [&args](CLIParser &) { args.opencl_enable_64bit_atomics = true; });
 	cbs.add("--opencl-subgroups", [&args](CLIParser &) { args.opencl_enable_subgroups = true; });
-	cbs.add("--opencl-shuffle", [&args](CLIParser &) { args.opencl_enable_shuffle = true; });
+	cbs.add("--opencl-subgroups-all", [&args](CLIParser &) { args.opencl_enable_subgroups = true; });
+	cbs.add("--opencl-emulate-subgroups", [&args](CLIParser &) { args.opencl_emulate_subgroups = true; });
+	cbs.add("--opencl-fixed-subgroup-size",
+	        [&args](CLIParser &parser) { args.opencl_fixed_subgroup_size = parser.next_uint(); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point",
 	        [&args](CLIParser &parser)
