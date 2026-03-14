@@ -1,0 +1,41 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _4;
+
+struct _4
+{
+    int _m0;
+    ulong _m1;
+};
+
+typedef struct _4 _4;
+
+struct _16
+{
+    ulong _m0;
+};
+
+typedef struct _16 _16;
+
+void _43(__global _4* __restrict _10, int _44, __global int* __restrict _12, __global int* __restrict __global * __restrict _13, __global int* __restrict _14)
+{
+}
+
+void _40(__global _4* _6, int _41, __global int* _7, __global int* __global * _8, __global int* _9)
+{
+    _43(_6, _41, _7, _8, _9);
+    _6->_m0 = _41;
+    *_7 = _41;
+    *_9 = _41;
+    *_8 = _9;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(_16 _32)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __global _4* _28 = ((__global _4*)(_32._m0));
+    _40(_28, 40, &_28->_m0, &_28->_m1, ((__global int*)(_28->_m1)));
+}
+

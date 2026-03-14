@@ -1,0 +1,38 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    int4 ints;
+    uint4 uints;
+};
+
+typedef struct SSBO SSBO;
+
+uint spvBitReverse(uint v) {
+    v = ((v >> 1u) & 0x55555555u) | ((v & 0x55555555u) << 1u);
+    v = ((v >> 2u) & 0x33333333u) | ((v & 0x33333333u) << 2u);
+    v = ((v >> 4u) & 0x0F0F0F0Fu) | ((v & 0x0F0F0F0Fu) << 4u);
+    v = ((v >> 8u) & 0x00FF00FFu) | ((v & 0x00FF00FFu) << 8u);
+    return (v >> 16u) | (v << 16u);
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _4)
+{
+    int4 _19 = _4->ints;
+    uint4 _20 = _4->uints;
+    _4->ints = popcount(_19);
+    _4->uints = as_uint4(popcount(_19));
+    _4->ints = as_int4(popcount(_20));
+    _4->uints = popcount(_20);
+    _4->ints = as_int4((uint4)(spvBitReverse(as_uint4(_19).s0), spvBitReverse(as_uint4(_19).s1), spvBitReverse(as_uint4(_19).s2), spvBitReverse(as_uint4(_19).s3)));
+    _4->uints = (uint4)(spvBitReverse(_20.s0), spvBitReverse(_20.s1), spvBitReverse(_20.s2), spvBitReverse(_20.s3));
+    _4->ints = (_19 << (32 - 11u - 1)) >> (32 - 11u);
+    _4->uints = as_uint4((as_int4(_20) << (32 - 1 - 11u)) >> (32 - 1));
+    _4->ints = as_int4((as_uint4(_19) >> 1) & ((uint4)(1u << 11u) - (uint4)1u));
+    _4->uints = (_20 >> 11u) & ((uint4)(1u << 1) - (uint4)1u);
+    _4->ints = as_int4((as_uint4(_19) & ~(((uint4)(1u << 11u) - (uint4)1u) << 1)) | ((as_uint4(_19.wzyx) << 1) & (((uint4)(1u << 11u) - (uint4)1u) << 1)));
+    _4->uints = (_20 & ~(((uint4)(1u << 1) - (uint4)1u) << 11u)) | ((_20.wzyx << 11u) & (((uint4)(1u << 1) - (uint4)1u) << 11u));
+}
+

@@ -1,0 +1,41 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct type_CommonConstants
+{
+    uint g_count;
+    uint3 g_padding4;
+};
+
+typedef struct type_CommonConstants type_CommonConstants;
+
+struct MyStruct
+{
+    float4 m_coefficients[4];
+};
+
+typedef struct MyStruct MyStruct;
+
+struct type_RWStructuredBuffer_MyStruct
+{
+    MyStruct _m0[1];
+};
+
+typedef struct type_RWStructuredBuffer_MyStruct type_RWStructuredBuffer_MyStruct;
+
+constant float4 _27[4] = { (float4)(0.0f), (float4)(0.0f), (float4)(0.0f), (float4)(0.0f) };
+
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void comp_main(type_CommonConstants CommonConstants, __global MyStruct* g_data)
+{
+    do
+    {
+        if (((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x >= CommonConstants.g_count)
+        {
+            break;
+        }
+        g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = (MyStruct){ { (float4)(0.0f), (float4)(0.0f), (float4)(0.0f), (float4)(0.0f) } };
+        break;
+    } while(false);
+}
+

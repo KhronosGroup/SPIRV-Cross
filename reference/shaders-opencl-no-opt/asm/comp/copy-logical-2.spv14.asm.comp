@@ -1,0 +1,83 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[2]; } spvMat2;
+
+struct _13
+{
+    spvMat2 _m0;
+};
+
+typedef struct _13 _13;
+
+struct _14
+{
+    spvMat2 _m0;
+};
+
+typedef struct _14 _14;
+
+struct B2
+{
+    float4 elem2;
+};
+
+typedef struct B2 B2;
+
+struct C
+{
+    float4 c;
+    B2 b2;
+    B2 b2_array[4];
+    _14 _m3;
+};
+
+typedef struct C C;
+
+struct B1
+{
+    float4 elem1;
+};
+
+typedef struct B1 B1;
+
+struct A
+{
+    float4 a;
+    B1 b1;
+    B1 b1_array[4];
+    _13 _m3;
+};
+
+typedef struct A A;
+
+struct _10
+{
+    A a_block;
+    C c_block;
+};
+
+typedef struct _10 _10;
+
+static spvMat2 spvTransposeMat2(spvMat2 m)
+{
+    spvMat2 r;
+    r.columns[0] = (float2)(m.columns[0].x, m.columns[1].x);
+    r.columns[1] = (float2)(m.columns[0].y, m.columns[1].y);
+    return r;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global _10* _4)
+{
+    A _24;
+    _24.a = _4->c_block.c;
+    _24.b1.elem1 = _4->c_block.b2.elem2;
+    _24.b1_array[0].elem1 = _4->c_block.b2_array[0].elem2;
+    _24.b1_array[1].elem1 = _4->c_block.b2_array[1].elem2;
+    _24.b1_array[2].elem1 = _4->c_block.b2_array[2].elem2;
+    _24.b1_array[3].elem1 = _4->c_block.b2_array[3].elem2;
+    _24._m3._m0 = spvTransposeMat2(_4->c_block._m3._m0);
+    _4->a_block = _24;
+}
+

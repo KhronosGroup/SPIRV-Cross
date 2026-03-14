@@ -1,0 +1,33 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO;
+
+struct S
+{
+    float3 v;
+};
+
+typedef struct S S;
+
+struct SSBO
+{
+    S s[1];
+};
+
+typedef struct SSBO SSBO;
+
+struct PC
+{
+    uint2 ptr;
+};
+
+typedef struct PC PC;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(PC pc)
+{
+    __global SSBO* ssbo = ((__global SSBO*)as_ulong(pc.ptr));
+    ssbo->s[0].v = (float3)(1.0f);
+}
+

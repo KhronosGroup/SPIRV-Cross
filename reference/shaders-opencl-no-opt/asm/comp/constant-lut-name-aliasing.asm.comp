@@ -1,0 +1,20 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    int values[1];
+};
+
+typedef struct SSBO SSBO;
+
+constant int indexable[4] = { 0, 1, 2, 3 };
+constant int indexable_1[4] = { 4, 5, 6, 7 };
+
+__attribute__((reqd_work_group_size(4, 4, 1)))
+__kernel void comp_main(__global int* _8)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _8[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = indexable[((uint3)(get_local_id(0), get_local_id(1), get_local_id(2))).x] + indexable_1[((uint3)(get_local_id(0), get_local_id(1), get_local_id(2))).y];
+}
+

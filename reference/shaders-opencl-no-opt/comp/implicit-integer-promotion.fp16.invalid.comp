@@ -1,0 +1,89 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+struct BUF0
+{
+    half2 f16s;
+    ushort2 u16;
+    short2 i16;
+    ushort4 u16s;
+    short4 i16s;
+    half f16;
+};
+
+typedef struct BUF0 BUF0;
+
+void test_u16(__global BUF0* _24)
+{
+    _24->f16 += as_half(ushort(_24->u16[0u] + _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] - _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] * _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] / _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] % _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] << _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] >> _24->u16[1u]));
+    _24->f16 += as_half(ushort(~_24->u16[0u]));
+    _24->f16 += as_half(ushort(-_24->u16[0u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] ^ _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] & _24->u16[1u]));
+    _24->f16 += as_half(ushort(_24->u16[0u] | _24->u16[1u]));
+}
+
+void test_i16(__global BUF0* _24)
+{
+    _24->f16 += as_half(short(_24->i16[0u] + _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] - _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] * _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] / _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] % _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] << _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] >> _24->i16[1u]));
+    _24->f16 += as_half(short(~_24->i16[0u]));
+    _24->f16 += as_half(short(-_24->i16[0u]));
+    _24->f16 += as_half(short(_24->i16[0u] ^ _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] & _24->i16[1u]));
+    _24->f16 += as_half(short(_24->i16[0u] | _24->i16[1u]));
+}
+
+void test_u16s(__global BUF0* _24)
+{
+    _24->f16s += as_half2(_24->u16s.xy + _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy - _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy * _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy / _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy % _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy << _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy >> _24->u16s.zw);
+    _24->f16s += as_half2(~_24->u16s.xy);
+    _24->f16s += as_half2(-_24->u16s.xy);
+    _24->f16s += as_half2(_24->u16s.xy ^ _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy & _24->u16s.zw);
+    _24->f16s += as_half2(_24->u16s.xy | _24->u16s.zw);
+}
+
+void test_i16s(__global BUF0* _24)
+{
+    _24->f16s += as_half2(_24->i16s.xy + _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy - _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy * _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy / _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy % _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy << _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy >> _24->i16s.zw);
+    _24->f16s += as_half2(~_24->i16s.xy);
+    _24->f16s += as_half2(-_24->i16s.xy);
+    _24->f16s += as_half2(_24->i16s.xy ^ _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy & _24->i16s.zw);
+    _24->f16s += as_half2(_24->i16s.xy | _24->i16s.zw);
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global BUF0* _24)
+{
+    test_u16(_24);
+    test_i16(_24);
+    test_u16s(_24);
+    test_i16s(_24);
+}
+

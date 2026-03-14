@@ -1,0 +1,35 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+uint spvBitReverse(uint v) {
+    v = ((v >> 1u) & 0x55555555u) | ((v & 0x55555555u) << 1u);
+    v = ((v >> 2u) & 0x33333333u) | ((v & 0x33333333u) << 2u);
+    v = ((v >> 4u) & 0x0F0F0F0Fu) | ((v & 0x0F0F0F0Fu) << 4u);
+    v = ((v >> 8u) & 0x00FF00FFu) | ((v & 0x00FF00FFu) << 8u);
+    return (v >> 16u) | (v << 16u);
+}
+
+static int spvFindLSB(uint x) {
+    if (x == 0u) return -1;
+    return 31 - as_int(clz(x & (0u - x)));
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main()
+{
+    int signed_value_1 = 0;
+    uint unsigned_value_1 = 0u;
+    int s_1 = (signed_value_1 << (32 - 20 - 5)) >> (32 - 20);
+    uint u_1 = (unsigned_value_1 >> 6) & ((uint)(1u << 21) - (uint)1u);
+    s_1 = as_int((as_uint(s_1) & ~(((uint)(1u << 4) - (uint)1u) << 5)) | ((as_uint(40) << 5) & (((uint)(1u << 4) - (uint)1u) << 5)));
+    u_1 = (u_1 & ~(((uint)(1u << 4) - (uint)1u) << 5)) | ((60u << 5) & (((uint)(1u << 4) - (uint)1u) << 5));
+    u_1 = spvBitReverse(u_1);
+    s_1 = as_int(spvBitReverse(as_uint(s_1)));
+    int v0_1 = as_int(popcount(u_1));
+    int v1_1 = popcount(s_1);
+    int v2_1 = 31 - as_int(clz(u_1));
+    int v3_1 = 31 - clz(s_1 ^ (s_1 >> 31));
+    int v4_1 = spvFindLSB(u_1);
+    int v5_1 = spvFindLSB(as_uint(s_1));
+}
+

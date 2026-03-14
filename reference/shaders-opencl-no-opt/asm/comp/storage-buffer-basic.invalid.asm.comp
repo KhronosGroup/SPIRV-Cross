@@ -1,0 +1,27 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _3
+{
+    float _m0[1];
+};
+
+typedef struct _3 _3;
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 1u
+#endif
+constant uint _15 = SPIRV_CROSS_CONSTANT_ID_0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 3u
+#endif
+constant uint _17 = SPIRV_CROSS_CONSTANT_ID_2;
+constant uint3 spvWorkgroupSize = (uint3)(_15, 2u, _17);
+
+__attribute__((reqd_work_group_size(1, 2, 3)))
+__kernel void comp_main(__global float* _20, __global float* _21)
+{
+    uint3 _19 = spvWorkgroupSize = spvWorkgroupSize;
+    _20[((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x] = _21[((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x] + _20[((uint3)(get_group_id(0), get_group_id(1), get_group_id(2))).x];
+}
+

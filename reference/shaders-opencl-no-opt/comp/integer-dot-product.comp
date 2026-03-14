@@ -1,0 +1,58 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct InOut3
+{
+    ushort4 x;
+    ushort4 y;
+    int acc;
+    int result;
+};
+
+typedef struct InOut3 InOut3;
+
+struct InOut2
+{
+    uint x;
+    uint y;
+    uint result;
+};
+
+typedef struct InOut2 InOut2;
+
+struct InOut
+{
+    uint4 x;
+    uint4 y;
+    int result;
+};
+
+typedef struct InOut InOut;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global InOut3* comp3, __global InOut2* comp2, __global InOut* comp)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    int sdot_int = (int)(as_short4(comp3->x).s0) * (int)(as_short4(comp3->y).s0) + (int)(as_short4(comp3->x).s1) * (int)(as_short4(comp3->y).s1) + (int)(as_short4(comp3->x).s2) * (int)(as_short4(comp3->y).s2) + (int)(as_short4(comp3->x).s3) * (int)(as_short4(comp3->y).s3);
+    uint sdot_uint = (uint)(as_short4(comp3->x).s0) * (uint)(as_short4(comp3->y).s0) + (uint)(as_short4(comp3->x).s1) * (uint)(as_short4(comp3->y).s1) + (uint)(as_short4(comp3->x).s2) * (uint)(as_short4(comp3->y).s2) + (uint)(as_short4(comp3->x).s3) * (uint)(as_short4(comp3->y).s3);
+    uint udot_uint = (uint)(comp3->x.s0) * (uint)(comp3->y.s0) + (uint)(comp3->x.s1) * (uint)(comp3->y.s1) + (uint)(comp3->x.s2) * (uint)(comp3->y.s2) + (uint)(comp3->x.s3) * (uint)(comp3->y.s3);
+    int sudot_int = (int)(as_short4(comp3->x).s0) * (int)(comp3->y.s0) + (int)(as_short4(comp3->x).s1) * (int)(comp3->y.s1) + (int)(as_short4(comp3->x).s2) * (int)(comp3->y.s2) + (int)(as_short4(comp3->x).s3) * (int)(comp3->y.s3);
+    uint sudot_uint = (uint)(as_short4(comp3->x).s0) * (uint)(comp3->y.s0) + (uint)(as_short4(comp3->x).s1) * (uint)(comp3->y.s1) + (uint)(as_short4(comp3->x).s2) * (uint)(comp3->y.s2) + (uint)(as_short4(comp3->x).s3) * (uint)(comp3->y.s3);
+    uchar spdot8 = (uchar)(as_char4(comp2->x).s0) * (uchar)(as_char4(comp2->y).s0) + (uchar)(as_char4(comp2->x).s1) * (uchar)(as_char4(comp2->y).s1) + (uchar)(as_char4(comp2->x).s2) * (uchar)(as_char4(comp2->y).s2) + (uchar)(as_char4(comp2->x).s3) * (uchar)(as_char4(comp2->y).s3);
+    ushort spdot16 = (ushort)(as_char4(comp2->x).s0) * (ushort)(as_char4(comp2->y).s0) + (ushort)(as_char4(comp2->x).s1) * (ushort)(as_char4(comp2->y).s1) + (ushort)(as_char4(comp2->x).s2) * (ushort)(as_char4(comp2->y).s2) + (ushort)(as_char4(comp2->x).s3) * (ushort)(as_char4(comp2->y).s3);
+    uint spdot32 = (uint)(as_char4(comp2->x).s0) * (uint)(as_char4(comp2->y).s0) + (uint)(as_char4(comp2->x).s1) * (uint)(as_char4(comp2->y).s1) + (uint)(as_char4(comp2->x).s2) * (uint)(as_char4(comp2->y).s2) + (uint)(as_char4(comp2->x).s3) * (uint)(as_char4(comp2->y).s3);
+    int spdoti32 = (int)(as_char4(comp2->x).s0) * (int)(as_char4(comp2->y).s0) + (int)(as_char4(comp2->x).s1) * (int)(as_char4(comp2->y).s1) + (int)(as_char4(comp2->x).s2) * (int)(as_char4(comp2->y).s2) + (int)(as_char4(comp2->x).s3) * (int)(as_char4(comp2->y).s3);
+    uchar updot8 = (uchar)(as_uchar4(comp2->x).s0) * (uchar)(as_uchar4(comp2->y).s0) + (uchar)(as_uchar4(comp2->x).s1) * (uchar)(as_uchar4(comp2->y).s1) + (uchar)(as_uchar4(comp2->x).s2) * (uchar)(as_uchar4(comp2->y).s2) + (uchar)(as_uchar4(comp2->x).s3) * (uchar)(as_uchar4(comp2->y).s3);
+    ushort updot16 = (ushort)(as_uchar4(comp2->x).s0) * (ushort)(as_uchar4(comp2->y).s0) + (ushort)(as_uchar4(comp2->x).s1) * (ushort)(as_uchar4(comp2->y).s1) + (ushort)(as_uchar4(comp2->x).s2) * (ushort)(as_uchar4(comp2->y).s2) + (ushort)(as_uchar4(comp2->x).s3) * (ushort)(as_uchar4(comp2->y).s3);
+    uint updot32 = (uint)(as_uchar4(comp2->x).s0) * (uint)(as_uchar4(comp2->y).s0) + (uint)(as_uchar4(comp2->x).s1) * (uint)(as_uchar4(comp2->y).s1) + (uint)(as_uchar4(comp2->x).s2) * (uint)(as_uchar4(comp2->y).s2) + (uint)(as_uchar4(comp2->x).s3) * (uint)(as_uchar4(comp2->y).s3);
+    uchar supdot8 = (uchar)(as_char4(comp2->x).s0) * (uchar)(as_uchar4(comp2->y).s0) + (uchar)(as_char4(comp2->x).s1) * (uchar)(as_uchar4(comp2->y).s1) + (uchar)(as_char4(comp2->x).s2) * (uchar)(as_uchar4(comp2->y).s2) + (uchar)(as_char4(comp2->x).s3) * (uchar)(as_uchar4(comp2->y).s3);
+    ushort supdot16 = (ushort)(as_char4(comp2->x).s0) * (ushort)(as_uchar4(comp2->y).s0) + (ushort)(as_char4(comp2->x).s1) * (ushort)(as_uchar4(comp2->y).s1) + (ushort)(as_char4(comp2->x).s2) * (ushort)(as_uchar4(comp2->y).s2) + (ushort)(as_char4(comp2->x).s3) * (ushort)(as_uchar4(comp2->y).s3);
+    uint supdot32 = (uint)(as_char4(comp2->x).s0) * (uint)(as_uchar4(comp2->y).s0) + (uint)(as_char4(comp2->x).s1) * (uint)(as_uchar4(comp2->y).s1) + (uint)(as_char4(comp2->x).s2) * (uint)(as_uchar4(comp2->y).s2) + (uint)(as_char4(comp2->x).s3) * (uint)(as_uchar4(comp2->y).s3);
+    int supdoti32 = (int)(as_char4(comp2->x).s0) * (int)(as_uchar4(comp2->y).s0) + (int)(as_char4(comp2->x).s1) * (int)(as_uchar4(comp2->y).s1) + (int)(as_char4(comp2->x).s2) * (int)(as_uchar4(comp2->y).s2) + (int)(as_char4(comp2->x).s3) * (int)(as_uchar4(comp2->y).s3);
+    int sdotaddsat_int = (int)add_sat((int)(as_short4(comp3->x).s0) * (int)(as_short4(comp3->y).s0) + (int)(as_short4(comp3->x).s1) * (int)(as_short4(comp3->y).s1) + (int)(as_short4(comp3->x).s2) * (int)(as_short4(comp3->y).s2) + (int)(as_short4(comp3->x).s3) * (int)(as_short4(comp3->y).s3), comp3->acc);
+    uint sdotaddsat_uint = (uint)add_sat((int)(as_short4(comp3->x).s0) * (int)(as_short4(comp3->y).s0) + (int)(as_short4(comp3->x).s1) * (int)(as_short4(comp3->y).s1) + (int)(as_short4(comp3->x).s2) * (int)(as_short4(comp3->y).s2) + (int)(as_short4(comp3->x).s3) * (int)(as_short4(comp3->y).s3), comp3->acc);
+    uint udotaddsat_uint = (uint)add_sat((uint)(comp3->x.s0) * (uint)(comp3->y.s0) + (uint)(comp3->x.s1) * (uint)(comp3->y.s1) + (uint)(comp3->x.s2) * (uint)(comp3->y.s2) + (uint)(comp3->x.s3) * (uint)(comp3->y.s3), as_uint(comp3->acc));
+    int sudotaddsat_int = (int)add_sat((int)(as_short4(comp3->x).s0) * (int)(comp3->y.s0) + (int)(as_short4(comp3->x).s1) * (int)(comp3->y.s1) + (int)(as_short4(comp3->x).s2) * (int)(comp3->y.s2) + (int)(as_short4(comp3->x).s3) * (int)(comp3->y.s3), comp3->acc);
+    uint sudotaddsat_uint = (uint)add_sat((int)(as_short4(comp3->x).s0) * (int)(comp3->y.s0) + (int)(as_short4(comp3->x).s1) * (int)(comp3->y.s1) + (int)(as_short4(comp3->x).s2) * (int)(comp3->y.s2) + (int)(as_short4(comp3->x).s3) * (int)(comp3->y.s3), comp3->acc);
+}
+

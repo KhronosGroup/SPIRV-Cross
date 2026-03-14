@@ -1,0 +1,56 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _7
+{
+    int _m0[1][4];
+};
+
+typedef struct _7 _7;
+
+struct _9
+{
+    int _m0[1][17];
+};
+
+typedef struct _9 _9;
+
+struct _11
+{
+    int _m0;
+};
+
+typedef struct _11 _11;
+
+__attribute__((reqd_work_group_size(4, 1, 1)))
+__kernel void comp_main(__global int* _2, __global int* _3, _11 _4)
+{
+    if (as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x >= _4._m0)
+    {
+        return;
+    }
+    int _49;
+    if (as_int3(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)))).x == 1)
+    {
+        _3[as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x][16] = &_2[as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x] - &_2[0];
+        _49 = 0;
+    }
+    else
+    {
+        _49 = 0;
+    }
+    for (;;)
+    {
+        int _50 = _49 + 1;
+        _3[as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x][(as_int3(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)))).x * 4) + _49] = &_2[as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x][as_int3(((uint3)(get_local_id(0), get_local_id(1), get_local_id(2)))).x] - &_2[as_int3(((uint3)(get_group_id(0), get_group_id(1), get_group_id(2)))).x][_49];
+        if (_50 == 4)
+        {
+            break;
+        }
+        else
+        {
+            _49 = _50;
+        }
+    }
+}
+

@@ -1137,9 +1137,10 @@ const char *CompilerOpenCL::to_restrict(uint32_t id, bool space)
 	else
 		flags = get_decoration_bitset(id);
 
-	return flags.get(DecorationRestrict) || flags.get(DecorationRestrictPointerEXT) ?
-	           (space ? "__restrict " : "__restrict") :
-	           "";
+	// Only check DecorationRestrict here. DecorationRestrictPointerEXT is handled by
+	// flags_to_qualifiers_glsl in the GLSL base (emits "restrict " prefix), so we
+	// don't duplicate it as "__restrict" after the pointer star.
+	return flags.get(DecorationRestrict) ? (space ? "__restrict " : "__restrict") : "";
 }
 
 string CompilerOpenCL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
@@ -1822,6 +1823,26 @@ std::string CompilerOpenCL::constant_expression(const SPIRConstant &c, bool insi
 	return CompilerGLSL::constant_expression(c, inside_block_like_struct_scope, inside_struct_scope);
 }
 
+std::string CompilerOpenCL::to_initializer_expression(const SPIRVariable &var)
+{
+	// OpenCL C does not support initializing arrays from non-constant expressions
+	// (e.g., `float a[5] = ssbo->b;` is not valid C).
+	// For array variables with non-constant initializers, emit zero init `{ 0 }` and
+	// schedule element-by-element copy after the declaration.
+	auto &type = get_variable_data_type(var);
+	if (is_array(type) && var.initializer)
+	{
+		// Check if the initializer is a constant — those are fine as-is.
+		if (ir.ids[var.initializer].get_type() != TypeConstant)
+		{
+			// Queue the initializer for post-declaration element-by-element copy.
+			pending_array_copies.push_back({ var.self, var.initializer });
+			return "{ 0 }";
+		}
+	}
+	return CompilerGLSL::to_initializer_expression(var);
+}
+
 // OpenCL C requires cast syntax for vector construction: (float4)(1.0, 2.0, 3.0, 4.0)
 // The GLSL base emits: float4(1.0, 2.0, 3.0, 4.0) which is invalid in OpenCL C.
 std::string CompilerOpenCL::constant_expression_vector(const SPIRConstant &c, uint32_t vector)
@@ -1831,15 +1852,17 @@ std::string CompilerOpenCL::constant_expression_vector(const SPIRConstant &c, ui
 	auto type = get<SPIRType>(c.constant_type);
 	type.columns = 1;
 
-	if (type.vecsize > 1)
+	// The base class emits GLSL constructor-style casts: typename(args).
+	// OpenCL C requires C-style casts: (typename)(args).
+	// This applies to both vector types (e.g. float4(x)) and scalar casts
+	// (e.g. int(0x80000000), long(0x8000000000000000ul), uchar(0)).
+	auto scalar_type = type;
+	scalar_type.vecsize = 1;
+	auto type_name = (type.vecsize > 1) ? type_to_glsl(type) : type_to_glsl(scalar_type);
+	if (!type_name.empty() && res.size() > type_name.size() + 1 && res.substr(0, type_name.size()) == type_name &&
+	    res[type_name.size()] == '(')
 	{
-		// The base class emits: typename(args). OpenCL needs: (typename)(args).
-		auto type_name = type_to_glsl(type);
-		if (res.size() > type_name.size() + 1 && res.substr(0, type_name.size()) == type_name &&
-		    res[type_name.size()] == '(')
-		{
-			res = "(" + type_name + ")(" + res.substr(type_name.size() + 1);
-		}
+		res = "(" + type_name + ")(" + res.substr(type_name.size() + 1);
 	}
 
 	return res;
@@ -2413,23 +2436,41 @@ void CompilerOpenCL::emit_glsl_op(uint32_t result_type, uint32_t result_id, uint
 		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
 		break;
 	case GLSLstd450SMin:
-		emit_binary_func_op(result_type, result_id, args[0], args[1], "min");
+	{
+		auto int_type = to_signed_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_binary_func_op_cast(result_type, result_id, args[0], args[1], "min", int_type, false);
 		break;
+	}
 	case GLSLstd450SMax:
-		emit_binary_func_op(result_type, result_id, args[0], args[1], "max");
+	{
+		auto int_type = to_signed_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_binary_func_op_cast(result_type, result_id, args[0], args[1], "max", int_type, false);
 		break;
+	}
 	case GLSLstd450UMin:
-		emit_binary_func_op(result_type, result_id, args[0], args[1], "min");
+	{
+		auto uint_type = to_unsigned_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_binary_func_op_cast(result_type, result_id, args[0], args[1], "min", uint_type, false);
 		break;
+	}
 	case GLSLstd450UMax:
-		emit_binary_func_op(result_type, result_id, args[0], args[1], "max");
+	{
+		auto uint_type = to_unsigned_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_binary_func_op_cast(result_type, result_id, args[0], args[1], "max", uint_type, false);
 		break;
+	}
 	case GLSLstd450SClamp:
-		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+	{
+		auto int_type = to_signed_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_trinary_func_op_cast(result_type, result_id, args[0], args[1], args[2], "clamp", int_type);
 		break;
+	}
 	case GLSLstd450UClamp:
-		emit_trinary_func_op(result_type, result_id, args[0], args[1], args[2], "clamp");
+	{
+		auto uint_type = to_unsigned_basetype(get_integer_width_for_glsl_instruction(glsl_op, args, count));
+		emit_trinary_func_op_cast(result_type, result_id, args[0], args[1], args[2], "clamp", uint_type);
 		break;
+	}
 
 	case GLSLstd450FMix:
 	case GLSLstd450IMix:
@@ -2544,7 +2585,8 @@ std::string CompilerOpenCL::to_member_reference(uint32_t base, const SPIRType &t
 			// so is_pointer() above is false — we only reach here with actual pointers.
 			// Note: StorageClassWorkgroup is excluded because __local variables are emitted
 			// as value types in OpenCL C, so member access uses '.'.
-			if (sc == StorageClassStorageBuffer || sc == StorageClassCrossWorkgroup)
+			if (sc == StorageClassStorageBuffer || sc == StorageClassCrossWorkgroup ||
+			    sc == StorageClassPhysicalStorageBuffer)
 			{
 				return join("->", to_member_name(type, index));
 			}
@@ -3200,7 +3242,9 @@ bool CompilerOpenCL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t
 		lhs = to_expression(lhs_id);
 
 	auto rhs_expr = to_expression(rhs_id);
-	auto &type = expression_type(rhs_id);
+	auto &raw_type = expression_type(rhs_id);
+	// If the RHS is a pointer (e.g., from OpLoad source), use the pointee type.
+	auto &type = is_pointer(raw_type) ? get_pointee_type(raw_type) : raw_type;
 
 	// Get the array size
 	if (!is_array(type) || type.array.empty())
@@ -3972,6 +4016,35 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		inherit_expression_dependencies(result_id, insert_id);
 		inherit_expression_dependencies(result_id, offset_id);
 		inherit_expression_dependencies(result_id, bits_id);
+		break;
+	}
+
+	// BDA pointer casts: emit C-style casts instead of GLSL constructor-style.
+	case OpConvertUToPtr:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		auto &in_type = expression_type(ops[2]);
+		auto ptr_type_str = type_to_glsl(type);
+		string expr;
+		if (in_type.vecsize > 1)
+			expr = join("((", ptr_type_str, ")as_ulong(", to_expression(ops[2]), "))");
+		else
+			expr = join("((", ptr_type_str, ")(", to_expression(ops[2]), "))");
+		emit_op(ops[0], ops[1], std::move(expr), should_forward(ops[2]));
+		inherit_expression_dependencies(ops[1], ops[2]);
+		break;
+	}
+
+	case OpConvertPtrToU:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		string expr;
+		if (type.vecsize > 1)
+			expr = join("as_", type_to_glsl(type), "((ulong)(", to_expression(ops[2]), "))");
+		else
+			expr = join("(", type_to_glsl(type), ")(", to_expression(ops[2]), ")");
+		emit_op(ops[0], ops[1], std::move(expr), should_forward(ops[2]));
+		inherit_expression_dependencies(ops[1], ops[2]);
 		break;
 	}
 

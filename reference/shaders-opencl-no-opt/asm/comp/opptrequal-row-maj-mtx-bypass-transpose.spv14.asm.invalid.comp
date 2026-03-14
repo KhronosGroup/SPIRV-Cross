@@ -1,0 +1,52 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float4 columns[4]; } spvMat4;
+
+struct _6
+{
+    spvMat4 _m0;
+    spvMat4 _m1;
+    float _m2;
+    float _m3;
+};
+
+typedef struct _6 _6;
+
+struct _7
+{
+    uint _m0[1];
+};
+
+typedef struct _7 _7;
+
+static spvMat4 spvTransposeMat4(spvMat4 m)
+{
+    spvMat4 r;
+    r.columns[0] = (float4)(m.columns[0].x, m.columns[1].x, m.columns[2].x, m.columns[3].x);
+    r.columns[1] = (float4)(m.columns[0].y, m.columns[1].y, m.columns[2].y, m.columns[3].y);
+    r.columns[2] = (float4)(m.columns[0].z, m.columns[1].z, m.columns[2].z, m.columns[3].z);
+    r.columns[3] = (float4)(m.columns[0].w, m.columns[1].w, m.columns[2].w, m.columns[3].w);
+    return r;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global _6* _2, __global _6* _3, __global uint* _4)
+{
+    uint _26 = 0u;
+    uint _39 = _26 + 1u;
+    _4[_26] = (&_2->_m2 == &_2->_m3) ? 0u : 1u;
+    bool _40 = &_2->_m2 == &_3->_m2;
+    uint _43 = _39 + 1u;
+    _4[_39] = _40 ? 0u : 1u;
+    bool _46 = _40 ? &_2->_m2 : &_2->_m3 == _40 ? &_3->_m2 : &_3->_m3;
+    uint _49 = _43 + 1u;
+    _4[_43] = _46 ? 0u : 1u;
+    uint _54 = _49 + 1u;
+    _4[_49] = (_46 ? &_2->_m2 : &_2->_m3 == &_2->_m0.columns[0u].x) ? 0u : 1u;
+    uint _56 = (&_2->_m0 == &spvTransposeMat4(_2->_m1)) ? 0u : 1u;
+    uint _58 = _54 + 1u;
+    _4[_54] = _56;
+    _4[_58] = _56;
+}
+

@@ -1,0 +1,234 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float2 columns[2]; } spvMat2;
+typedef struct { float3 columns[3]; } spvMat3;
+typedef struct { float4 columns[4]; } spvMat4;
+
+struct SSBO
+{
+    float res;
+    int ires;
+    uint ures;
+    float4 f32;
+    int4 s32;
+    uint4 u32;
+    spvMat2 m2;
+    spvMat3 m3;
+    spvMat4 m4;
+};
+
+typedef struct SSBO SSBO;
+
+struct ResType
+{
+    float _m0;
+    float _m1;
+};
+
+typedef struct ResType ResType;
+
+struct ResType_1
+{
+    float _m0;
+    int _m1;
+};
+
+typedef struct ResType_1 ResType_1;
+
+uint spvPackHalf2x16(float2 v) {
+    uint r;
+    vstore_half(v.x, 0, (__private half *)&r);
+    vstore_half(v.y, 1, (__private half *)&r);
+    return r;
+}
+
+float2 spvUnpackHalf2x16(uint u) {
+    const __private uint *p = &u;
+    return (float2)(vload_half(0, (const __private half *)p),
+                   vload_half(1, (const __private half *)p));
+}
+
+static int spvFindLSB(uint x) {
+    if (x == 0u) return -1;
+    return 31 - as_int(clz(x & (0u - x)));
+}
+
+static uint spvPackSnorm4x8(float4 v) {
+    char4 packed = convert_char4_sat_rte(v * 127.0f);
+    return as_uint(packed);
+}
+
+static uint spvPackUnorm4x8(float4 v) {
+    uchar4 packed = convert_uchar4_sat_rte(v * 255.0f);
+    return as_uint(packed);
+}
+
+static uint spvPackSnorm2x16(float2 v) {
+    short2 packed = convert_short2_sat_rte(v * 32767.0f);
+    return as_uint(packed);
+}
+
+static uint spvPackUnorm2x16(float2 v) {
+    ushort2 packed = convert_ushort2_sat_rte(v * 65535.0f);
+    return as_uint(packed);
+}
+
+static float4 spvUnpackSnorm4x8(uint v) {
+    char4 packed = as_char4(v);
+    return max(convert_float4(packed) / 127.0f, (float4)(-1.0f));
+}
+
+static float4 spvUnpackUnorm4x8(uint v) {
+    uchar4 packed = as_uchar4(v);
+    return convert_float4(packed) / 255.0f;
+}
+
+static float2 spvUnpackSnorm2x16(uint v) {
+    short2 packed = as_short2(v);
+    return max(convert_float2(packed) / 32767.0f, (float2)(-1.0f));
+}
+
+static float2 spvUnpackUnorm2x16(uint v) {
+    ushort2 packed = as_ushort2(v);
+    return convert_float2(packed) / 65535.0f;
+}
+
+static float spvDeterminant2(spvMat2 m) {
+    return m.columns[0].x * m.columns[1].y - m.columns[0].y * m.columns[1].x;
+}
+
+static float spvDeterminant3(spvMat3 m) {
+    return dot(m.columns[0], (float3)(m.columns[1].y * m.columns[2].z - m.columns[1].z * m.columns[2].y, m.columns[1].z * m.columns[2].x - m.columns[1].x * m.columns[2].z, m.columns[1].x * m.columns[2].y - m.columns[1].y * m.columns[2].x));
+}
+
+static float spvDeterminant4(spvMat4 m) {
+    return dot(m.columns[0], (float4)(m.columns[2].y * m.columns[3].z * m.columns[1].w - m.columns[3].y * m.columns[2].z * m.columns[1].w + m.columns[3].y * m.columns[1].z * m.columns[2].w - m.columns[1].y * m.columns[3].z * m.columns[2].w - m.columns[2].y * m.columns[1].z * m.columns[3].w + m.columns[1].y * m.columns[2].z * m.columns[3].w, m.columns[3].x * m.columns[2].z * m.columns[1].w - m.columns[2].x * m.columns[3].z * m.columns[1].w - m.columns[3].x * m.columns[1].z * m.columns[2].w + m.columns[1].x * m.columns[3].z * m.columns[2].w + m.columns[2].x * m.columns[1].z * m.columns[3].w - m.columns[1].x * m.columns[2].z * m.columns[3].w, m.columns[2].x * m.columns[3].y * m.columns[1].w - m.columns[3].x * m.columns[2].y * m.columns[1].w + m.columns[3].x * m.columns[1].y * m.columns[2].w - m.columns[1].x * m.columns[3].y * m.columns[2].w - m.columns[2].x * m.columns[1].y * m.columns[3].w + m.columns[1].x * m.columns[2].y * m.columns[3].w, m.columns[3].x * m.columns[2].y * m.columns[1].z - m.columns[2].x * m.columns[3].y * m.columns[1].z - m.columns[3].x * m.columns[1].y * m.columns[2].z + m.columns[1].x * m.columns[3].y * m.columns[2].z + m.columns[2].x * m.columns[1].y * m.columns[3].z - m.columns[1].x * m.columns[2].y * m.columns[3].z));
+}
+
+static spvMat2 spvInverse2(spvMat2 m) {
+    float d = 1.0f / (m.columns[0].x * m.columns[1].y - m.columns[1].x * m.columns[0].y);
+    return (spvMat2){ { (float2)(m.columns[1].y * d, -m.columns[0].y * d), (float2)(-m.columns[1].x * d, m.columns[0].x * d) } };
+}
+
+static spvMat3 spvInverse3(spvMat3 m) {
+    float3 t = (float3)(m.columns[1].y * m.columns[2].z - m.columns[1].z * m.columns[2].y, m.columns[1].z * m.columns[2].x - m.columns[1].x * m.columns[2].z, m.columns[1].x * m.columns[2].y - m.columns[1].y * m.columns[2].x);
+    float d = 1.0f / dot(m.columns[0], t);
+    return (spvMat3){ { t * d, (float3)(m.columns[0].z * m.columns[2].y - m.columns[0].y * m.columns[2].z, m.columns[0].x * m.columns[2].z - m.columns[0].z * m.columns[2].x, m.columns[0].y * m.columns[2].x - m.columns[0].x * m.columns[2].y) * d, (float3)(m.columns[0].y * m.columns[1].z - m.columns[0].z * m.columns[1].y, m.columns[0].z * m.columns[1].x - m.columns[0].x * m.columns[1].z, m.columns[0].x * m.columns[1].y - m.columns[0].y * m.columns[1].x) * d } };
+}
+
+static spvMat4 spvInverse4(spvMat4 m) {
+    float4 t = (float4)(m.columns[2].y * m.columns[3].z * m.columns[1].w - m.columns[3].y * m.columns[2].z * m.columns[1].w + m.columns[3].y * m.columns[1].z * m.columns[2].w - m.columns[1].y * m.columns[3].z * m.columns[2].w - m.columns[2].y * m.columns[1].z * m.columns[3].w + m.columns[1].y * m.columns[2].z * m.columns[3].w, m.columns[3].x * m.columns[2].z * m.columns[1].w - m.columns[2].x * m.columns[3].z * m.columns[1].w - m.columns[3].x * m.columns[1].z * m.columns[2].w + m.columns[1].x * m.columns[3].z * m.columns[2].w + m.columns[2].x * m.columns[1].z * m.columns[3].w - m.columns[1].x * m.columns[2].z * m.columns[3].w, m.columns[2].x * m.columns[3].y * m.columns[1].w - m.columns[3].x * m.columns[2].y * m.columns[1].w + m.columns[3].x * m.columns[1].y * m.columns[2].w - m.columns[1].x * m.columns[3].y * m.columns[2].w - m.columns[2].x * m.columns[1].y * m.columns[3].w + m.columns[1].x * m.columns[2].y * m.columns[3].w, m.columns[3].x * m.columns[2].y * m.columns[1].z - m.columns[2].x * m.columns[3].y * m.columns[1].z - m.columns[3].x * m.columns[1].y * m.columns[2].z + m.columns[1].x * m.columns[3].y * m.columns[2].z + m.columns[2].x * m.columns[1].y * m.columns[3].z - m.columns[1].x * m.columns[2].y * m.columns[3].z);
+    spvMat4 r = (spvMat4){ { (float4)(t.x, m.columns[3].y * m.columns[2].z * m.columns[0].w - m.columns[2].y * m.columns[3].z * m.columns[0].w - m.columns[3].y * m.columns[0].z * m.columns[2].w + m.columns[0].y * m.columns[3].z * m.columns[2].w + m.columns[2].y * m.columns[0].z * m.columns[3].w - m.columns[0].y * m.columns[2].z * m.columns[3].w, m.columns[1].y * m.columns[3].z * m.columns[0].w - m.columns[3].y * m.columns[1].z * m.columns[0].w + m.columns[3].y * m.columns[0].z * m.columns[1].w - m.columns[0].y * m.columns[3].z * m.columns[1].w - m.columns[1].y * m.columns[0].z * m.columns[3].w + m.columns[0].y * m.columns[1].z * m.columns[3].w, m.columns[2].y * m.columns[1].z * m.columns[0].w - m.columns[1].y * m.columns[2].z * m.columns[0].w - m.columns[2].y * m.columns[0].z * m.columns[1].w + m.columns[0].y * m.columns[2].z * m.columns[1].w + m.columns[1].y * m.columns[0].z * m.columns[2].w - m.columns[0].y * m.columns[1].z * m.columns[2].w), (float4)(t.y, m.columns[2].x * m.columns[3].z * m.columns[0].w - m.columns[3].x * m.columns[2].z * m.columns[0].w + m.columns[3].x * m.columns[0].z * m.columns[2].w - m.columns[0].x * m.columns[3].z * m.columns[2].w - m.columns[2].x * m.columns[0].z * m.columns[3].w + m.columns[0].x * m.columns[2].z * m.columns[3].w, m.columns[3].x * m.columns[1].z * m.columns[0].w - m.columns[1].x * m.columns[3].z * m.columns[0].w - m.columns[3].x * m.columns[0].z * m.columns[1].w + m.columns[0].x * m.columns[3].z * m.columns[1].w + m.columns[1].x * m.columns[0].z * m.columns[3].w - m.columns[0].x * m.columns[1].z * m.columns[3].w, m.columns[1].x * m.columns[2].z * m.columns[0].w - m.columns[2].x * m.columns[1].z * m.columns[0].w + m.columns[2].x * m.columns[0].z * m.columns[1].w - m.columns[0].x * m.columns[2].z * m.columns[1].w - m.columns[1].x * m.columns[0].z * m.columns[2].w + m.columns[0].x * m.columns[1].z * m.columns[2].w), (float4)(t.z, m.columns[3].x * m.columns[2].y * m.columns[0].w - m.columns[2].x * m.columns[3].y * m.columns[0].w - m.columns[3].x * m.columns[0].y * m.columns[2].w + m.columns[0].x * m.columns[3].y * m.columns[2].w + m.columns[2].x * m.columns[0].y * m.columns[3].w - m.columns[0].x * m.columns[2].y * m.columns[3].w, m.columns[1].x * m.columns[3].y * m.columns[0].w - m.columns[3].x * m.columns[1].y * m.columns[0].w + m.columns[3].x * m.columns[0].y * m.columns[1].w - m.columns[0].x * m.columns[3].y * m.columns[1].w - m.columns[1].x * m.columns[0].y * m.columns[3].w + m.columns[0].x * m.columns[1].y * m.columns[3].w, m.columns[2].x * m.columns[1].y * m.columns[0].w - m.columns[1].x * m.columns[2].y * m.columns[0].w - m.columns[2].x * m.columns[0].y * m.columns[1].w + m.columns[0].x * m.columns[2].y * m.columns[1].w + m.columns[1].x * m.columns[0].y * m.columns[2].w - m.columns[0].x * m.columns[1].y * m.columns[2].w), (float4)(t.w, m.columns[2].x * m.columns[3].y * m.columns[0].z - m.columns[3].x * m.columns[2].y * m.columns[0].z + m.columns[3].x * m.columns[0].y * m.columns[2].z - m.columns[0].x * m.columns[3].y * m.columns[2].z - m.columns[2].x * m.columns[0].y * m.columns[3].z + m.columns[0].x * m.columns[2].y * m.columns[3].z, m.columns[3].x * m.columns[1].y * m.columns[0].z - m.columns[1].x * m.columns[3].y * m.columns[0].z - m.columns[3].x * m.columns[0].y * m.columns[1].z + m.columns[0].x * m.columns[3].y * m.columns[1].z + m.columns[1].x * m.columns[0].y * m.columns[3].z - m.columns[0].x * m.columns[1].y * m.columns[3].z, m.columns[1].x * m.columns[2].y * m.columns[0].z - m.columns[2].x * m.columns[1].y * m.columns[0].z + m.columns[2].x * m.columns[0].y * m.columns[1].z - m.columns[0].x * m.columns[2].y * m.columns[1].z - m.columns[1].x * m.columns[0].y * m.columns[2].z + m.columns[0].x * m.columns[1].y * m.columns[2].z) } };
+    float d = 1.0f / dot(m.columns[0], t);
+    r.columns[0] *= d; r.columns[1] *= d; r.columns[2] *= d; r.columns[3] *= d;
+    return r;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _19)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _19->res = round(_19->f32[0u]);
+    _19->res = rint(_19->f32[0u]);
+    _19->res = trunc(_19->f32[0u]);
+    _19->res = fabs(_19->f32[0u]);
+    _19->ires = as_int(abs(_19->s32[0u]));
+    _19->res = sign(_19->f32[0u]);
+    _19->ires = clamp(_19->s32[0u], -1, 1);
+    _19->res = floor(_19->f32[0u]);
+    _19->res = ceil(_19->f32[0u]);
+    _19->res = (_19->f32[0u] - floor(_19->f32[0u]));
+    _19->res = radians(_19->f32[0u]);
+    _19->res = degrees(_19->f32[0u]);
+    _19->res = sin(_19->f32[0u]);
+    _19->res = cos(_19->f32[0u]);
+    _19->res = tan(_19->f32[0u]);
+    _19->res = asin(_19->f32[0u]);
+    _19->res = acos(_19->f32[0u]);
+    _19->res = atan(_19->f32[0u]);
+    _19->res = sinh(_19->f32[0u]);
+    _19->res = cosh(_19->f32[0u]);
+    _19->res = tanh(_19->f32[0u]);
+    _19->res = asinh(_19->f32[0u]);
+    _19->res = acosh(_19->f32[0u]);
+    _19->res = atanh(_19->f32[0u]);
+    _19->res = atan2(_19->f32[0u], _19->f32[1u]);
+    _19->res = pow(_19->f32[0u], _19->f32[1u]);
+    _19->res = exp(_19->f32[0u]);
+    _19->res = log(_19->f32[0u]);
+    _19->res = exp2(_19->f32[0u]);
+    _19->res = log2(_19->f32[0u]);
+    _19->res = sqrt(_19->f32[0u]);
+    _19->res = rsqrt(_19->f32[0u]);
+    _19->res = fabs(_19->f32[0u]);
+    _19->res = fabs(_19->f32[0u] - _19->f32[1u]);
+    _19->res = sign(_19->f32[0u]);
+    _19->res = (_19->f32[2u] * _19->f32[1u] < 0.0f ? _19->f32[0u] : -_19->f32[0u]);
+    _19->res = _19->f32[0u] - 2.0f * _19->f32[1u] * _19->f32[0u] * _19->f32[1u];
+    float _195 = (float)(0.0f);
+    {
+        float spv_NdotI = _19->f32[1u] * _19->f32[0u];
+        float spv_k = 1.0f - _19->f32[2u] * _19->f32[2u] * (1.0f - spv_NdotI * spv_NdotI);
+        if (spv_k >= 0.0f)
+            _195 = _19->f32[2u] * _19->f32[0u] - (_19->f32[2u] * spv_NdotI + sqrt(spv_k)) * _19->f32[1u];
+    }
+    _19->res = _195;
+    _19->res = length(_19->f32.xy);
+    _19->res = distance(_19->f32.xy, _19->f32.zw);
+    float2 v2_1 = normalize(_19->f32.xy);
+    v2_1 = (dot(_19->f32.zw, _19->f32.yz) < 0.0f ? _19->f32.xy : -_19->f32.xy);
+    v2_1 = _19->f32.xy - 2.0f * dot(_19->f32.zw, _19->f32.xy) * _19->f32.zw;
+    float2 _243 = (float2)(0.0f);
+    {
+        float spv_NdotI = dot(_19->f32.yz, _19->f32.xy);
+        float spv_k = 1.0f - _19->f32[3u] * _19->f32[3u] * (1.0f - spv_NdotI * spv_NdotI);
+        if (spv_k >= 0.0f)
+            _243 = _19->f32[3u] * _19->f32.xy - (_19->f32[3u] * spv_NdotI + sqrt(spv_k)) * _19->f32.yz;
+    }
+    v2_1 = _243;
+    float3 v3_1 = cross(_19->f32.xyz, _19->f32.yzw);
+    _19->res = spvDeterminant2(_19->m2);
+    _19->res = spvDeterminant3(_19->m3);
+    _19->res = spvDeterminant4(_19->m4);
+    _19->m2 = spvInverse2(_19->m2);
+    _19->m3 = spvInverse3(_19->m3);
+    _19->m4 = spvInverse4(_19->m4);
+    ResType _288;
+    _288._m0 = modf(_19->f32[0u], &_288._m1);
+    float tmp_1 = _288._m1;
+    _19->res = _288._m0;
+    _19->res = fmin(_19->f32[0u], _19->f32[1u]);
+    _19->ures = min(_19->u32[0u], _19->u32[1u]);
+    _19->ires = min(_19->s32[0u], _19->s32[1u]);
+    _19->res = fmax(_19->f32[0u], _19->f32[1u]);
+    _19->ures = max(_19->u32[0u], _19->u32[1u]);
+    _19->ires = max(_19->s32[0u], _19->s32[1u]);
+    _19->res = clamp(_19->f32[0u], _19->f32[1u], _19->f32[2u]);
+    _19->ures = clamp(_19->u32[0u], _19->u32[1u], _19->u32[2u]);
+    _19->ires = clamp(_19->s32[0u], _19->s32[1u], _19->s32[2u]);
+    _19->res = mix(_19->f32[0u], _19->f32[1u], _19->f32[2u]);
+    _19->res = step(_19->f32[0u], _19->f32[1u]);
+    _19->res = smoothstep(_19->f32[0u], _19->f32[1u], _19->f32[2u]);
+    _19->res = fma(_19->f32[0u], _19->f32[1u], _19->f32[2u]);
+    ResType_1 _390;
+    _390._m0 = frexp(_19->f32[0u], &_390._m1);
+    int itmp_1 = _390._m1;
+    _19->res = _390._m0;
+    _19->res = ldexp(_19->f32[0u], itmp_1);
+    _19->ures = spvPackSnorm4x8(_19->f32);
+    _19->ures = spvPackUnorm4x8(_19->f32);
+    _19->ures = spvPackSnorm2x16(_19->f32.xy);
+    _19->ures = spvPackUnorm2x16(_19->f32.xy);
+    _19->ures = spvPackHalf2x16(_19->f32.xy);
+    v2_1 = spvUnpackSnorm2x16(_19->u32[0u]);
+    v2_1 = spvUnpackUnorm2x16(_19->u32[0u]);
+    v2_1 = spvUnpackHalf2x16(_19->u32[0u]);
+    float4 v4_1 = spvUnpackSnorm4x8(_19->u32[0u]);
+    v4_1 = spvUnpackUnorm4x8(_19->u32[0u]);
+    _19->s32 = (int4)(spvFindLSB(as_uint(_19->s32.x)), spvFindLSB(as_uint(_19->s32.y)), spvFindLSB(as_uint(_19->s32.z)), spvFindLSB(as_uint(_19->s32.w)));
+    _19->s32 = (int4)(spvFindLSB(_19->u32.x), spvFindLSB(_19->u32.y), spvFindLSB(_19->u32.z), spvFindLSB(_19->u32.w));
+    _19->s32 = 31 - clz(_19->s32 ^ (_19->s32 >> 31));
+    _19->s32 = 31 - as_int4(clz(_19->u32));
+}
+

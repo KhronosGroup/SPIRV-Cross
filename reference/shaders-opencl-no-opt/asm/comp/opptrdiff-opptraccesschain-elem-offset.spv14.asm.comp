@@ -1,0 +1,50 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _7
+{
+    int _m0;
+    int _m1[1];
+};
+
+typedef struct _7 _7;
+
+struct _9
+{
+    int2 _m0[1];
+};
+
+typedef struct _9 _9;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global _7* _2, __global int2* _3)
+{
+    __global int* _4;
+    __global int* _5;
+    int _28 = _2->_m0;
+    _4 = &_2->_m1[0];
+    _5 = &_2->_m1[0 + _28];
+    int _34;
+    if (!(_28 <= 0))
+    {
+        _34 = 0;
+        for (;;)
+        {
+            __global int* _36 = _4;
+            __global int* _37 = _5;
+            int _35 = _34 + 1;
+            _4 = &_36[1];
+            _5 = &_37[-1];
+            _3[_34] = (int2)(_36 - _37, _37 - _36);
+            if (_34 >= _28)
+            {
+                break;
+            }
+            else
+            {
+                _34 = _35;
+            }
+        }
+    }
+}
+

@@ -1,0 +1,20 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    uint a;
+    uint b;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _7)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint _16 = atomic_add(&(_7->b), 0u);
+    uint c = _16;
+    atomic_xchg(&(_7->a), c);
+}
+

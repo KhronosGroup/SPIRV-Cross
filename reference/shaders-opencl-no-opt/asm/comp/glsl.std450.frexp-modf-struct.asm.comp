@@ -1,0 +1,40 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _9
+{
+    float _m0;
+    float _m1;
+};
+
+typedef struct _9 _9;
+
+struct _16
+{
+    float _m0;
+    int _m1;
+};
+
+typedef struct _16 _16;
+
+struct _4
+{
+    float _m0;
+    int _m1;
+};
+
+typedef struct _4 _4;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global _4* _6)
+{
+    _9 _23;
+    _23._m0 = modf(20.0f, &_23._m1);
+    _16 _24;
+    _24._m0 = frexp(40.0f, &_24._m1);
+    _6->_m0 = _23._m0;
+    _6->_m0 = _23._m1;
+    _6->_m0 = _24._m0;
+    _6->_m1 = _24._m1;
+}
+

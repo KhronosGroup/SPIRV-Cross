@@ -1,0 +1,34 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float4 values[1];
+};
+
+typedef struct SSBO SSBO;
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 11u
+#endif
+constant uint _12 = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 12u
+#endif
+constant uint _13 = SPIRV_CROSS_CONSTANT_ID_2;
+#ifndef SPIRV_CROSS_CONSTANT_ID_3
+#define SPIRV_CROSS_CONSTANT_ID_3 13u
+#endif
+constant uint _6 = SPIRV_CROSS_CONSTANT_ID_3;
+#ifndef SPIRV_CROSS_CONSTANT_ID_4
+#define SPIRV_CROSS_CONSTANT_ID_4 14u
+#endif
+constant uint _7 = SPIRV_CROSS_CONSTANT_ID_4;
+constant uint3 spvWorkgroupSize = (uint3)(3u, _12, _13);
+
+__attribute__((reqd_work_group_size(3, 11, 12)))
+__kernel void comp_main(__global float4* _10)
+{
+    _10[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] += (float4)(2.0f);
+}
+

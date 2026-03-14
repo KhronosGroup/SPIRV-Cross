@@ -1,0 +1,38 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Data
+{
+    float3 sourceData[16];
+};
+
+typedef struct Data Data;
+
+__attribute__((reqd_work_group_size(8, 8, 1)))
+__kernel void comp_main(read_only image2d_t g_inputTexture, write_only image2d_t g_output)
+{
+    __local Data g_data[64];
+    uint _49;
+    _49 = 0u;
+    for (; _49 < 4u; _49++)
+    {
+        for (uint _56 = 0u; _56 < 4u; )
+        {
+            int3 _65 = as_int3(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)))) + (int3)(as_int(_56), as_int(_49), 0);
+            g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[(_49 * 4u) + _56] = texelFetch(g_inputTexture, _65.xy, _65.z).xyz;
+            _56++;
+            continue;
+        }
+    }
+    float3 _45[16] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData;
+    uint _77;
+    _77 = 0u;
+    for (int _80 = 0; _80 < 16; )
+    {
+        _77 |= convert_uint(clamp(dot(_45[_80], (float3)(-1.0f)), 0.0f, 1.0f));
+        _80++;
+        continue;
+    }
+    write_imageui(g_output, as_int2(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).xy), (uint4)(_77));
+}
+

@@ -1,0 +1,18 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float a[16];
+    float4 b[16];
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _14)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _14->b[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = (float4)(_14->a[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x]);
+}
+

@@ -1,0 +1,26 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Ref;
+
+struct Ref
+{
+    float4 v;
+};
+
+typedef struct Ref Ref;
+
+struct Registers
+{
+    ulong foo;
+};
+
+typedef struct Registers Registers;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(Registers _14)
+{
+    restrict __global Ref* __restrict ref = ((__global Ref*)(_14.foo));
+    ref->v = (float4)(1.0f);
+}
+

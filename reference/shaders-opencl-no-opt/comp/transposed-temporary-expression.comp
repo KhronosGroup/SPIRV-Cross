@@ -1,0 +1,41 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+typedef struct { float4 columns[3]; } spvMat3x4;
+typedef struct { float3 columns[4]; } spvMat4x3;
+
+struct SSBO
+{
+    spvMat3x4 A;
+    spvMat3x4 B;
+    spvMat3x4 C;
+    float4 D;
+    float w0;
+    float w1;
+};
+
+typedef struct SSBO SSBO;
+
+static float3 spvMulMat4x3Vec4(spvMat4x3 m, float4 v)
+{
+    return m.columns[0] * v.x + m.columns[1] * v.y + m.columns[2] * v.z + m.columns[3] * v.w;
+}
+
+static spvMat3x4 spvMulMat3x4Scalar(spvMat3x4 m, float s)
+{
+    spvMat3x4 r;
+    r.columns[0] = m.columns[0] * s;
+    r.columns[1] = m.columns[1] * s;
+    r.columns[2] = m.columns[2] * s;
+    return r;
+}
+
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void comp_main(__global SSBO* _12)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    spvMat3x4 _23 = spvMulMat3x4Scalar(_12->A, _12->w0);
+    spvMat3x4 _30 = spvMulMat3x4Scalar(_12->B, _12->w1);
+    _12->D = (float4)(spvMulMat4x3Vec4((spvMat4x3){ { (float3)(_23.columns[0][0], _23.columns[1][0], _23.columns[2][0]) + (float3)(_30.columns[0][0], _30.columns[1][0], _30.columns[2][0]), (float3)(_23.columns[0][1], _23.columns[1][1], _23.columns[2][1]) + (float3)(_30.columns[0][1], _30.columns[1][1], _30.columns[2][1]), (float3)(_23.columns[0][2], _23.columns[1][2], _23.columns[2][2]) + (float3)(_30.columns[0][2], _30.columns[1][2], _30.columns[2][2]), (float3)(_23.columns[0][3], _23.columns[1][3], _23.columns[2][3]) + (float3)(_30.columns[0][3], _30.columns[1][3], _30.columns[2][3]) } }, _12->D), 1.0f);
+}
+

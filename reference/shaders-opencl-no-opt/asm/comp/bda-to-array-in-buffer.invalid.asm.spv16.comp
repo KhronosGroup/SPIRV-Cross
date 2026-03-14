@@ -1,0 +1,24 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _7
+{
+    ulong _m0;
+    ulong _m1;
+};
+
+typedef struct _7 _7;
+
+__global uint* _23(__global _7* _2)
+{
+    __global uint* _29 = ((__global uint*)((ulong)(((__global uchar*)(_2->_m1))) + 16ul));
+    *_29 = 1u;
+    return _29;
+}
+
+__attribute__((reqd_work_group_size(16, 16, 1)))
+__kernel void comp_main(__global _7* _2)
+{
+    __global uint* _31 = _23(_2);
+}
+

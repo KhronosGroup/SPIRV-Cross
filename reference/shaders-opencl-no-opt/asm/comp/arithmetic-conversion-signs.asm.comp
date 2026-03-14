@@ -1,0 +1,43 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    int s32;
+    uint u32;
+    short s16;
+    ushort u16;
+    float f32;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _6)
+{
+    int _29 = _6->s32;
+    uint _30 = _6->u32;
+    short _31 = _6->s16;
+    ushort _32 = _6->u16;
+    float _33 = _6->f32;
+    _6->s32 = convert_int(_31);
+    _6->u32 = convert_uint(_31);
+    _6->s32 = convert_int(_32);
+    _6->u32 = convert_uint(_32);
+    _6->u32 = convert_uint(_31);
+    _6->u32 = convert_uint(_32);
+    _6->s16 = convert_short(_29);
+    _6->u16 = convert_ushort(_29);
+    _6->s16 = convert_short(_30);
+    _6->u16 = convert_ushort(_30);
+    _6->u16 = convert_ushort(_29);
+    _6->u16 = convert_ushort(_30);
+    _6->f32 = convert_float(_31);
+    _6->f32 = convert_float(_32);
+    _6->f32 = convert_float(_31);
+    _6->f32 = convert_float(_32);
+    _6->s16 = convert_short(_33);
+    _6->u16 = convert_ushort(_33);
+    _6->u16 = convert_ushort(_33);
+}
+

@@ -1,0 +1,19 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct A
+{
+    float3 a;
+    float3 b;
+};
+
+typedef struct A A;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global A* _14)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    int3 c = _14->b < (float3)(1.0f);
+    _14->a = select((float3)(1.0f, 0.0f, 0.0f), (float3)(0.0f, 0.0f, 1.0f), c);
+}
+

@@ -1,0 +1,21 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Registers
+{
+    ulong a;
+    ulong b;
+    uint2 c;
+    uint2 d;
+};
+
+typedef struct Registers Registers;
+
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void comp_main(Registers _7)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    *((__global float3*)((ulong)(((__global float3*)(_7.a))) + ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x * 12)) = (*((__global float3*)((ulong)(((__global float3*)(_7.a))) + ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x * 12))) + ((__global float3*)(_7.b))[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x];
+    *((__global float3*)((ulong)(((__global float3*)as_ulong(_7.c))) + ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x * 12)) = (*((__global float3*)((ulong)(((__global float3*)as_ulong(_7.c))) + ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x * 12))) + ((__global float3*)as_ulong(_7.d))[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x];
+}
+

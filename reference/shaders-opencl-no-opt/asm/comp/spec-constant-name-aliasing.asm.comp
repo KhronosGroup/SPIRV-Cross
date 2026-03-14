@@ -1,0 +1,48 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    int values[1];
+};
+
+typedef struct SSBO SSBO;
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 0
+#endif
+constant int A = SPIRV_CROSS_CONSTANT_ID_0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 1
+#endif
+constant int A_1 = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 2
+#endif
+constant int A_2 = SPIRV_CROSS_CONSTANT_ID_2;
+#ifndef SPIRV_CROSS_CONSTANT_ID_3
+#define SPIRV_CROSS_CONSTANT_ID_3 3
+#endif
+constant int A_3 = SPIRV_CROSS_CONSTANT_ID_3;
+#ifndef SPIRV_CROSS_CONSTANT_ID_4
+#define SPIRV_CROSS_CONSTANT_ID_4 4
+#endif
+constant int A_4 = SPIRV_CROSS_CONSTANT_ID_4;
+#ifndef SPIRV_CROSS_CONSTANT_ID_5
+#define SPIRV_CROSS_CONSTANT_ID_5 5
+#endif
+constant int A_5 = SPIRV_CROSS_CONSTANT_ID_5;
+#define A_6 ((A - A_1))
+#define A_7 ((A_6 - A_2))
+#define A_8 ((A_7 - A_3))
+#define A_9 ((A_8 - A_4))
+#define A_10 ((A_9 - A_5))
+#define A_11 ((A_10 + A_5))
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global int* _7)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _7[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = A_11;
+}
+

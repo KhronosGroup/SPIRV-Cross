@@ -1,0 +1,31 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct AttData0
+{
+    uint3 att0[1];
+};
+
+typedef struct AttData0 AttData0;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint3* _22)
+{
+    uint newVal_1 = 432u;
+    uint prevVal_1 = 0u;
+    uint curVal_1 = 0u;
+    for (;;)
+    {
+        uint _30 = atomic_cmpxchg(&(_22[0][0u]), prevVal_1, newVal_1);
+        curVal_1 = _30;
+        if (_30 != prevVal_1)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+

@@ -1,0 +1,35 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    uint4 u;
+    int4 i;
+};
+
+typedef struct SSBO SSBO;
+
+static int spvFindLSB(uint x) {
+    if (x == 0u) return -1;
+    return 31 - as_int(clz(x & (0u - x)));
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _6)
+{
+    uint4 _19 = _6->u;
+    int4 _20 = _6->i;
+    _6->u = (uint4)(spvFindLSB(_19.x), spvFindLSB(_19.y), spvFindLSB(_19.z), spvFindLSB(_19.w));
+    _6->i = (int4)(spvFindLSB(_19.x), spvFindLSB(_19.y), spvFindLSB(_19.z), spvFindLSB(_19.w));
+    _6->u = (uint4)(spvFindLSB(as_uint(_20.x)), spvFindLSB(as_uint(_20.y)), spvFindLSB(as_uint(_20.z)), spvFindLSB(as_uint(_20.w)));
+    _6->i = (int4)(spvFindLSB(as_uint(_20.x)), spvFindLSB(as_uint(_20.y)), spvFindLSB(as_uint(_20.z)), spvFindLSB(as_uint(_20.w)));
+    _6->u = as_uint4(31 - as_int4(clz(_19)));
+    _6->i = 31 - as_int4(clz(_19));
+    _6->u = as_uint4(31 - as_int4(clz(as_uint4(_20))));
+    _6->i = 31 - as_int4(clz(as_uint4(_20)));
+    _6->u = as_uint4(31 - clz(as_int4(_19) ^ (as_int4(_19) >> 31)));
+    _6->i = 31 - clz(as_int4(_19) ^ (as_int4(_19) >> 31));
+    _6->u = as_uint4(31 - clz(_20 ^ (_20 >> 31)));
+    _6->i = 31 - clz(_20 ^ (_20 >> 31));
+}
+

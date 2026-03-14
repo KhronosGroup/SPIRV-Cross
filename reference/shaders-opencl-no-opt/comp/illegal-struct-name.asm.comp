@@ -1,0 +1,27 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Foo
+{
+    float _abs;
+};
+
+typedef struct Foo Foo;
+
+struct SSBO
+{
+    Foo foo;
+    Foo foo2;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _9)
+{
+    Foo f;
+    f._abs = _9->foo._abs;
+    int _abs = 10;
+    _9->foo2._abs = f._abs;
+}
+

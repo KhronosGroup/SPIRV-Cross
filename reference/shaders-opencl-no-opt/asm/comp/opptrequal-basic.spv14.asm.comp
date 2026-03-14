@@ -1,0 +1,34 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _7
+{
+    uint _m0[1];
+};
+
+typedef struct _7 _7;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global uint* _2, __global uint* _3, __global uint* _4, __global uint* _5)
+{
+    uint _18 = 0u;
+    uint _28 = _18 + 1u;
+    _5[_18] = (uint)(&_2 == &_3);
+    uint _32 = _28 + 1u;
+    _5[_28] = (uint)(&_2[0] == &_3[0]);
+    uint _36 = _32 + 1u;
+    _5[_32] = (uint)(&_2[0u] == &_3[0u]);
+    uint _40 = _36 + 1u;
+    _5[_36] = (uint)(&_2 == &_4);
+    uint _44 = _40 + 1u;
+    _5[_40] = (uint)(&_2[0] == &_4[0]);
+    uint _48 = _44 + 1u;
+    _5[_44] = (uint)(&_2[0u] == &_4[0u]);
+    uint _52 = _48 + 1u;
+    _5[_48] = (uint)(&_3 == &_4);
+    uint _56 = _52 + 1u;
+    _5[_52] = (uint)(&_3[0] == &_4[0]);
+    _5[_56] = (uint)(&_3[0u] == &_4[0u]);
+    _5[_56 + 1u] = (uint)(&_2 == &_2);
+}
+

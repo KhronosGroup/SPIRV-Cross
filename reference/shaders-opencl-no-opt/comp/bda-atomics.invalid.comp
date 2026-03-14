@@ -1,0 +1,44 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Ptr;
+
+struct Registers
+{
+    ulong ptr;
+};
+
+typedef struct Registers Registers;
+
+struct Ptr
+{
+    uint i;
+    uint2 i2;
+};
+
+typedef struct Ptr Ptr;
+
+struct UBO
+{
+    ulong ptr_ubo;
+};
+
+typedef struct UBO UBO;
+
+struct SSBO
+{
+    ulong ptr_ssbo;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(Registers _12, UBO _26, __global const __global Ptr** _35)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint _23 = atomic_add(&((__global Ptr*)(_12.ptr))->i, 10u);
+    uint _32 = atomic_add(&((__global Ptr*)(_26.ptr_ubo))->i, 11u);
+    uint _41 = atomic_add(&((__global Ptr*)(_35[0]))->i, 12u);
+    uint _51 = atomic_add(&((__global Ptr*)as_ulong(((__global Ptr*)(_12.ptr))->i2))->i, 13u);
+}
+

@@ -1,0 +1,21 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    uint count;
+    uint data[1];
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _7)
+{
+    uint _19 = atomic_add(&(_7->count), 1u);
+    if (_19 < 1024u)
+    {
+        _7->data[_19] = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x;
+    }
+}
+

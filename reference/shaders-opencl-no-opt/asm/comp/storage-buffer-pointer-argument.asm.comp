@@ -1,0 +1,28 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float a;
+};
+
+typedef struct SSBO SSBO;
+
+struct SSBORead
+{
+    float b;
+};
+
+typedef struct SSBORead SSBORead;
+
+void copy_out(__global float* A_1, __global float* B_1)
+{
+    *A_1 = *B_1;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global float* _10, __global const float* _14)
+{
+    copy_out(&_10[0], &_14[0]);
+}
+

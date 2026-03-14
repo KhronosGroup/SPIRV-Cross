@@ -1,0 +1,77 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct foo
+{
+    int a[128];
+    uint b;
+    float2 c;
+};
+
+typedef struct foo foo;
+
+struct bar
+{
+    int d;
+};
+
+typedef struct bar bar;
+
+struct baz
+{
+    int e[128];
+};
+
+typedef struct baz baz;
+
+__global int* select_buffer(__global foo* buf, __global int* buf2, bar cb)
+{
+    return (cb.d != 0) ? &buf->a[0u] : &buf2[0u];
+}
+
+__global int* select_buffer_null(__global foo* buf, bar cb)
+{
+    return (cb.d != 0) ? &buf->a[0u] : NULL;
+}
+
+__local int* select_tgsm(bar cb, __local int* tgsm)
+{
+    return (cb.d != 0) ? &tgsm[0u] : NULL;
+}
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global foo* buf, bar cb, __global int* buf2)
+{
+    __local int tgsm[128];
+    __global int* sbuf_1_1;
+    __global int* sbuf2_1_1;
+    __local int* stgsm_1_1;
+    sbuf_1_1 = select_buffer(buf, buf2, cb);
+    sbuf2_1_1 = select_buffer_null(buf, cb);
+    stgsm_1_1 = select_tgsm(cb, tgsm);
+    __local int* cur_1_1 = stgsm_1_1;
+    __global int* _78;
+    _78 = &buf->a[0u];
+    __local int* _81;
+    int _82;
+    for (;;)
+    {
+        _81 = cur_1_1;
+        _82 = *_78;
+        if (_82 != 0)
+        {
+            int _86 = *_81;
+            int _87 = _82 + _86;
+            *_78 = _87;
+            *_81 = _87;
+            cur_1_1 = &_81[1u];
+            _78 = &_78[1u];
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+

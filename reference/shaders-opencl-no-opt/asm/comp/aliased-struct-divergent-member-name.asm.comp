@@ -1,0 +1,32 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct T
+{
+    float c;
+};
+
+typedef struct T T;
+
+struct SSBO1
+{
+    T foo[1];
+};
+
+typedef struct SSBO1 SSBO1;
+
+struct SSBO2
+{
+    T bar[1];
+};
+
+typedef struct SSBO2 SSBO2;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global T* _9, __global T* _13)
+{
+    T v = (T){ 40.0f };
+    _9[10].c = v.c;
+    _13[30].c = v.c;
+}
+

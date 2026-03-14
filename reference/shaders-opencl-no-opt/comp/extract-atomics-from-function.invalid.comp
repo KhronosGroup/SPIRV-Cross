@@ -1,0 +1,90 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+#define var (*var_ptr)
+#define var (*var_ptr)
+void testAdd(__local uint* var_ptr)
+{
+    uint _29 = atomic_add(&var, 1u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testMin(__local uint* var_ptr)
+{
+    uint _31 = atomic_min(&var, 2u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testMax(__local uint* var_ptr)
+{
+    uint _33 = atomic_max(&var, 3u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testOr(__local uint* var_ptr)
+{
+    uint _35 = atomic_or(&var, 5u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testXor(__local uint* var_ptr)
+{
+    uint _37 = atomic_xor(&var, 6u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testExchange(__local uint* var_ptr)
+{
+    uint _39 = atomic_xchg(&var, 7u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testCompSwap(__local uint* var_ptr)
+{
+    uint _42 = atomic_cmpxchg(&var, 8u, 9u);
+}
+
+#undef var
+
+#define var (*var_ptr)
+void testStore(__local uint* var_ptr)
+{
+    atomic_xchg(&var, 10u);
+}
+
+#undef var
+
+void foo(__local uint* var_ptr)
+{
+    testAdd(&var);
+    testMin(&var);
+    testMax(&var);
+    testOr(&var);
+    testXor(&var);
+    testExchange(&var);
+    testCompSwap(&var);
+    testStore(&var);
+}
+
+#undef var
+
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void comp_main()
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local uint var;
+    foo(&var);
+}
+

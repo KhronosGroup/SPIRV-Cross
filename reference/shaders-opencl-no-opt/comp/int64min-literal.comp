@@ -1,0 +1,26 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct UBO
+{
+    float b;
+};
+
+typedef struct UBO UBO;
+
+struct SSBO
+{
+    float a;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(UBO _12, __global float* _25)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    long v = convert_long(as_int(_12.b));
+    v ^= (long)(0x8000000000000000ul);
+    _25[0] = as_float(convert_int(v));
+}
+

@@ -1,0 +1,16 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void comp_main()
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    __local float2 test[64];
+    float _21 = convert_float(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x);
+    float2 _22 = (float2)(_21);
+    ((&((&test)[0u]))[0u])[1u + 2u] = _22;
+    ((&test)[0u])[1u + 2u] = _22;
+    ((&test)[0u])[3u] = _22;
+    ((&test)[0u])[2u + 1u].x = _21;
+}
+

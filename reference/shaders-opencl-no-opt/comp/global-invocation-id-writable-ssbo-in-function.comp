@@ -1,0 +1,27 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct myBlock
+{
+    int a;
+    float b[1];
+};
+
+typedef struct myBlock myBlock;
+
+#define _RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID (*_RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID_ptr)
+float getB(__global myBlock* myStorage, __private uint3* _RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID_ptr)
+{
+    return myStorage->b[_RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID.x];
+}
+
+#undef _RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global myBlock* myStorage)
+{
+    uint3 _RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    myStorage->a = (myStorage->a + 1) % 256;
+    myStorage->b[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x] = fmod(getB(myStorage, &_RESERVED_IDENTIFIER_FIXUP_gl_GlobalInvocationID) + 0.0199999995529651641845703125f, 1.0f);
+}
+

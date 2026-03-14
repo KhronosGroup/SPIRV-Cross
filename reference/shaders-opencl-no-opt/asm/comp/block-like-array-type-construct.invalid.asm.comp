@@ -1,0 +1,37 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct _12
+{
+    float _m0[4];
+    float _m1[4];
+};
+
+typedef struct _12 _12;
+
+constant float _36[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+constant _12 _39[2] = { (_12){ { 1.0f, 2.0f, 3.0f, 4.0f }, { 1.0f, 2.0f, 3.0f, 4.0f } }, (_12){ { 1.0f, 2.0f, 3.0f, 4.0f }, { 1.0f, 2.0f, 3.0f, 4.0f } } };
+
+struct SSBO
+{
+    uint a;
+    int b;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _8)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    float foo[4];
+    float foo2[4];
+    foo[0] = 1.0f;
+    foo = { 1.0f, 2.0f, 3.0f, 4.0f };
+    foo[1] = 2.0f;
+    foo[2] = 3.0f;
+    foo[3] = 4.0f;
+    foo2 = foo;
+    _12 _41 = (_12){ { foo[0], foo[1], foo[2], foo[3] }, { foo2[0], foo2[1], foo2[2], foo2[3] } };
+}
+
