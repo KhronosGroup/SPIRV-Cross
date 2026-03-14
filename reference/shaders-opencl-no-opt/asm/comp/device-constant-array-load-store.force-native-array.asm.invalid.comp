@@ -20,14 +20,22 @@ __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void comp_main(__global Block* ssbo, SSBO ubo)
 {
     __local uint2 _18[2];
-    ssbo[0u]._m0 = ssbo[0u]._m1;
-    ssbo[0u]._m0 = ubo._m0[0u]._m1;
+    ssbo[0u]._m0[0] = ssbo[0u]._m1[0];
+    ssbo[0u]._m0[1] = ssbo[0u]._m1[1];
+    ssbo[0u]._m0[0] = ubo._m0[0u]._m1[0];
+    ssbo[0u]._m0[1] = ubo._m0[0u]._m1[1];
     uint2 _23[2];
-    ssbo[0u]._m0 = _23;
-    ssbo[0u]._m0 = _18;
-    _18 = ssbo[0u]._m1;
-    _23 = ssbo[0u]._m1;
-    _18 = ubo._m0[0u]._m1;
-    _23 = ubo._m0[0u]._m1;
+    ssbo[0u]._m0[0] = _23[0];
+    ssbo[0u]._m0[1] = _23[1];
+    ssbo[0u]._m0[0] = _18[0];
+    ssbo[0u]._m0[1] = _18[1];
+    _18[0] = ssbo[0u]._m1[0];
+    _18[1] = ssbo[0u]._m1[1];
+    _23[0] = ssbo[0u]._m1[0];
+    _23[1] = ssbo[0u]._m1[1];
+    _18[0] = ubo._m0[0u]._m1[0];
+    _18[1] = ubo._m0[0u]._m1[1];
+    _23[0] = ubo._m0[0u]._m1[0];
+    _23[1] = ubo._m0[0u]._m1[1];
 }
 

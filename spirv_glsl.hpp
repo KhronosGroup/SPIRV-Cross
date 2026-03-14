@@ -667,6 +667,9 @@ protected:
 		bool workgroup_size_is_hidden = false;
 		bool requires_relaxed_precision_analysis = false;
 		bool implicit_c_integer_promotion_rules = false;
+		// When true, emit C-style casts "(type)(expr)" instead of GLSL constructor-style "type(expr)"
+		// for value casts (e.g., implicit integer promotion).
+		bool c_style_casts = false;
 		bool supports_spec_constant_array_size = true;
 		// When non-empty, matrix column access uses this member name instead of raw array indexing.
 		// e.g., "columns" -> m.columns[i] instead of m[i].

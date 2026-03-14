@@ -1,0 +1,23 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct D
+{
+    float data_d[1];
+};
+
+typedef struct D D;
+
+struct A
+{
+    float data_a[1];
+};
+
+typedef struct A A;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global float* d, __global const float* a)
+{
+    d[0][0] = a[0][0];
+}
+

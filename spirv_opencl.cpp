@@ -78,8 +78,8 @@ string CompilerOpenCL::compile()
 	backend.float_literal_suffix = true;
 	backend.double_literal_suffix = true;
 	backend.uint32_t_literal_suffix = true;
-	backend.int16_t_literal_suffix = "s";
-	backend.uint16_t_literal_suffix = "us";
+	backend.int16_t_literal_suffix = "";
+	backend.uint16_t_literal_suffix = "";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
 	backend.basic_int8_type = "char";
@@ -111,12 +111,14 @@ string CompilerOpenCL::compile()
 	backend.array_is_value_type_in_buffer_blocks = false;
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
+	backend.c_style_casts = true;
 	backend.supports_spec_constant_array_size = false;
 	backend.matrix_column_accessor = "columns";
 
 	fixup_anonymous_struct_names();
 	fixup_type_alias();
 	replace_illegal_names();
+	fixup_image_load_store_access();
 	build_function_control_flow_graphs_and_analyze();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
@@ -216,6 +218,21 @@ const char *CompilerOpenCL::to_storage_qualifiers_glsl(const SPIRVariable &)
 
 void CompilerOpenCL::compute_kernel_resources()
 {
+	// OpenCL C uses __restrict (after *) instead of GLSL's restrict (before type).
+	// Convert DecorationRestrictPointerEXT → DecorationRestrict so the base class
+	// flags_to_qualifiers_glsl does not emit "restrict " prefix, and our to_restrict
+	// emits "__restrict" after the pointer star instead.
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, SPIRVariable &var)
+	    {
+		    auto &flags = get_decoration_bitset(var.self);
+		    if (flags.get(DecorationRestrictPointerEXT))
+		    {
+			    unset_decoration(var.self, DecorationRestrictPointerEXT);
+			    set_decoration(var.self, DecorationRestrict);
+		    }
+	    });
+
 	// Collect all SSBOs/BufferBlocks that get flattened to __global T* kernel parameters.
 	flattened_buffer_vars.clear();
 	flattened_var_type_decl.clear();
@@ -234,7 +251,11 @@ void CompilerOpenCL::compute_kernel_resources()
 			    if (type.basetype == SPIRType::Struct && type.member_types.size() == 1)
 			    {
 				    const auto &member0_type = get<SPIRType>(type.member_types.front());
-				    subtype = type_to_glsl(member0_type);
+				    // BDA pointer members are stored as ulong in structs.
+				    if (is_pointer(member0_type) && member0_type.storage == StorageClassPhysicalStorageBuffer)
+					    subtype = "ulong";
+				    else
+					    subtype = type_to_glsl(member0_type);
 			    }
 			    else
 			    {
@@ -951,10 +972,9 @@ void CompilerOpenCL::emit_entry_point_declarations()
 		if (var.storage == StorageClassPrivate && !is_hidden_variable(var, true))
 		{
 			add_local_variable_name(var.self);
-			string initializer;
-			if (var.initializer)
-				initializer = join(" = ", to_expression(var.initializer));
-			statement(CompilerGLSL::variable_decl(var), initializer, ";");
+			// CompilerGLSL::variable_decl(var) already includes the initializer
+			// expression (via to_initializer_expression), so no extra initializer needed.
+			statement(CompilerGLSL::variable_decl(var), ";");
 		}
 	}
 
@@ -1137,9 +1157,8 @@ const char *CompilerOpenCL::to_restrict(uint32_t id, bool space)
 	else
 		flags = get_decoration_bitset(id);
 
-	// Only check DecorationRestrict here. DecorationRestrictPointerEXT is handled by
-	// flags_to_qualifiers_glsl in the GLSL base (emits "restrict " prefix), so we
-	// don't duplicate it as "__restrict" after the pointer star.
+	// DecorationRestrictPointerEXT is converted to DecorationRestrict in
+	// compute_kernel_resources(), so only check DecorationRestrict here.
 	return flags.get(DecorationRestrict) ? (space ? "__restrict " : "__restrict") : "";
 }
 
@@ -1829,17 +1848,9 @@ std::string CompilerOpenCL::to_initializer_expression(const SPIRVariable &var)
 	// (e.g., `float a[5] = ssbo->b;` is not valid C).
 	// For array variables with non-constant initializers, emit zero init `{ 0 }` and
 	// schedule element-by-element copy after the declaration.
-	auto &type = get_variable_data_type(var);
-	if (is_array(type) && var.initializer)
-	{
-		// Check if the initializer is a constant — those are fine as-is.
-		if (ir.ids[var.initializer].get_type() != TypeConstant)
-		{
-			// Queue the initializer for post-declaration element-by-element copy.
-			pending_array_copies.push_back({ var.self, var.initializer });
-			return "{ 0 }";
-		}
-	}
+	// SPIR-V spec only allows constant initializers on OpVariable, so array
+	// initializers are always constants and valid as-is in OpenCL C.
+	// Non-constant array copies are handled by emit_store_statement (OpStore).
 	return CompilerGLSL::to_initializer_expression(var);
 }
 
@@ -2513,6 +2524,26 @@ std::string CompilerOpenCL::bitcast_glsl_op(const SPIRType &out_type, const SPIR
 	return "as_" + out_name;
 }
 
+bool CompilerOpenCL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0)
+{
+	auto &output_type = get<SPIRType>(result_type);
+	auto &input_type = expression_type(op0);
+	string expr;
+
+	// float → half2 bitcast: as_half2(expr)
+	if (output_type.basetype == SPIRType::Half && input_type.basetype == SPIRType::Float && input_type.vecsize == 1)
+		expr = join("as_half2(", to_unpacked_expression(op0), ")");
+	// half2 → float bitcast: as_float(expr)
+	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half &&
+	         input_type.vecsize == 2)
+		expr = join("as_float(", to_unpacked_expression(op0), ")");
+	else
+		return false;
+
+	emit_op(result_type, id, expr, should_forward(op0));
+	return true;
+}
+
 // Task #7: In OpenCL C, atomic functions take a pointer argument.
 // Access chain expressions (access_chain = true) may be C lvalues (e.g. ssbo->u32) → need &.
 // But single-member flattened SSBOs emit the raw pointer itself (e.g. _48 is __global uint*)
@@ -2728,6 +2759,12 @@ std::string CompilerOpenCL::entry_point_args(bool append_comma)
 				    {
 					    // Use type of first struct member as a StructuredBuffer will have only one '._m0' field in SPIR-V
 					    const auto &member0_type = this->get<SPIRType>(parent_type.member_types.front());
+					    // If the sole member is a BDA pointer, type_to_glsl would return
+					    // `__global Ptr*` which, wrapped in `__global const X*`, yields
+					    // double `__global` and pointer-to-pointer. Flatten to `ulong`
+					    // instead, matching how emit_struct_member stores BDA pointers.
+					    if (is_pointer(member0_type) && member0_type.storage == StorageClassPhysicalStorageBuffer)
+						    return std::string("ulong");
 					    return this->type_to_glsl(member0_type);
 				    }
 				    else
@@ -2896,6 +2933,24 @@ void CompilerOpenCL::emit_function_prototype(SPIRFunction &func, const Bitset &r
 	}
 
 	decl += ")";
+
+	// Emit #define macros right before the function prototype for workgroup scalar pointer aliasing.
+	// This must happen here (not in emit_function) because CompilerGLSL::emit_function recursively
+	// emits callee functions before reaching emit_function_prototype, so #define in emit_function
+	// would be undone by callee #undef before this function's body is emitted.
+	auto wg_it = func_workgroup_args.find(func.self);
+	if (wg_it != func_workgroup_args.end())
+	{
+		for (auto var_id : wg_it->second)
+		{
+			if (workgroup_scalar_vars.count(var_id))
+			{
+				auto var_name = to_name(var_id);
+				statement("#define ", var_name, " (*", var_name, "_ptr)");
+			}
+		}
+	}
+
 	statement(decl);
 }
 
@@ -2933,33 +2988,24 @@ void CompilerOpenCL::append_global_func_args(const SPIRFunction &func, uint32_t 
 
 void CompilerOpenCL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 {
-	// Emit #define macros before the function for workgroup scalar pointer aliasing.
+	CompilerGLSL::emit_function(func, return_flags);
+
+	// Emit #undef after the function body.
+	// The matching #define is emitted in emit_function_prototype.
 	auto wg_it = func_workgroup_args.find(func.self);
-	bool has_defines = false;
 	if (wg_it != func_workgroup_args.end())
 	{
+		bool has_defines = false;
 		for (auto var_id : wg_it->second)
 		{
 			if (workgroup_scalar_vars.count(var_id))
 			{
-				auto var_name = to_name(var_id);
-				statement("#define ", var_name, " (*", var_name, "_ptr)");
+				statement("#undef ", to_name(var_id));
 				has_defines = true;
 			}
 		}
-	}
-
-	CompilerGLSL::emit_function(func, return_flags);
-
-	// Emit #undef after the function.
-	if (has_defines)
-	{
-		for (auto var_id : wg_it->second)
-		{
-			if (workgroup_scalar_vars.count(var_id))
-				statement("#undef ", to_name(var_id));
-		}
-		statement("");
+		if (has_defines)
+			statement("");
 	}
 }
 
@@ -3020,6 +3066,35 @@ void CompilerOpenCL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_
 	}
 	else
 	{
+		// Check if storing an array type — C does not allow `array = expr;`.
+		auto &rhs_type_raw = expression_type(rhs_expression);
+		auto &rhs_type = is_pointer(rhs_type_raw) ? get_pointee_type(rhs_type_raw) : rhs_type_raw;
+		if (is_array(rhs_type))
+		{
+			auto *var = maybe_get<SPIRVariable>(lhs_expression);
+			// For deferred declarations where the RHS is a composite construct
+			// (not loaded from memory), C99 allows `T arr[N] = { ... };`.
+			// Let the base class handle that case — it merges decl + init correctly.
+			auto *rhs_expr_node = maybe_get<SPIRExpression>(rhs_expression);
+			bool rhs_from_memory = rhs_expr_node && rhs_expr_node->loaded_from;
+			if (var && var->deferred_declaration && !rhs_from_memory)
+			{
+				// Base class will emit `T arr[N] = { ... };`
+				CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
+				return;
+			}
+
+			// Flush deferred declaration so we don't get "float a[5] = rhs".
+			if (var && var->deferred_declaration)
+			{
+				var->deferred_declaration = false;
+				statement(variable_decl_function_local(*var), ";");
+			}
+			auto lhs_expr = to_dereferenced_expression(lhs_expression);
+			emit_array_copy(lhs_expr.c_str(), 0, rhs_expression, StorageClassFunction, StorageClassFunction);
+			register_write(lhs_expression);
+			return;
+		}
 		CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
 	}
 }
@@ -3031,19 +3106,20 @@ void CompilerOpenCL::emit_struct_member(const SPIRType &type, uint32_t member_ty
 	// OpenCL C does not use GLSL layout qualifiers or interpolation qualifiers.
 	// PhysicalStorageBuffer pointers in structs must be emitted as ulong since
 	// OpenCL C does not allow pointer types in kernel parameter structs.
-	if (is_pointer(membertype) && membertype.storage == StorageClassPhysicalStorageBuffer)
+	// Walk through array dimensions to find the inner element type, so that
+	// array-of-pointer members (e.g. `Ptr* ptrs[2]`) are also caught.
+	auto *inner = &membertype;
+	while (is_array(*inner))
+		inner = &get<SPIRType>(inner->parent_type);
+	if (is_pointer(*inner) && inner->storage == StorageClassPhysicalStorageBuffer)
 	{
-		statement(qualifier, "ulong ", to_member_name(type, index), ";");
+		statement(qualifier, "ulong ", to_member_name(type, index), type_to_array_glsl(membertype, 0), ";");
 	}
 	else if (has_member_decoration(type.self, index, DecorationRowMajor))
 	{
 		// Row-major matrix: the physical layout has transposed dimensions.
 		// Emit the member with the physical (transposed) type so struct layout matches buffer.
-		// Walk through array nesting to find the inner matrix type.
-		const auto *inner = &membertype;
-		while (is_array(*inner))
-			inner = &get<SPIRType>(inner->parent_type);
-
+		// `inner` already points to the innermost non-array type from the BDA check above.
 		if (inner->columns > 1)
 		{
 			auto phys_type_name = opencl_matrix_type_name(inner->basetype, inner->columns, inner->vecsize);
@@ -3262,9 +3338,19 @@ bool CompilerOpenCL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t
 		return true;
 	}
 
-	// Emit element-by-element copy
-	for (uint32_t i = 0; i < array_size; i++)
-		statement(lhs, "[", i, "] = ", rhs_expr, "[", i, "];");
+	// For constant RHS, `to_expression` returns `{ 1.0f, 2.0f, ... }` and
+	// subscripting that (`{ ... }[0]`) is not valid C. Extract sub-constants.
+	auto *constant = maybe_get<SPIRConstant>(rhs_id);
+	if (constant && !constant->subconstants.empty())
+	{
+		for (uint32_t i = 0; i < array_size; i++)
+			statement(lhs, "[", i, "] = ", to_expression(constant->subconstants[i]), ";");
+	}
+	else
+	{
+		for (uint32_t i = 0; i < array_size; i++)
+			statement(lhs, "[", i, "] = ", rhs_expr, "[", i, "];");
+	}
 
 	return true;
 }
@@ -4164,6 +4250,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 
 			string expr;
 			bool handled = false;
+			int32_t row_major_mbr_idx = -1; // member index for row-major check, -1 if N/A
 
 			bool is_subscript_deref = false; // result is a C value (subscripted), not a pointer
 
@@ -4175,6 +4262,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				// ops[5+] = optional sub-member indices
 				expr = join(to_name(base_id), "[", to_expression(ops[4]), "]");
 				is_subscript_deref = true;
+				row_major_mbr_idx = 0; // single member, always index 0
 				// Walk additional sub-member indices using type info.
 				if (length >= 6 && struct_type)
 				{
@@ -4204,6 +4292,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				auto mbr_name = to_member_name(*struct_type, mbr_idx);
 				expr = join(to_name(base_id), "[", to_expression(ops[3]), "].", mbr_name);
 				is_subscript_deref = true;
+				row_major_mbr_idx = int32_t(mbr_idx);
 				handled = true;
 			}
 			else if (length == 5 && !is_single_member && struct_type)
@@ -4214,6 +4303,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				auto mbr_name = to_member_name(*struct_type, mbr_idx);
 				expr = join(to_name(base_id), "->", mbr_name, "[", to_expression(ops[4]), "]");
 				is_subscript_deref = true;
+				row_major_mbr_idx = int32_t(mbr_idx);
 				handled = true;
 			}
 			else if (length == 4 && is_single_member)
@@ -4221,6 +4311,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				// Single-member SSBO flattened to T*: accessing the one member gives element 0.
 				expr = join(to_name(base_id), "[0]");
 				is_subscript_deref = true;
+				row_major_mbr_idx = 0; // single member, always index 0
 				handled = true;
 			}
 			else if (length == 4 && !is_single_member && struct_type && !struct_type->array.empty())
@@ -4237,6 +4328,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 				auto mbr_name = to_member_name(*struct_type, mbr_idx);
 				expr = join(to_name(base_id), "->", mbr_name);
 				is_subscript_deref = true; // result is a struct value (accessed through ->), use . for children
+				row_major_mbr_idx = int32_t(mbr_idx);
 				handled = true;
 			}
 
@@ -4250,10 +4342,9 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 					subscripted_deref_exprs.insert(result_id);
 
 				// Propagate row-major transpose flag for matrix members.
-				if (struct_type && length >= 4)
+				if (struct_type && row_major_mbr_idx >= 0)
 				{
-					uint32_t mbr_idx = get<SPIRConstant>(ops[3]).scalar();
-					if (member_is_non_native_row_major_matrix(*struct_type, mbr_idx))
+					if (member_is_non_native_row_major_matrix(*struct_type, uint32_t(row_major_mbr_idx)))
 						e.need_transpose = true;
 				}
 
@@ -4554,6 +4645,46 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	// OpImageFetch (texelFetch in GLSL) maps to read_image* in OpenCL C,
+	// same as OpImageRead but may carry a Lod operand (which we ignore
+	// since OpenCL images don't support LOD on read).
+	case OpImageFetch:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t image_id = ops[2];
+		uint32_t coord_id = ops[3];
+
+		auto &result_spirtype = get<SPIRType>(result_type);
+		const char *read_func;
+		switch (result_spirtype.basetype)
+		{
+		case SPIRType::UInt:
+			read_func = "read_imageui";
+			break;
+		case SPIRType::Int:
+			read_func = "read_imagei";
+			break;
+		default:
+			read_func = "read_imagef";
+			break;
+		}
+
+		// Convert coordinate to int.
+		auto coord_type = expression_type(coord_id);
+		coord_type.basetype = SPIRType::Int;
+		auto coord_expr = bitcast_expression(coord_type, expression_type(coord_id).basetype, to_expression(coord_id));
+
+		auto raw_expr = join(read_func, "(", to_expression(image_id), ", ", coord_expr, ")");
+		auto swizzled = remap_swizzle(result_spirtype, 4, raw_expr);
+
+		bool forward = should_forward(image_id) && should_forward(coord_id);
+		emit_op(result_type, result_id, swizzled, forward);
+		inherit_expression_dependencies(result_id, image_id);
+		inherit_expression_dependencies(result_id, coord_id);
+		break;
+	}
+
 	// Task #10: Map image read/write/query ops to OpenCL C equivalents.
 	case OpImageRead:
 	{
@@ -4561,6 +4692,18 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		uint32_t result_id = ops[1];
 		uint32_t image_id = ops[2];
 		uint32_t coord_id = ops[3];
+
+		// Unset NonReadable so image access qualifier deduction works correctly.
+		auto *image_var = maybe_get_backing_variable(image_id);
+		if (image_var)
+		{
+			auto &flags = get_decoration_bitset(image_var->self);
+			if (flags.get(DecorationNonReadable))
+			{
+				unset_decoration(image_var->self, DecorationNonReadable);
+				force_recompile();
+			}
+		}
 
 		auto &img_type = expression_type(image_id);
 		// SubpassData is not supported; fall through to base class.

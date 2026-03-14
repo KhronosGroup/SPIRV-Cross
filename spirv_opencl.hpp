@@ -125,6 +125,7 @@ protected:
 	std::string to_initializer_expression(const SPIRVariable &var) override;
 	std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
+	bool emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0) override;
 	std::string to_atomic_ptr_expression(uint32_t id) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
@@ -156,10 +157,6 @@ protected:
 	// Expression IDs that were produced by subscripting a flattened SSBO pointer (e.g. ptr[idx]).
 	// These are C values (not pointers), so subsequent member accesses must use '.' not '->'.
 	std::unordered_set<uint32_t> subscripted_deref_exprs;
-
-	// Pending array copies from to_initializer_expression: { var_id, initializer_id }
-	// These are emitted as element-by-element copies after the variable declaration.
-	SmallVector<std::pair<uint32_t, uint32_t>> pending_array_copies;
 
 	// Set when packHalf2x16/unpackHalf2x16 polyfill helpers are needed.
 	bool needs_half_pack_polyfill = false;

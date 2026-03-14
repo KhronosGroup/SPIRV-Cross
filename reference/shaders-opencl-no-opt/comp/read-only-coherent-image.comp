@@ -1,27 +1,17 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
-#pragma OPENCL EXTENSION cl_khr_fp16 : enable
-
-struct UBO
-{
-    half b;
-};
-
-typedef struct UBO UBO;
 
 struct SSBO
 {
-    half a;
+    uint val;
 };
 
 typedef struct SSBO SSBO;
 
 __attribute__((reqd_work_group_size(1, 1, 1)))
-__kernel void comp_main(UBO _12, __global half* _24)
+__kernel void comp_main(__global uint* _9, read_only image2d_t img)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
-    short v = as_short(_12.b);
-    v = short(v ^ (-32768s));
-    _24[0] = as_half(v);
+    _9[0] = read_imageui(img, (int2)(10)).x;
 }
 

@@ -23,7 +23,9 @@ __kernel void comp_main(__global Block* ssbo)
     uint2 _27[2];
     _27[0] = ssbo[0u]._m1[0];
     _27[1] = ssbo[0u]._m1[1];
-    ssbo[0u]._m0 = _27;
-    ssbo[0u]._m0 = _27;
+    ssbo[0u]._m0[0] = _27[0];
+    ssbo[0u]._m0[1] = _27[1];
+    ssbo[0u]._m0[0] = _27[0];
+    ssbo[0u]._m0[1] = _27[1];
 }
 

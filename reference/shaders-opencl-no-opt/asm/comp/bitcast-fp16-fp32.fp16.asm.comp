@@ -1,17 +1,22 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
 struct SSBO
 {
-    uint val;
+    half2 a;
+    float b;
+    float c;
+    half2 d;
 };
 
 typedef struct SSBO SSBO;
 
 __attribute__((reqd_work_group_size(1, 1, 1)))
-__kernel void comp_main(__global uint* _9, write_only image2d_t img)
+__kernel void comp_main(__global SSBO* _6)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
-    _9[0] = read_imageui(img, (int2)(10)).x;
+    _6->b = as_float(_6->a);
+    _6->d = as_half2(_6->c);
 }
 

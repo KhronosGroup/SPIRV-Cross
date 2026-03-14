@@ -43,7 +43,7 @@ __kernel void comp_main(__global uint4* _25, _8 _29)
 {
     __local uint _5[256];
     __local uchar _10[1024];
-    uint3 _20 = spvWorkgroupSize = spvWorkgroupSize;
+    uint3 _20 = spvWorkgroupSize;
     bool _40 = _29._m0._m0 != 0u;
     if (_40)
     {

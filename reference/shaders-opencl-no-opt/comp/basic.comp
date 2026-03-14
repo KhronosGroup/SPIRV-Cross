@@ -1,0 +1,36 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Baz
+{
+    int e;
+    int f;
+};
+
+typedef struct Baz Baz;
+
+struct Foo
+{
+    int a;
+    int b;
+};
+
+typedef struct Foo Foo;
+
+struct Bar
+{
+    int c;
+    int d;
+};
+
+typedef struct Bar Bar;
+
+__attribute__((reqd_work_group_size(3, 3, 2)))
+__kernel void comp_main(__global Baz* baz, Foo _34, Bar _40)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint3 coords = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)));
+    baz[(coords.x + coords.y) + coords.z].e = _34.a + _40.c;
+    baz[(coords.x + coords.y) + coords.z].f = _34.b * _40.d;
+}
+

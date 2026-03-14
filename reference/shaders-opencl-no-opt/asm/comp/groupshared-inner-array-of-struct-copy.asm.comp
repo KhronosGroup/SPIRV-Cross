@@ -1,0 +1,53 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct Data
+{
+    float3 sourceData[16];
+};
+
+typedef struct Data Data;
+
+__attribute__((reqd_work_group_size(8, 8, 1)))
+__kernel void comp_main(read_only image2d_t g_inputTexture, write_only image2d_t g_output)
+{
+    __local Data g_data[64];
+    uint _49;
+    _49 = 0u;
+    for (; _49 < 4u; _49++)
+    {
+        for (uint _56 = 0u; _56 < 4u; )
+        {
+            g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[(_49 * 4u) + _56] = read_imagef(g_inputTexture, (as_int3(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2)))) + (int3)(as_int(_56), as_int(_49), 0)).xy).xyz;
+            _56++;
+            continue;
+        }
+    }
+    float3 _45[16];
+    _45[0] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[0];
+    _45[1] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[1];
+    _45[2] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[2];
+    _45[3] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[3];
+    _45[4] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[4];
+    _45[5] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[5];
+    _45[6] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[6];
+    _45[7] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[7];
+    _45[8] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[8];
+    _45[9] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[9];
+    _45[10] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[10];
+    _45[11] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[11];
+    _45[12] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[12];
+    _45[13] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[13];
+    _45[14] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[14];
+    _45[15] = g_data[((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x].sourceData[15];
+    uint _77;
+    _77 = 0u;
+    for (int _80 = 0; _80 < 16; )
+    {
+        _77 |= convert_uint(clamp(dot(_45[_80], (float3)(-1.0f)), 0.0f, 1.0f));
+        _80++;
+        continue;
+    }
+    write_imageui(g_output, as_int2(((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).xy), (uint4)(_77));
+}
+

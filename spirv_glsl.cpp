@@ -7122,8 +7122,12 @@ void CompilerGLSL::emit_unary_op_cast(uint32_t result_type, uint32_t result_id, 
 {
 	auto &type = get<SPIRType>(result_type);
 	bool forward = should_forward(op0);
-	emit_op(result_type, result_id, join(type_to_glsl(type), "(", op, to_enclosed_unpacked_expression(op0), ")"),
-	        forward);
+	if (backend.c_style_casts)
+		emit_op(result_type, result_id,
+		        join("(", type_to_glsl(type), ")(", op, to_enclosed_unpacked_expression(op0), ")"), forward);
+	else
+		emit_op(result_type, result_id, join(type_to_glsl(type), "(", op, to_enclosed_unpacked_expression(op0), ")"),
+		        forward);
 	inherit_expression_dependencies(result_id, op0);
 }
 
@@ -7291,7 +7295,10 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 	if (implicit_integer_promotion)
 	{
 		// Simple value cast.
-		expr = join(type_to_glsl(out_type), '(', bitop, ')');
+		if (backend.c_style_casts)
+			expr = join("(", type_to_glsl(out_type), ")(", bitop, ")");
+		else
+			expr = join(type_to_glsl(out_type), '(', bitop, ')');
 	}
 	else if (out_type.basetype != input_type && out_type.basetype != SPIRType::Boolean)
 	{
@@ -13779,7 +13786,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (implicit_integer_promotion)
 		{
-			expr = join(type_to_glsl(get<SPIRType>(result_type)), '(', expr, ')');
+			if (backend.c_style_casts)
+				expr = join("(", type_to_glsl(get<SPIRType>(result_type)), ")(", expr, ")");
+			else
+				expr = join(type_to_glsl(get<SPIRType>(result_type)), '(', expr, ')');
 		}
 		else if (out_type.basetype != int_type)
 		{

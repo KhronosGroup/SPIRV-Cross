@@ -12,7 +12,7 @@ typedef struct SSBO SSBO;
 
 struct UBO
 {
-    __global SSBO* ptrs[2];
+    ulong ptrs[2];
 };
 
 typedef struct UBO UBO;

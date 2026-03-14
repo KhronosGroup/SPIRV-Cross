@@ -2,7 +2,6 @@
 
 
 #define var (*var_ptr)
-#define var (*var_ptr)
 void testAdd(__local uint* var_ptr)
 {
     uint _29 = atomic_add(&var, 1u);
@@ -66,6 +65,7 @@ void testStore(__local uint* var_ptr)
 
 #undef var
 
+#define var (*var_ptr)
 void foo(__local uint* var_ptr)
 {
     testAdd(&var);

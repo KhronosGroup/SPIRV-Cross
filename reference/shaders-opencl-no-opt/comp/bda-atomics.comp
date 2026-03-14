@@ -33,7 +33,7 @@ struct SSBO
 typedef struct SSBO SSBO;
 
 __attribute__((reqd_work_group_size(1, 1, 1)))
-__kernel void comp_main(Registers _12, UBO _26, __global const __global Ptr** _35)
+__kernel void comp_main(Registers _12, UBO _26, __global const ulong* _35)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
     uint _23 = atomic_add(&((__global Ptr*)(_12.ptr))->i, 10u);

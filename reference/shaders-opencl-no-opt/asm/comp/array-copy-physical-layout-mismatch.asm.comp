@@ -1,0 +1,37 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float b[5];
+    float c[5];
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global SSBO* _7)
+{
+    float a[5];
+    a[0] = _7->b[0];
+    a[1] = _7->b[1];
+    a[2] = _7->b[2];
+    a[3] = _7->b[3];
+    a[4] = _7->b[4];
+    a[0] = _7->b[0];
+    a[1] = _7->b[1];
+    a[2] = _7->b[2];
+    a[3] = _7->b[3];
+    a[4] = _7->b[4];
+    _7->b[0] = a[0];
+    _7->b[1] = a[1];
+    _7->b[2] = a[2];
+    _7->b[3] = a[3];
+    _7->b[4] = a[4];
+    _7->c[0] = a[0];
+    _7->c[1] = a[1];
+    _7->c[2] = a[2];
+    _7->c[3] = a[3];
+    _7->c[4] = a[4];
+}
+
