@@ -1,0 +1,24 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_rotate : enable
+
+struct SSBO
+{
+    float FragColor;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global float* _26)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint rotated_1 = sub_group_rotate(20u, 4u);
+    bool rotated_bool_1 = sub_group_rotate(false, 4u);
+    uint rotated_clustered_1 = sub_group_clustered_rotate(20u, 4u, 8u);
+    bool rotated_clustered_bool_1 = sub_group_clustered_rotate(false, 4u, 8u);
+    _26[0] = ((convert_float(rotated_1) + (float)(rotated_bool_1)) + convert_float(rotated_clustered_1)) + (float)(rotated_clustered_bool_1);
+}
+

@@ -1,0 +1,97 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_clustered : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float fdat;
+	int idat;
+	uint udat;
+};
+
+void main()
+{
+	vec4 fv = vec4(fdat);
+	ivec4 iv = ivec4(idat);
+	uvec4 uv = uvec4(udat);
+
+	// Cluster size 1
+	vec4 added = subgroupClusteredAdd(fv, 1u);
+	vec4 multiplied = subgroupClusteredMul(fv, 1u);
+	ivec4 iadded = subgroupClusteredAdd(iv, 1u);
+	ivec4 imultiplied = subgroupClusteredMul(iv, 1u);
+	vec4 lo = subgroupClusteredMin(fv, 1u);
+	vec4 hi = subgroupClusteredMax(fv, 1u);
+	ivec4 slo = subgroupClusteredMin(iv, 1u);
+	ivec4 shi = subgroupClusteredMax(iv, 1u);
+	uvec4 ulo = subgroupClusteredMin(uv, 1u);
+	uvec4 uhi = subgroupClusteredMax(uv, 1u);
+	uvec4 anded = subgroupClusteredAnd(uv, 1u);
+	uvec4 ored = subgroupClusteredOr(uv, 1u);
+	uvec4 xored = subgroupClusteredXor(uv, 1u);
+	bvec4 bval = equal(uv, uvec4(42u));
+	bvec4 anded_b = subgroupClusteredAnd(bval, 1u);
+	bvec4 ored_b = subgroupClusteredOr(bval, 1u);
+	bvec4 xored_b = subgroupClusteredXor(bval, 1u);
+
+	// Cluster size 2
+	added = subgroupClusteredAdd(added, 2u);
+	multiplied = subgroupClusteredMul(multiplied, 2u);
+	iadded = subgroupClusteredAdd(iadded, 2u);
+	imultiplied = subgroupClusteredMul(imultiplied, 2u);
+	lo = subgroupClusteredMin(lo, 2u);
+	hi = subgroupClusteredMax(hi, 2u);
+	slo = subgroupClusteredMin(slo, 2u);
+	shi = subgroupClusteredMax(shi, 2u);
+	ulo = subgroupClusteredMin(ulo, 2u);
+	uhi = subgroupClusteredMax(uhi, 2u);
+	anded = subgroupClusteredAnd(anded, 2u);
+	ored = subgroupClusteredOr(ored, 2u);
+	xored = subgroupClusteredXor(xored, 2u);
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 2u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 2u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 2u);
+
+	// Cluster size 4
+	added = subgroupClusteredAdd(added, 4u);
+	multiplied = subgroupClusteredMul(multiplied, 4u);
+	iadded = subgroupClusteredAdd(iadded, 4u);
+	imultiplied = subgroupClusteredMul(imultiplied, 4u);
+	lo = subgroupClusteredMin(lo, 4u);
+	hi = subgroupClusteredMax(hi, 4u);
+	slo = subgroupClusteredMin(slo, 4u);
+	shi = subgroupClusteredMax(shi, 4u);
+	ulo = subgroupClusteredMin(ulo, 4u);
+	uhi = subgroupClusteredMax(uhi, 4u);
+	anded = subgroupClusteredAnd(anded, 4u);
+	ored = subgroupClusteredOr(ored, 4u);
+	xored = subgroupClusteredXor(xored, 4u);
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 4u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 4u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 4u);
+
+	// Cluster size 16
+	added = subgroupClusteredAdd(added, 16u);
+	multiplied = subgroupClusteredMul(multiplied, 16u);
+	iadded = subgroupClusteredAdd(iadded, 16u);
+	imultiplied = subgroupClusteredMul(imultiplied, 16u);
+	lo = subgroupClusteredMin(lo, 16u);
+	hi = subgroupClusteredMax(hi, 16u);
+	slo = subgroupClusteredMin(slo, 16u);
+	shi = subgroupClusteredMax(shi, 16u);
+	ulo = subgroupClusteredMin(ulo, 16u);
+	uhi = subgroupClusteredMax(uhi, 16u);
+	anded = subgroupClusteredAnd(anded, 16u);
+	ored = subgroupClusteredOr(ored, 16u);
+	xored = subgroupClusteredXor(xored, 16u);
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 16u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 16u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 16u);
+
+	// Write results
+	fdat = added.x + multiplied.x + lo.x + hi.x
+		+ float(iadded.x + imultiplied.x + slo.x + shi.x)
+		+ float(ulo.x + uhi.x + anded.x + ored.x + xored.x)
+		+ float(anded_b.x) + float(ored_b.x) + float(xored_b.x);
+}

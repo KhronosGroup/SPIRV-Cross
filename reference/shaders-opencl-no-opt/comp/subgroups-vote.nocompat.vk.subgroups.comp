@@ -1,0 +1,28 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable
+
+struct SSBO
+{
+    float FragColor;
+    int idat;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global SSBO* _29)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    bool elected_1 = sub_group_elect();
+    bool has_all_1 = sub_group_all(get_sub_group_local_id() < 10u);
+    bool has_any_1 = sub_group_any(get_sub_group_local_id() == 0u);
+    bool eq_int_1 = sub_group_non_uniform_all_equal(_29->idat);
+    bool eq_bool_1 = sub_group_non_uniform_all_equal(true);
+    bool eq_vec3_1 = sub_group_non_uniform_all_equal((float3)(0.0f, 1.0f, 2.0f).x) && sub_group_non_uniform_all_equal((float3)(0.0f, 1.0f, 2.0f).y) && sub_group_non_uniform_all_equal((float3)(0.0f, 1.0f, 2.0f).z);
+    bool eq_bvec4_1 = sub_group_non_uniform_all_equal((int4)(true, true, false, true).x) && sub_group_non_uniform_all_equal((int4)(true, true, false, true).y) && sub_group_non_uniform_all_equal((int4)(true, true, false, true).z) && sub_group_non_uniform_all_equal((int4)(true, true, false, true).w);
+    _29->FragColor = ((((((float)(elected_1) + (float)(has_all_1)) + (float)(has_any_1)) + (float)(eq_int_1)) + (float)(eq_bool_1)) + (float)(eq_vec3_1)) + (float)(eq_bvec4_1);
+}
+

@@ -585,29 +585,29 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
 
     return (spirv_path, hlsl_path)
 
-def path_to_opencl_standard(shader):
-    if '.cl30.' in shader:
-        return '-cl-std=CL3.0'
-    elif '.cl22.' in shader:
-        return '-cl-std=CL2.2'
-    elif '.cl21.' in shader:
-        return '-cl-std=CL2.1'
-    elif '.cl20.' in shader:
-        return '-cl-std=CL2.0'
-    else:
-        return '-cl-std=CL1.2'
-
 def path_to_opencl_standard_cli(shader):
+    # clang seems warn about cl_khr_subgroups unless is specified.
+    # Revisit when OpenCL 3.0 support is no longer experimental.
+    if '.subgroups.' in shader:
+        return '200'
+    # OpenCL 3.0 support in clang is experimental and 2.1 and 2.2 seem unsupported.
     if '.cl30.' in shader:
-        return '300'
+        # return '300'
+        return '120'
     elif '.cl22.' in shader:
-        return '220'
+        # return '220'
+        return '200'
     elif '.cl21.' in shader:
-        return '210'
+        # return '210'
+        return '200'
     elif '.cl20.' in shader:
         return '200'
     else:
         return '120'
+
+def path_to_opencl_standard(shader):
+    version = path_to_opencl_standard_cli(shader)
+    return f'-cl-std=CL{version[0]}.{version[1]}'
 
 ignore_clang = False
 def validate_shader_opencl(shader, opt, paths):
@@ -633,14 +633,22 @@ def validate_shader_opencl(shader, opt, paths):
     global ignore_clang
     try:
         defines = ['-D' + ext for ext in extensions]
+        if extensions:
+            exts = ['-cl-ext=' + ','.join(['+' + ext for ext in extensions])]
+        else:
+            exts = []
+        defines = ['-D' + ext for ext in extensions]
         version = path_to_opencl_standard_cli(shader)
         subprocess.check_call([paths.clang, '-Xclang',
                                path_to_opencl_standard(shader),
                                '-D__OPENCL_C_VERSION__=' + version,
-                               '-D__OPENCL_VERSION__=' + version] + defines +
+                               '-D__OPENCL_VERSION__=' + version] + defines + exts +
                               [
                                '-emit-llvm', '-target', 'spir64-unknown-unknown',
-                               '-Xclang', '-finclude-default-header', '-x', 'cl', '-c', shader])
+                               # clang may incorrectly claim that some extension pragmas are unnecessary
+                               '-Wignored-pragmas',
+                               '-Xclang', '-finclude-default-header', '-x', 'cl', '-c', shader,
+                               '-o', os.devnull])
 
     except OSError as oe:
         if (oe.errno != errno.ENOENT):   # Ignore clang not found error

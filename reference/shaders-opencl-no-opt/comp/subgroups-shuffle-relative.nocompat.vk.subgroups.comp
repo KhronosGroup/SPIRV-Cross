@@ -1,0 +1,24 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle_relative : enable
+
+struct SSBO
+{
+    float FragColor;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global float* _26)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint shuffled_up_1 = sub_group_shuffle_up(20u, 4u);
+    bool shuffled_up_bool_1 = sub_group_shuffle_up(true, 4u);
+    uint shuffled_down_1 = sub_group_shuffle_down(20u, 4u);
+    bool shuffled_down_bool_1 = sub_group_shuffle_down(false, 4u);
+    _26[0] = ((convert_float(shuffled_up_1) + (float)(shuffled_up_bool_1)) + convert_float(shuffled_down_1)) + (float)(shuffled_down_bool_1);
+}
+

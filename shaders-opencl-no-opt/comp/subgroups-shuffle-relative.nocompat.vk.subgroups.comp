@@ -1,0 +1,20 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+};
+
+void main()
+{
+	uint shuffled_up = subgroupShuffleUp(20u, 4u);
+	bool shuffled_up_bool = subgroupShuffleUp(true, 4u);
+	uint shuffled_down = subgroupShuffleDown(20u, 4u);
+	bool shuffled_down_bool = subgroupShuffleDown(false, 4u);
+
+	FragColor = float(shuffled_up) + float(shuffled_up_bool)
+		+ float(shuffled_down) + float(shuffled_down_bool);
+}

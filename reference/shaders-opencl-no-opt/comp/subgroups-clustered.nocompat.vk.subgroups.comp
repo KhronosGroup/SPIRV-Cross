@@ -1,0 +1,99 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_clustered_reduce : enable
+
+struct SSBO
+{
+    float fdat;
+    int idat;
+    uint udat;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global SSBO* _14)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    float4 fv_1 = (float4)(_14->fdat);
+    int4 iv_1 = (int4)(_14->idat);
+    uint4 uv_1 = (uint4)(_14->udat);
+    float4 added_1 = (float4)(sub_group_clustered_reduce_add(fv_1.x, 1u), sub_group_clustered_reduce_add(fv_1.y, 1u), sub_group_clustered_reduce_add(fv_1.z, 1u), sub_group_clustered_reduce_add(fv_1.w, 1u));
+    float4 multiplied_1 = (float4)(sub_group_clustered_reduce_mul(fv_1.x, 1u), sub_group_clustered_reduce_mul(fv_1.y, 1u), sub_group_clustered_reduce_mul(fv_1.z, 1u), sub_group_clustered_reduce_mul(fv_1.w, 1u));
+    int4 iadded_1 = (int4)(sub_group_clustered_reduce_add(iv_1.x, 1u), sub_group_clustered_reduce_add(iv_1.y, 1u), sub_group_clustered_reduce_add(iv_1.z, 1u), sub_group_clustered_reduce_add(iv_1.w, 1u));
+    int4 imultiplied_1 = (int4)(sub_group_clustered_reduce_mul(iv_1.x, 1u), sub_group_clustered_reduce_mul(iv_1.y, 1u), sub_group_clustered_reduce_mul(iv_1.z, 1u), sub_group_clustered_reduce_mul(iv_1.w, 1u));
+    float4 lo_1 = (float4)(sub_group_clustered_reduce_min(fv_1.x, 1u), sub_group_clustered_reduce_min(fv_1.y, 1u), sub_group_clustered_reduce_min(fv_1.z, 1u), sub_group_clustered_reduce_min(fv_1.w, 1u));
+    float4 hi_1 = (float4)(sub_group_clustered_reduce_max(fv_1.x, 1u), sub_group_clustered_reduce_max(fv_1.y, 1u), sub_group_clustered_reduce_max(fv_1.z, 1u), sub_group_clustered_reduce_max(fv_1.w, 1u));
+    int4 slo_1 = (int4)(sub_group_clustered_reduce_min(iv_1.x, 1u), sub_group_clustered_reduce_min(iv_1.y, 1u), sub_group_clustered_reduce_min(iv_1.z, 1u), sub_group_clustered_reduce_min(iv_1.w, 1u));
+    int4 shi_1 = (int4)(sub_group_clustered_reduce_max(iv_1.x, 1u), sub_group_clustered_reduce_max(iv_1.y, 1u), sub_group_clustered_reduce_max(iv_1.z, 1u), sub_group_clustered_reduce_max(iv_1.w, 1u));
+    uint4 ulo_1 = (uint4)(sub_group_clustered_reduce_min(uv_1.x, 1u), sub_group_clustered_reduce_min(uv_1.y, 1u), sub_group_clustered_reduce_min(uv_1.z, 1u), sub_group_clustered_reduce_min(uv_1.w, 1u));
+    uint4 uhi_1 = (uint4)(sub_group_clustered_reduce_max(uv_1.x, 1u), sub_group_clustered_reduce_max(uv_1.y, 1u), sub_group_clustered_reduce_max(uv_1.z, 1u), sub_group_clustered_reduce_max(uv_1.w, 1u));
+    uint4 anded_1 = (uint4)(sub_group_clustered_reduce_and(uv_1.x, 1u), sub_group_clustered_reduce_and(uv_1.y, 1u), sub_group_clustered_reduce_and(uv_1.z, 1u), sub_group_clustered_reduce_and(uv_1.w, 1u));
+    uint4 ored_1 = (uint4)(sub_group_clustered_reduce_or(uv_1.x, 1u), sub_group_clustered_reduce_or(uv_1.y, 1u), sub_group_clustered_reduce_or(uv_1.z, 1u), sub_group_clustered_reduce_or(uv_1.w, 1u));
+    uint4 xored_1 = (uint4)(sub_group_clustered_reduce_xor(uv_1.x, 1u), sub_group_clustered_reduce_xor(uv_1.y, 1u), sub_group_clustered_reduce_xor(uv_1.z, 1u), sub_group_clustered_reduce_xor(uv_1.w, 1u));
+    int4 bval_1 = uv_1 == (uint4)(42u);
+    int4 anded_b_1 = (int4)(sub_group_clustered_reduce_logical_and(bval_1.x, 1u), sub_group_clustered_reduce_logical_and(bval_1.y, 1u), sub_group_clustered_reduce_logical_and(bval_1.z, 1u), sub_group_clustered_reduce_logical_and(bval_1.w, 1u));
+    int4 ored_b_1 = (int4)(sub_group_clustered_reduce_logical_or(bval_1.x, 1u), sub_group_clustered_reduce_logical_or(bval_1.y, 1u), sub_group_clustered_reduce_logical_or(bval_1.z, 1u), sub_group_clustered_reduce_logical_or(bval_1.w, 1u));
+    int4 xored_b_1 = (int4)(sub_group_clustered_reduce_logical_xor(bval_1.x, 1u), sub_group_clustered_reduce_logical_xor(bval_1.y, 1u), sub_group_clustered_reduce_logical_xor(bval_1.z, 1u), sub_group_clustered_reduce_logical_xor(bval_1.w, 1u));
+    added_1 = (float4)(sub_group_clustered_reduce_add(added_1.x, 2u), sub_group_clustered_reduce_add(added_1.y, 2u), sub_group_clustered_reduce_add(added_1.z, 2u), sub_group_clustered_reduce_add(added_1.w, 2u));
+    multiplied_1 = (float4)(sub_group_clustered_reduce_mul(multiplied_1.x, 2u), sub_group_clustered_reduce_mul(multiplied_1.y, 2u), sub_group_clustered_reduce_mul(multiplied_1.z, 2u), sub_group_clustered_reduce_mul(multiplied_1.w, 2u));
+    iadded_1 = (int4)(sub_group_clustered_reduce_add(iadded_1.x, 2u), sub_group_clustered_reduce_add(iadded_1.y, 2u), sub_group_clustered_reduce_add(iadded_1.z, 2u), sub_group_clustered_reduce_add(iadded_1.w, 2u));
+    imultiplied_1 = (int4)(sub_group_clustered_reduce_mul(imultiplied_1.x, 2u), sub_group_clustered_reduce_mul(imultiplied_1.y, 2u), sub_group_clustered_reduce_mul(imultiplied_1.z, 2u), sub_group_clustered_reduce_mul(imultiplied_1.w, 2u));
+    lo_1 = (float4)(sub_group_clustered_reduce_min(lo_1.x, 2u), sub_group_clustered_reduce_min(lo_1.y, 2u), sub_group_clustered_reduce_min(lo_1.z, 2u), sub_group_clustered_reduce_min(lo_1.w, 2u));
+    hi_1 = (float4)(sub_group_clustered_reduce_max(hi_1.x, 2u), sub_group_clustered_reduce_max(hi_1.y, 2u), sub_group_clustered_reduce_max(hi_1.z, 2u), sub_group_clustered_reduce_max(hi_1.w, 2u));
+    slo_1 = (int4)(sub_group_clustered_reduce_min(slo_1.x, 2u), sub_group_clustered_reduce_min(slo_1.y, 2u), sub_group_clustered_reduce_min(slo_1.z, 2u), sub_group_clustered_reduce_min(slo_1.w, 2u));
+    shi_1 = (int4)(sub_group_clustered_reduce_max(shi_1.x, 2u), sub_group_clustered_reduce_max(shi_1.y, 2u), sub_group_clustered_reduce_max(shi_1.z, 2u), sub_group_clustered_reduce_max(shi_1.w, 2u));
+    ulo_1 = (uint4)(sub_group_clustered_reduce_min(ulo_1.x, 2u), sub_group_clustered_reduce_min(ulo_1.y, 2u), sub_group_clustered_reduce_min(ulo_1.z, 2u), sub_group_clustered_reduce_min(ulo_1.w, 2u));
+    uhi_1 = (uint4)(sub_group_clustered_reduce_max(uhi_1.x, 2u), sub_group_clustered_reduce_max(uhi_1.y, 2u), sub_group_clustered_reduce_max(uhi_1.z, 2u), sub_group_clustered_reduce_max(uhi_1.w, 2u));
+    anded_1 = (uint4)(sub_group_clustered_reduce_and(anded_1.x, 2u), sub_group_clustered_reduce_and(anded_1.y, 2u), sub_group_clustered_reduce_and(anded_1.z, 2u), sub_group_clustered_reduce_and(anded_1.w, 2u));
+    ored_1 = (uint4)(sub_group_clustered_reduce_or(ored_1.x, 2u), sub_group_clustered_reduce_or(ored_1.y, 2u), sub_group_clustered_reduce_or(ored_1.z, 2u), sub_group_clustered_reduce_or(ored_1.w, 2u));
+    xored_1 = (uint4)(sub_group_clustered_reduce_xor(xored_1.x, 2u), sub_group_clustered_reduce_xor(xored_1.y, 2u), sub_group_clustered_reduce_xor(xored_1.z, 2u), sub_group_clustered_reduce_xor(xored_1.w, 2u));
+    int4 _123 = anded_1 == (uint4)(2u);
+    anded_b_1 = (int4)(sub_group_clustered_reduce_logical_and(_123.x, 2u), sub_group_clustered_reduce_logical_and(_123.y, 2u), sub_group_clustered_reduce_logical_and(_123.z, 2u), sub_group_clustered_reduce_logical_and(_123.w, 2u));
+    int4 _127 = ored_1 == (uint4)(3u);
+    ored_b_1 = (int4)(sub_group_clustered_reduce_logical_or(_127.x, 2u), sub_group_clustered_reduce_logical_or(_127.y, 2u), sub_group_clustered_reduce_logical_or(_127.z, 2u), sub_group_clustered_reduce_logical_or(_127.w, 2u));
+    int4 _132 = xored_1 == (uint4)(4u);
+    xored_b_1 = (int4)(sub_group_clustered_reduce_logical_xor(_132.x, 2u), sub_group_clustered_reduce_logical_xor(_132.y, 2u), sub_group_clustered_reduce_logical_xor(_132.z, 2u), sub_group_clustered_reduce_logical_xor(_132.w, 2u));
+    added_1 = (float4)(sub_group_clustered_reduce_add(added_1.x, 4u), sub_group_clustered_reduce_add(added_1.y, 4u), sub_group_clustered_reduce_add(added_1.z, 4u), sub_group_clustered_reduce_add(added_1.w, 4u));
+    multiplied_1 = (float4)(sub_group_clustered_reduce_mul(multiplied_1.x, 4u), sub_group_clustered_reduce_mul(multiplied_1.y, 4u), sub_group_clustered_reduce_mul(multiplied_1.z, 4u), sub_group_clustered_reduce_mul(multiplied_1.w, 4u));
+    iadded_1 = (int4)(sub_group_clustered_reduce_add(iadded_1.x, 4u), sub_group_clustered_reduce_add(iadded_1.y, 4u), sub_group_clustered_reduce_add(iadded_1.z, 4u), sub_group_clustered_reduce_add(iadded_1.w, 4u));
+    imultiplied_1 = (int4)(sub_group_clustered_reduce_mul(imultiplied_1.x, 4u), sub_group_clustered_reduce_mul(imultiplied_1.y, 4u), sub_group_clustered_reduce_mul(imultiplied_1.z, 4u), sub_group_clustered_reduce_mul(imultiplied_1.w, 4u));
+    lo_1 = (float4)(sub_group_clustered_reduce_min(lo_1.x, 4u), sub_group_clustered_reduce_min(lo_1.y, 4u), sub_group_clustered_reduce_min(lo_1.z, 4u), sub_group_clustered_reduce_min(lo_1.w, 4u));
+    hi_1 = (float4)(sub_group_clustered_reduce_max(hi_1.x, 4u), sub_group_clustered_reduce_max(hi_1.y, 4u), sub_group_clustered_reduce_max(hi_1.z, 4u), sub_group_clustered_reduce_max(hi_1.w, 4u));
+    slo_1 = (int4)(sub_group_clustered_reduce_min(slo_1.x, 4u), sub_group_clustered_reduce_min(slo_1.y, 4u), sub_group_clustered_reduce_min(slo_1.z, 4u), sub_group_clustered_reduce_min(slo_1.w, 4u));
+    shi_1 = (int4)(sub_group_clustered_reduce_max(shi_1.x, 4u), sub_group_clustered_reduce_max(shi_1.y, 4u), sub_group_clustered_reduce_max(shi_1.z, 4u), sub_group_clustered_reduce_max(shi_1.w, 4u));
+    ulo_1 = (uint4)(sub_group_clustered_reduce_min(ulo_1.x, 4u), sub_group_clustered_reduce_min(ulo_1.y, 4u), sub_group_clustered_reduce_min(ulo_1.z, 4u), sub_group_clustered_reduce_min(ulo_1.w, 4u));
+    uhi_1 = (uint4)(sub_group_clustered_reduce_max(uhi_1.x, 4u), sub_group_clustered_reduce_max(uhi_1.y, 4u), sub_group_clustered_reduce_max(uhi_1.z, 4u), sub_group_clustered_reduce_max(uhi_1.w, 4u));
+    anded_1 = (uint4)(sub_group_clustered_reduce_and(anded_1.x, 4u), sub_group_clustered_reduce_and(anded_1.y, 4u), sub_group_clustered_reduce_and(anded_1.z, 4u), sub_group_clustered_reduce_and(anded_1.w, 4u));
+    ored_1 = (uint4)(sub_group_clustered_reduce_or(ored_1.x, 4u), sub_group_clustered_reduce_or(ored_1.y, 4u), sub_group_clustered_reduce_or(ored_1.z, 4u), sub_group_clustered_reduce_or(ored_1.w, 4u));
+    xored_1 = (uint4)(sub_group_clustered_reduce_xor(xored_1.x, 4u), sub_group_clustered_reduce_xor(xored_1.y, 4u), sub_group_clustered_reduce_xor(xored_1.z, 4u), sub_group_clustered_reduce_xor(xored_1.w, 4u));
+    int4 _161 = anded_1 == (uint4)(2u);
+    anded_b_1 = (int4)(sub_group_clustered_reduce_logical_and(_161.x, 4u), sub_group_clustered_reduce_logical_and(_161.y, 4u), sub_group_clustered_reduce_logical_and(_161.z, 4u), sub_group_clustered_reduce_logical_and(_161.w, 4u));
+    int4 _164 = ored_1 == (uint4)(3u);
+    ored_b_1 = (int4)(sub_group_clustered_reduce_logical_or(_164.x, 4u), sub_group_clustered_reduce_logical_or(_164.y, 4u), sub_group_clustered_reduce_logical_or(_164.z, 4u), sub_group_clustered_reduce_logical_or(_164.w, 4u));
+    int4 _167 = xored_1 == (uint4)(4u);
+    xored_b_1 = (int4)(sub_group_clustered_reduce_logical_xor(_167.x, 4u), sub_group_clustered_reduce_logical_xor(_167.y, 4u), sub_group_clustered_reduce_logical_xor(_167.z, 4u), sub_group_clustered_reduce_logical_xor(_167.w, 4u));
+    added_1 = (float4)(sub_group_clustered_reduce_add(added_1.x, 16u), sub_group_clustered_reduce_add(added_1.y, 16u), sub_group_clustered_reduce_add(added_1.z, 16u), sub_group_clustered_reduce_add(added_1.w, 16u));
+    multiplied_1 = (float4)(sub_group_clustered_reduce_mul(multiplied_1.x, 16u), sub_group_clustered_reduce_mul(multiplied_1.y, 16u), sub_group_clustered_reduce_mul(multiplied_1.z, 16u), sub_group_clustered_reduce_mul(multiplied_1.w, 16u));
+    iadded_1 = (int4)(sub_group_clustered_reduce_add(iadded_1.x, 16u), sub_group_clustered_reduce_add(iadded_1.y, 16u), sub_group_clustered_reduce_add(iadded_1.z, 16u), sub_group_clustered_reduce_add(iadded_1.w, 16u));
+    imultiplied_1 = (int4)(sub_group_clustered_reduce_mul(imultiplied_1.x, 16u), sub_group_clustered_reduce_mul(imultiplied_1.y, 16u), sub_group_clustered_reduce_mul(imultiplied_1.z, 16u), sub_group_clustered_reduce_mul(imultiplied_1.w, 16u));
+    lo_1 = (float4)(sub_group_clustered_reduce_min(lo_1.x, 16u), sub_group_clustered_reduce_min(lo_1.y, 16u), sub_group_clustered_reduce_min(lo_1.z, 16u), sub_group_clustered_reduce_min(lo_1.w, 16u));
+    hi_1 = (float4)(sub_group_clustered_reduce_max(hi_1.x, 16u), sub_group_clustered_reduce_max(hi_1.y, 16u), sub_group_clustered_reduce_max(hi_1.z, 16u), sub_group_clustered_reduce_max(hi_1.w, 16u));
+    slo_1 = (int4)(sub_group_clustered_reduce_min(slo_1.x, 16u), sub_group_clustered_reduce_min(slo_1.y, 16u), sub_group_clustered_reduce_min(slo_1.z, 16u), sub_group_clustered_reduce_min(slo_1.w, 16u));
+    shi_1 = (int4)(sub_group_clustered_reduce_max(shi_1.x, 16u), sub_group_clustered_reduce_max(shi_1.y, 16u), sub_group_clustered_reduce_max(shi_1.z, 16u), sub_group_clustered_reduce_max(shi_1.w, 16u));
+    ulo_1 = (uint4)(sub_group_clustered_reduce_min(ulo_1.x, 16u), sub_group_clustered_reduce_min(ulo_1.y, 16u), sub_group_clustered_reduce_min(ulo_1.z, 16u), sub_group_clustered_reduce_min(ulo_1.w, 16u));
+    uhi_1 = (uint4)(sub_group_clustered_reduce_max(uhi_1.x, 16u), sub_group_clustered_reduce_max(uhi_1.y, 16u), sub_group_clustered_reduce_max(uhi_1.z, 16u), sub_group_clustered_reduce_max(uhi_1.w, 16u));
+    anded_1 = (uint4)(sub_group_clustered_reduce_and(anded_1.x, 16u), sub_group_clustered_reduce_and(anded_1.y, 16u), sub_group_clustered_reduce_and(anded_1.z, 16u), sub_group_clustered_reduce_and(anded_1.w, 16u));
+    ored_1 = (uint4)(sub_group_clustered_reduce_or(ored_1.x, 16u), sub_group_clustered_reduce_or(ored_1.y, 16u), sub_group_clustered_reduce_or(ored_1.z, 16u), sub_group_clustered_reduce_or(ored_1.w, 16u));
+    xored_1 = (uint4)(sub_group_clustered_reduce_xor(xored_1.x, 16u), sub_group_clustered_reduce_xor(xored_1.y, 16u), sub_group_clustered_reduce_xor(xored_1.z, 16u), sub_group_clustered_reduce_xor(xored_1.w, 16u));
+    int4 _197 = anded_1 == (uint4)(2u);
+    anded_b_1 = (int4)(sub_group_clustered_reduce_logical_and(_197.x, 16u), sub_group_clustered_reduce_logical_and(_197.y, 16u), sub_group_clustered_reduce_logical_and(_197.z, 16u), sub_group_clustered_reduce_logical_and(_197.w, 16u));
+    int4 _200 = ored_1 == (uint4)(3u);
+    ored_b_1 = (int4)(sub_group_clustered_reduce_logical_or(_200.x, 16u), sub_group_clustered_reduce_logical_or(_200.y, 16u), sub_group_clustered_reduce_logical_or(_200.z, 16u), sub_group_clustered_reduce_logical_or(_200.w, 16u));
+    int4 _203 = xored_1 == (uint4)(4u);
+    xored_b_1 = (int4)(sub_group_clustered_reduce_logical_xor(_203.x, 16u), sub_group_clustered_reduce_logical_xor(_203.y, 16u), sub_group_clustered_reduce_logical_xor(_203.z, 16u), sub_group_clustered_reduce_logical_xor(_203.w, 16u));
+    _14->fdat = (((((((added_1.x + multiplied_1.x) + lo_1.x) + hi_1.x) + convert_float(((iadded_1.x + imultiplied_1.x) + slo_1.x) + shi_1.x)) + convert_float((((ulo_1.x + uhi_1.x) + anded_1.x) + ored_1.x) + xored_1.x)) + (float)(anded_b_1.x)) + (float)(ored_b_1.x)) + (float)(xored_b_1.x);
+}
+

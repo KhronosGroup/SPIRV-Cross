@@ -177,6 +177,22 @@ void CompilerOpenCL::emit_header()
 		statement("#pragma OPENCL EXTENSION cl_khr_fp64 : enable");
 	if (opencl_options.enable_64bit_atomics && opencl_options.opencl_version >= 200)
 		statement("#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable");
+	if (opencl_options.enable_subgroups)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroups : enable");
+	if (needs_subgroup_vote)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable");
+	if (needs_subgroup_ballot)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable");
+	if (needs_subgroup_arithmetic)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_arithmetic : enable");
+	if (needs_subgroup_shuffle)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle : enable");
+	if (needs_subgroup_shuffle_relative)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle_relative : enable");
+	if (needs_subgroup_clustered)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_clustered_reduce : enable");
+	if (needs_subgroup_rotate)
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_rotate : enable");
 	statement("");
 
 	// Emit FP_CONTRACT pragma based on ContractionOff execution mode and FPFastMathDefault.
@@ -1071,10 +1087,66 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInGlobalSize:
 		return "((uint3)(get_global_size(0), get_global_size(1), get_global_size(2)))";
 	case BuiltInNumSubgroups:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		return "get_num_sub_groups()";
 	case BuiltInSubgroupId:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		return "get_sub_group_id()";
 	case BuiltInSubgroupSize:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		return "get_sub_group_size()";
 	case BuiltInSubgroupLocalInvocationId:
-		SPIRV_CROSS_THROW("OpenCL subgroup builtins not yet implemented.");
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		return "get_sub_group_local_id()";
+	case BuiltInSubgroupEqMask:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		if (!needs_subgroup_ballot)
+		{
+			needs_subgroup_ballot = true;
+			force_recompile();
+		}
+		return "get_sub_group_eq_mask()";
+	case BuiltInSubgroupGeMask:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		if (!needs_subgroup_ballot)
+		{
+			needs_subgroup_ballot = true;
+			force_recompile();
+		}
+		return "get_sub_group_ge_mask()";
+	case BuiltInSubgroupGtMask:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		if (!needs_subgroup_ballot)
+		{
+			needs_subgroup_ballot = true;
+			force_recompile();
+		}
+		return "get_sub_group_gt_mask()";
+	case BuiltInSubgroupLeMask:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		if (!needs_subgroup_ballot)
+		{
+			needs_subgroup_ballot = true;
+			force_recompile();
+		}
+		return "get_sub_group_le_mask()";
+	case BuiltInSubgroupLtMask:
+		if (!opencl_options.enable_subgroups)
+			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
+		if (!needs_subgroup_ballot)
+		{
+			needs_subgroup_ballot = true;
+			force_recompile();
+		}
+		return "get_sub_group_lt_mask()";
 	default:
 		SPIRV_CROSS_THROW("Unsupported builtin for OpenCL compute shader.");
 	}
@@ -3183,6 +3255,333 @@ void CompilerOpenCL::emit_block_hints(const SPIRBlock &)
 	// OpenCL C has no control-flow hint attributes; suppress SPIRV_CROSS_BRANCH/FLATTEN etc.
 }
 
+// Emit a unary subgroup op, decomposing vectors into per-component calls.
+// For scalars, emits: func(val)
+// For vectors, emits: (vectype)(func(val.x), func(val.y), ...)
+void CompilerOpenCL::emit_subgroup_op_vec(uint32_t result_type, uint32_t id, uint32_t value_id, const char *func_name)
+{
+	auto &type = expression_type(value_id);
+	if (type.vecsize > 1)
+	{
+		auto &out_type = get<SPIRType>(result_type);
+		string expr = "(" + type_to_glsl(out_type) + ")(";
+		for (uint32_t c = 0; c < type.vecsize; c++)
+		{
+			if (c > 0)
+				expr += ", ";
+			expr += join(func_name, "(", to_enclosed_expression(value_id), ".", "xyzw"[c], ")");
+		}
+		expr += ")";
+		emit_op(result_type, id, expr, should_forward(value_id));
+		inherit_expression_dependencies(id, value_id);
+	}
+	else
+	{
+		emit_unary_func_op(result_type, id, value_id, func_name);
+	}
+}
+
+// Emit a binary subgroup op (value + extra arg like cluster size), decomposing vectors.
+// For scalars, emits: func(val, extra)
+// For vectors, emits: (vectype)(func(val.x, extra), func(val.y, extra), ...)
+void CompilerOpenCL::emit_subgroup_op_vec_binary(uint32_t result_type, uint32_t id, uint32_t value_id,
+                                                 uint32_t extra_id, const char *func_name)
+{
+	auto &type = expression_type(value_id);
+	if (type.vecsize > 1)
+	{
+		auto &out_type = get<SPIRType>(result_type);
+		string extra_expr = to_expression(extra_id);
+		string expr = "(" + type_to_glsl(out_type) + ")(";
+		for (uint32_t c = 0; c < type.vecsize; c++)
+		{
+			if (c > 0)
+				expr += ", ";
+			expr += join(func_name, "(", to_enclosed_expression(value_id), ".", "xyzw"[c], ", ", extra_expr, ")");
+		}
+		expr += ")";
+		emit_op(result_type, id, expr, should_forward(value_id));
+		inherit_expression_dependencies(id, value_id);
+	}
+	else
+	{
+		emit_binary_func_op(result_type, id, value_id, extra_id, func_name);
+	}
+}
+
+void CompilerOpenCL::emit_subgroup_op(const Instruction &i)
+{
+	const uint32_t *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+
+	if (!opencl_options.enable_subgroups)
+		SPIRV_CROSS_THROW("Subgroup operations require enable_subgroups option.");
+
+	// Validate scope is Subgroup
+	if (op != OpGroupNonUniformQuadAllKHR && op != OpGroupNonUniformQuadAnyKHR)
+	{
+		auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
+		if (scope != ScopeSubgroup)
+			SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+	}
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_instruction(i);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
+
+	// Helper to set an extension flag and trigger recompile if newly needed.
+	auto require_extension = [this](bool &flag)
+	{
+		if (!flag)
+		{
+			flag = true;
+			force_recompile();
+		}
+	};
+
+	switch (op)
+	{
+		// === Task 5: cl_khr_subgroup_non_uniform_vote ===
+
+	case OpGroupNonUniformElect:
+		require_extension(needs_subgroup_vote);
+		emit_op(result_type, id, "sub_group_elect()", true);
+		break;
+
+	case OpGroupNonUniformAllEqual:
+	{
+		require_extension(needs_subgroup_vote);
+		auto &type = expression_type(ops[3]);
+		if (type.vecsize > 1)
+		{
+			// OpenCL sub_group_non_uniform_all_equal only accepts scalars.
+			// For vectors, decompose into per-component calls combined with &&.
+			string expr;
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				if (c > 0)
+					expr += " && ";
+				string component = join(to_enclosed_expression(ops[3]), ".", "xyzw"[c]);
+				expr += join("sub_group_non_uniform_all_equal(", component, ")");
+			}
+			emit_op(result_type, id, expr, should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_unary_func_op(result_type, id, ops[3], "sub_group_non_uniform_all_equal");
+		}
+		break;
+	}
+
+		// === Task 4: cl_khr_subgroups (base) — vote/broadcast ===
+
+	case OpGroupNonUniformAll:
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_all");
+		break;
+
+	case OpGroupNonUniformAny:
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_any");
+		break;
+
+	case OpGroupNonUniformBroadcast:
+		emit_subgroup_op_vec_binary(result_type, id, ops[3], ops[4], "sub_group_broadcast");
+		break;
+
+		// === Task 6: cl_khr_subgroup_ballot ===
+
+	case OpGroupNonUniformBroadcastFirst:
+		require_extension(needs_subgroup_ballot);
+		emit_subgroup_op_vec(result_type, id, ops[3], "sub_group_broadcast_first");
+		break;
+
+	case OpGroupNonUniformBallot:
+		require_extension(needs_subgroup_ballot);
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_ballot");
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		require_extension(needs_subgroup_ballot);
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_inverse_ballot");
+		break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		require_extension(needs_subgroup_ballot);
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_ballot_bit_extract");
+		break;
+
+	case OpGroupNonUniformBallotFindLSB:
+		require_extension(needs_subgroup_ballot);
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_ballot_find_lsb");
+		break;
+
+	case OpGroupNonUniformBallotFindMSB:
+		require_extension(needs_subgroup_ballot);
+		emit_unary_func_op(result_type, id, ops[3], "sub_group_ballot_find_msb");
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		require_extension(needs_subgroup_ballot);
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+			emit_unary_func_op(result_type, id, ops[4], "sub_group_ballot_bit_count");
+		else if (operation == GroupOperationInclusiveScan)
+			emit_unary_func_op(result_type, id, ops[4], "sub_group_ballot_inclusive_scan");
+		else if (operation == GroupOperationExclusiveScan)
+			emit_unary_func_op(result_type, id, ops[4], "sub_group_ballot_exclusive_scan");
+		else
+			SPIRV_CROSS_THROW("Invalid group operation for BallotBitCount.");
+		break;
+	}
+
+	// === Tasks 4/7/10: Arithmetic ops (Reduce/Scan/Clustered) ===
+	// The same SPIR-V opcodes are used for base cl_khr_subgroups (Reduce/InclusiveScan/ExclusiveScan
+	// with add/min/max), cl_khr_subgroup_non_uniform_arithmetic (all ops with Reduce/Scan),
+	// and cl_khr_subgroup_clustered_reduce (ClusteredReduce).
+
+	// clang-format off
+	// OpenCL subgroup functions are scalar-only; vectors are decomposed per-component
+	// via emit_subgroup_op_vec / emit_subgroup_op_vec_binary.
+
+#define OPENCL_SUBGROUP_ARITH(spirv_op, base_name, nu_name) \
+	case OpGroupNonUniform##spirv_op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_reduce_" base_name); \
+		else if (operation == GroupOperationInclusiveScan) \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_scan_inclusive_" base_name); \
+		else if (operation == GroupOperationExclusiveScan) \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_scan_exclusive_" base_name); \
+		else if (operation == GroupOperationClusteredReduce) \
+		{ \
+			require_extension(needs_subgroup_clustered); \
+			emit_subgroup_op_vec_binary(result_type, id, ops[4], ops[5], "sub_group_clustered_reduce_" base_name); \
+		} \
+		else \
+			SPIRV_CROSS_THROW("Unsupported group operation."); \
+		break; \
+	}
+
+#define OPENCL_SUBGROUP_ARITH_CAST(spirv_op, base_name, nu_name, cast_type) \
+	case OpGroupNonUniform##spirv_op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "sub_group_reduce_" base_name, cast_type, cast_type); \
+		else if (operation == GroupOperationInclusiveScan) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "sub_group_scan_inclusive_" base_name, cast_type, cast_type); \
+		else if (operation == GroupOperationExclusiveScan) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "sub_group_scan_exclusive_" base_name, cast_type, cast_type); \
+		else if (operation == GroupOperationClusteredReduce) \
+		{ \
+			require_extension(needs_subgroup_clustered); \
+			emit_subgroup_op_vec_binary(result_type, id, ops[4], ops[5], "sub_group_clustered_reduce_" base_name); \
+		} \
+		else \
+			SPIRV_CROSS_THROW("Unsupported group operation."); \
+		break; \
+	}
+
+	// Non-uniform arithmetic extension ops (mul, bitwise, logical) — always require the extension
+#define OPENCL_SUBGROUP_ARITH_NU(spirv_op, nu_name) \
+	case OpGroupNonUniform##spirv_op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+		{ \
+			require_extension(needs_subgroup_arithmetic); \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_non_uniform_reduce_" nu_name); \
+		} \
+		else if (operation == GroupOperationInclusiveScan) \
+		{ \
+			require_extension(needs_subgroup_arithmetic); \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_non_uniform_scan_inclusive_" nu_name); \
+		} \
+		else if (operation == GroupOperationExclusiveScan) \
+		{ \
+			require_extension(needs_subgroup_arithmetic); \
+			emit_subgroup_op_vec(result_type, id, ops[4], "sub_group_non_uniform_scan_exclusive_" nu_name); \
+		} \
+		else if (operation == GroupOperationClusteredReduce) \
+		{ \
+			require_extension(needs_subgroup_clustered); \
+			emit_subgroup_op_vec_binary(result_type, id, ops[4], ops[5], "sub_group_clustered_reduce_" nu_name); \
+		} \
+		else \
+			SPIRV_CROSS_THROW("Unsupported group operation."); \
+		break; \
+	}
+
+	// add/min/max: base cl_khr_subgroups for Reduce/Scan, clustered for ClusteredReduce
+	OPENCL_SUBGROUP_ARITH(FAdd, "add", "add")
+	OPENCL_SUBGROUP_ARITH(IAdd, "add", "add")
+	OPENCL_SUBGROUP_ARITH(FMin, "min", "min")
+	OPENCL_SUBGROUP_ARITH(FMax, "max", "max")
+	OPENCL_SUBGROUP_ARITH_CAST(SMin, "min", "min", int_type)
+	OPENCL_SUBGROUP_ARITH_CAST(SMax, "max", "max", int_type)
+	OPENCL_SUBGROUP_ARITH_CAST(UMin, "min", "min", uint_type)
+	OPENCL_SUBGROUP_ARITH_CAST(UMax, "max", "max", uint_type)
+
+	// mul/bitwise/logical: always require cl_khr_subgroup_non_uniform_arithmetic (or clustered)
+	OPENCL_SUBGROUP_ARITH_NU(FMul, "mul")
+	OPENCL_SUBGROUP_ARITH_NU(IMul, "mul")
+	OPENCL_SUBGROUP_ARITH_NU(BitwiseAnd, "and")
+	OPENCL_SUBGROUP_ARITH_NU(BitwiseOr, "or")
+	OPENCL_SUBGROUP_ARITH_NU(BitwiseXor, "xor")
+	OPENCL_SUBGROUP_ARITH_NU(LogicalAnd, "logical_and")
+	OPENCL_SUBGROUP_ARITH_NU(LogicalOr, "logical_or")
+	OPENCL_SUBGROUP_ARITH_NU(LogicalXor, "logical_xor")
+
+#undef OPENCL_SUBGROUP_ARITH
+#undef OPENCL_SUBGROUP_ARITH_CAST
+#undef OPENCL_SUBGROUP_ARITH_NU
+		// clang-format on
+
+		// === Task 8: cl_khr_subgroup_shuffle ===
+
+	case OpGroupNonUniformShuffle:
+		require_extension(needs_subgroup_shuffle);
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_shuffle");
+		break;
+
+	case OpGroupNonUniformShuffleXor:
+		require_extension(needs_subgroup_shuffle);
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_shuffle_xor");
+		break;
+
+		// === Task 9: cl_khr_subgroup_shuffle_relative ===
+
+	case OpGroupNonUniformShuffleUp:
+		require_extension(needs_subgroup_shuffle_relative);
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_shuffle_up");
+		break;
+
+	case OpGroupNonUniformShuffleDown:
+		require_extension(needs_subgroup_shuffle_relative);
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_shuffle_down");
+		break;
+
+		// === Task 11: cl_khr_subgroup_rotate ===
+
+	case OpGroupNonUniformRotateKHR:
+		require_extension(needs_subgroup_rotate);
+		if (i.length > 5)
+			emit_trinary_func_op(result_type, id, ops[3], ops[4], ops[5], "sub_group_clustered_rotate");
+		else
+			emit_binary_func_op(result_type, id, ops[3], ops[4], "sub_group_rotate");
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported subgroup op for OpenCL.");
+	}
+}
+
 void CompilerOpenCL::emit_specialization_constants_and_structs()
 {
 	bool emitted = false;
@@ -3851,28 +4250,50 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpControlBarrier:
 	{
 		// ops[0]=execution_scope, ops[1]=memory_scope, ops[2]=semantics
+		uint32_t execution_scope = evaluate_constant_u32(ops[0]);
 		uint32_t semantics = evaluate_constant_u32(ops[2]);
 		semantics = mask_relevant_memory_semantics(semantics);
 
 		flush_control_dependent_expressions(current_emitting_block->self);
 		flush_all_active_variables();
 
-		// Emit memory fence before the execution barrier if needed
-		string fence_flags = opencl_mem_fence_flags(semantics);
-		if (semantics != 0)
+		if (execution_scope == ScopeSubgroup)
 		{
-			if (opencl_options.supports_opencl_version(2, 0))
-				statement("work_group_barrier(", fence_flags, ");");
+			if (!opencl_options.enable_subgroups)
+				SPIRV_CROSS_THROW("Subgroup barriers require enable_subgroups option.");
+
+			// Subgroup barrier with memory fence flags
+			const uint32_t all_barriers =
+			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
+
+			if (semantics == 0 || (semantics & all_barriers) == all_barriers)
+			{
+				statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+			}
 			else
-				statement("barrier(", fence_flags, ");");
+			{
+				string fence_flags = opencl_mem_fence_flags(semantics);
+				statement("sub_group_barrier(", fence_flags, ");");
+			}
 		}
 		else
 		{
-			// Execution barrier with default local fence
-			if (opencl_options.supports_opencl_version(2, 0))
-				statement("work_group_barrier(CLK_LOCAL_MEM_FENCE);");
+			// Workgroup barrier
+			string fence_flags = opencl_mem_fence_flags(semantics);
+			if (semantics != 0)
+			{
+				if (opencl_options.supports_opencl_version(2, 0))
+					statement("work_group_barrier(", fence_flags, ");");
+				else
+					statement("barrier(", fence_flags, ");");
+			}
 			else
-				statement("barrier(CLK_LOCAL_MEM_FENCE);");
+			{
+				if (opencl_options.supports_opencl_version(2, 0))
+					statement("work_group_barrier(CLK_LOCAL_MEM_FENCE);");
+				else
+					statement("barrier(CLK_LOCAL_MEM_FENCE);");
+			}
 		}
 		break;
 	}
@@ -3880,6 +4301,7 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 	case OpMemoryBarrier:
 	{
 		// ops[0]=memory_scope, ops[1]=semantics
+		uint32_t memory_scope = evaluate_constant_u32(ops[0]);
 		uint32_t semantics = evaluate_constant_u32(ops[1]);
 		semantics = mask_relevant_memory_semantics(semantics);
 
@@ -3888,8 +4310,30 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 
 		if (semantics != 0)
 		{
-			string fence_flags = opencl_mem_fence_flags(semantics);
-			statement("mem_fence(", fence_flags, ");");
+			if (memory_scope == ScopeSubgroup)
+			{
+				if (!opencl_options.enable_subgroups)
+					SPIRV_CROSS_THROW("Subgroup memory barriers require enable_subgroups option.");
+
+				const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+				                              MemorySemanticsImageMemoryMask;
+
+				if ((semantics & all_barriers) == all_barriers ||
+				    (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask)))
+				{
+					statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+				}
+				else
+				{
+					string fence_flags = opencl_mem_fence_flags(semantics);
+					statement("sub_group_barrier(", fence_flags, ");");
+				}
+			}
+			else
+			{
+				string fence_flags = opencl_mem_fence_flags(semantics);
+				statement("mem_fence(", fence_flags, ");");
+			}
 		}
 		break;
 	}

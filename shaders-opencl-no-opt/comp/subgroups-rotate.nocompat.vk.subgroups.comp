@@ -1,0 +1,20 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_rotate : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+};
+
+void main()
+{
+	uint rotated = subgroupRotate(20u, 4u);
+	bool rotated_bool = subgroupRotate(false, 4u);
+	uint rotated_clustered = subgroupClusteredRotate(20u, 4u, 8u);
+	bool rotated_clustered_bool = subgroupClusteredRotate(false, 4u, 8u);
+
+	FragColor = float(rotated) + float(rotated_bool)
+		+ float(rotated_clustered) + float(rotated_clustered_bool);
+}

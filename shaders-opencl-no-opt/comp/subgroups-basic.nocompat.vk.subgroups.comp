@@ -1,0 +1,72 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_vote : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+	int idat;
+	uint udat;
+};
+
+void main()
+{
+	// Builtins
+	FragColor = float(gl_NumSubgroups);
+	FragColor = float(gl_SubgroupID);
+	FragColor = float(gl_SubgroupSize);
+	FragColor = float(gl_SubgroupInvocationID);
+
+	// Barriers
+	subgroupBarrier();
+	subgroupMemoryBarrier();
+	subgroupMemoryBarrierBuffer();
+	subgroupMemoryBarrierShared();
+	subgroupMemoryBarrierImage();
+
+	// Vote (uniform) — OpGroupNonUniformAll/Any map to sub_group_all/any in cl_khr_subgroups
+	bool has_all = subgroupAll(true);
+	bool has_any = subgroupAny(true);
+
+	// Broadcast (uniform) — OpGroupNonUniformBroadcast maps to sub_group_broadcast in cl_khr_subgroups
+	uint broadcasted = subgroupBroadcast(42u, 0u);
+
+	// Reduce (uniform) — OpGroupNonUniform{I,F}Add/Min/Max with Reduce
+	float fadd = subgroupAdd(FragColor);
+	int iadd = subgroupAdd(idat);
+	float fmin = subgroupMin(FragColor);
+	float fmax = subgroupMax(FragColor);
+	int smin = subgroupMin(idat);
+	int smax = subgroupMax(idat);
+	uint umin = subgroupMin(udat);
+	uint umax = subgroupMax(udat);
+
+	// Inclusive scan
+	float finc_add = subgroupInclusiveAdd(FragColor);
+	float finc_min = subgroupInclusiveMin(FragColor);
+	float finc_max = subgroupInclusiveMax(FragColor);
+	int iinc_add = subgroupInclusiveAdd(idat);
+	int iinc_min = subgroupInclusiveMin(idat);
+	int iinc_max = subgroupInclusiveMax(idat);
+	uint uinc_min = subgroupInclusiveMin(udat);
+	uint uinc_max = subgroupInclusiveMax(udat);
+
+	// Exclusive scan
+	float fexc_add = subgroupExclusiveAdd(FragColor);
+	float fexc_min = subgroupExclusiveMin(FragColor);
+	float fexc_max = subgroupExclusiveMax(FragColor);
+	int iexc_add = subgroupExclusiveAdd(idat);
+	int iexc_min = subgroupExclusiveMin(idat);
+	int iexc_max = subgroupExclusiveMax(idat);
+	uint uexc_min = subgroupExclusiveMin(udat);
+	uint uexc_max = subgroupExclusiveMax(udat);
+
+	// Write results to prevent dead-code elimination
+	FragColor = fadd + fmin + fmax + finc_add + finc_min + finc_max + fexc_add + fexc_min + fexc_max
+		+ float(iadd + smin + smax + iinc_add + iinc_min + iinc_max + iexc_add + iexc_min + iexc_max)
+		+ float(umin + umax + uinc_min + uinc_max + uexc_min + uexc_max + broadcasted)
+		+ float(has_all) + float(has_any);
+}

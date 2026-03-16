@@ -1,0 +1,37 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable
+
+struct SSBO
+{
+    float FragColor;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global float* _9)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _9[0] = convert_float4(get_sub_group_eq_mask()).x;
+    _9[0] = convert_float4(get_sub_group_ge_mask()).x;
+    _9[0] = convert_float4(get_sub_group_gt_mask()).x;
+    _9[0] = convert_float4(get_sub_group_le_mask()).x;
+    _9[0] = convert_float4(get_sub_group_lt_mask()).x;
+    float4 broadcasted_1 = (float4)(sub_group_broadcast((float4)(10.0f).x, 8u), sub_group_broadcast((float4)(10.0f).y, 8u), sub_group_broadcast((float4)(10.0f).z, 8u), sub_group_broadcast((float4)(10.0f).w, 8u));
+    int2 broadcasted_bool_1 = (int2)(sub_group_broadcast((int2)(true).x, 8u), sub_group_broadcast((int2)(true).y, 8u));
+    float3 first_1 = (float3)(sub_group_broadcast_first((float3)(20.0f).x), sub_group_broadcast_first((float3)(20.0f).y), sub_group_broadcast_first((float3)(20.0f).z));
+    int4 first_bool_1 = (int4)(sub_group_broadcast_first((int4)(false).x), sub_group_broadcast_first((int4)(false).y), sub_group_broadcast_first((int4)(false).z), sub_group_broadcast_first((int4)(false).w));
+    uint4 ballot_value_1 = sub_group_ballot(true);
+    bool inverse_ballot_value_1 = sub_group_inverse_ballot(ballot_value_1);
+    bool bit_extracted_1 = sub_group_ballot_bit_extract((uint4)(10u), 8u);
+    uint bit_count_1 = sub_group_ballot_bit_count(ballot_value_1);
+    uint inclusive_bit_count_1 = sub_group_ballot_inclusive_scan(ballot_value_1);
+    uint exclusive_bit_count_1 = sub_group_ballot_exclusive_scan(ballot_value_1);
+    uint lsb_1 = sub_group_ballot_find_lsb(ballot_value_1);
+    uint msb_1 = sub_group_ballot_find_msb(ballot_value_1);
+    _9[0] = (((((((((broadcasted_1.x + (float)(broadcasted_bool_1.x)) + first_1.x) + (float)(first_bool_1.x)) + (float)(inverse_ballot_value_1)) + (float)(bit_extracted_1)) + convert_float(bit_count_1)) + convert_float(inclusive_bit_count_1)) + convert_float(exclusive_bit_count_1)) + convert_float(lsb_1)) + convert_float(msb_1);
+}
+

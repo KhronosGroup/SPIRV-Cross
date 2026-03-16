@@ -1,0 +1,36 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+};
+
+void main()
+{
+	FragColor = float(gl_SubgroupEqMask);
+	FragColor = float(gl_SubgroupGeMask);
+	FragColor = float(gl_SubgroupGtMask);
+	FragColor = float(gl_SubgroupLeMask);
+	FragColor = float(gl_SubgroupLtMask);
+
+	vec4 broadcasted = subgroupBroadcast(vec4(10.0), 8u);
+	bvec2 broadcasted_bool = subgroupBroadcast(bvec2(true), 8u);
+	vec3 first = subgroupBroadcastFirst(vec3(20.0));
+	bvec4 first_bool = subgroupBroadcastFirst(bvec4(false));
+	uvec4 ballot_value = subgroupBallot(true);
+	bool inverse_ballot_value = subgroupInverseBallot(ballot_value);
+	bool bit_extracted = subgroupBallotBitExtract(uvec4(10u), 8u);
+	uint bit_count = subgroupBallotBitCount(ballot_value);
+	uint inclusive_bit_count = subgroupBallotInclusiveBitCount(ballot_value);
+	uint exclusive_bit_count = subgroupBallotExclusiveBitCount(ballot_value);
+	uint lsb = subgroupBallotFindLSB(ballot_value);
+	uint msb = subgroupBallotFindMSB(ballot_value);
+
+	FragColor = broadcasted.x + float(broadcasted_bool.x) + first.x + float(first_bool.x)
+		+ float(inverse_ballot_value) + float(bit_extracted)
+		+ float(bit_count) + float(inclusive_bit_count) + float(exclusive_bit_count)
+		+ float(lsb) + float(msb);
+}

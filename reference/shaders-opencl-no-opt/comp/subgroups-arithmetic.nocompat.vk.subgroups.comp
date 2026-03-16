@@ -1,0 +1,47 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_arithmetic : enable
+
+struct SSBO
+{
+    float fdat;
+    int idat;
+    uint udat;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global SSBO* _13)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    float fadd_1 = sub_group_reduce_add(_13->fdat);
+    float fmul_1 = sub_group_non_uniform_reduce_mul(_13->fdat);
+    int iadd_1 = sub_group_reduce_add(_13->idat);
+    int imul_1 = sub_group_non_uniform_reduce_mul(_13->idat);
+    float fmin_v_1 = sub_group_reduce_min(_13->fdat);
+    float fmax_v_1 = sub_group_reduce_max(_13->fdat);
+    int smin_v_1 = sub_group_reduce_min(_13->idat);
+    int smax_v_1 = sub_group_reduce_max(_13->idat);
+    uint umin_v_1 = sub_group_reduce_min(_13->udat);
+    uint umax_v_1 = sub_group_reduce_max(_13->udat);
+    uint anded_1 = sub_group_non_uniform_reduce_and(_13->udat);
+    uint ored_1 = sub_group_non_uniform_reduce_or(_13->udat);
+    uint xored_1 = sub_group_non_uniform_reduce_xor(_13->udat);
+    int4 bval_1 = (uint4)(_13->udat) == (uint4)(42u);
+    int4 anded_b_1 = (int4)(sub_group_non_uniform_reduce_logical_and(bval_1.x), sub_group_non_uniform_reduce_logical_and(bval_1.y), sub_group_non_uniform_reduce_logical_and(bval_1.z), sub_group_non_uniform_reduce_logical_and(bval_1.w));
+    int4 ored_b_1 = (int4)(sub_group_non_uniform_reduce_logical_or(bval_1.x), sub_group_non_uniform_reduce_logical_or(bval_1.y), sub_group_non_uniform_reduce_logical_or(bval_1.z), sub_group_non_uniform_reduce_logical_or(bval_1.w));
+    int4 xored_b_1 = (int4)(sub_group_non_uniform_reduce_logical_xor(bval_1.x), sub_group_non_uniform_reduce_logical_xor(bval_1.y), sub_group_non_uniform_reduce_logical_xor(bval_1.z), sub_group_non_uniform_reduce_logical_xor(bval_1.w));
+    float finc_add_1 = sub_group_scan_inclusive_add(_13->fdat);
+    float finc_mul_1 = sub_group_non_uniform_scan_inclusive_mul(_13->fdat);
+    int iinc_add_1 = sub_group_scan_inclusive_add(_13->idat);
+    int iinc_mul_1 = sub_group_non_uniform_scan_inclusive_mul(_13->idat);
+    float fexc_add_1 = sub_group_scan_exclusive_add(_13->fdat);
+    float fexc_mul_1 = sub_group_non_uniform_scan_exclusive_mul(_13->fdat);
+    int iexc_add_1 = sub_group_scan_exclusive_add(_13->idat);
+    int iexc_mul_1 = sub_group_non_uniform_scan_exclusive_mul(_13->idat);
+    _13->fdat = (((((((((((fadd_1 + fmul_1) + fmin_v_1) + fmax_v_1) + finc_add_1) + finc_mul_1) + fexc_add_1) + fexc_mul_1) + convert_float(((((((iadd_1 + imul_1) + smin_v_1) + smax_v_1) + iinc_add_1) + iinc_mul_1) + iexc_add_1) + iexc_mul_1)) + convert_float((((umin_v_1 + umax_v_1) + anded_1) + ored_1) + xored_1)) + (float)(anded_b_1.x)) + (float)(ored_b_1.x)) + (float)(xored_b_1.x);
+}
+

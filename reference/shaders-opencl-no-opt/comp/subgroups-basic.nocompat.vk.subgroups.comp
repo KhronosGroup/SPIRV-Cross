@@ -1,0 +1,57 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_khr_subgroups : enable
+
+struct SSBO
+{
+    float FragColor;
+    int idat;
+    uint udat;
+};
+
+typedef struct SSBO SSBO;
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global SSBO* _11)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    _11->FragColor = convert_float(get_num_sub_groups());
+    _11->FragColor = convert_float(get_sub_group_id());
+    _11->FragColor = convert_float(get_sub_group_size());
+    _11->FragColor = convert_float(get_sub_group_local_id());
+    sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+    sub_group_barrier(CLK_GLOBAL_MEM_FENCE);
+    sub_group_barrier(CLK_LOCAL_MEM_FENCE);
+    sub_group_barrier(CLK_GLOBAL_MEM_FENCE);
+    bool has_all = sub_group_all(true);
+    bool has_any = sub_group_any(true);
+    uint broadcasted = sub_group_broadcast(42u, 0u);
+    float fadd = sub_group_reduce_add(_11->FragColor);
+    int iadd = sub_group_reduce_add(_11->idat);
+    float fmin = sub_group_reduce_min(_11->FragColor);
+    float fmax = sub_group_reduce_max(_11->FragColor);
+    int smin = sub_group_reduce_min(_11->idat);
+    int smax = sub_group_reduce_max(_11->idat);
+    uint umin = sub_group_reduce_min(_11->udat);
+    uint umax = sub_group_reduce_max(_11->udat);
+    float finc_add = sub_group_scan_inclusive_add(_11->FragColor);
+    float finc_min = sub_group_scan_inclusive_min(_11->FragColor);
+    float finc_max = sub_group_scan_inclusive_max(_11->FragColor);
+    int iinc_add = sub_group_scan_inclusive_add(_11->idat);
+    int iinc_min = sub_group_scan_inclusive_min(_11->idat);
+    int iinc_max = sub_group_scan_inclusive_max(_11->idat);
+    uint uinc_min = sub_group_scan_inclusive_min(_11->udat);
+    uint uinc_max = sub_group_scan_inclusive_max(_11->udat);
+    float fexc_add = sub_group_scan_exclusive_add(_11->FragColor);
+    float fexc_min = sub_group_scan_exclusive_min(_11->FragColor);
+    float fexc_max = sub_group_scan_exclusive_max(_11->FragColor);
+    int iexc_add = sub_group_scan_exclusive_add(_11->idat);
+    int iexc_min = sub_group_scan_exclusive_min(_11->idat);
+    int iexc_max = sub_group_scan_exclusive_max(_11->idat);
+    uint uexc_min = sub_group_scan_exclusive_min(_11->udat);
+    uint uexc_max = sub_group_scan_exclusive_max(_11->udat);
+    _11->FragColor = (((((((((((fadd + fmin) + fmax) + finc_add) + finc_min) + finc_max) + fexc_add) + fexc_min) + fexc_max) + convert_float((((((((iadd + smin) + smax) + iinc_add) + iinc_min) + iinc_max) + iexc_add) + iexc_min) + iexc_max)) + convert_float((((((umin + umax) + uinc_min) + uinc_max) + uexc_min) + uexc_max) + broadcasted)) + (float)(has_all)) + (float)(has_any);
+}
+

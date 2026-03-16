@@ -141,6 +141,10 @@ protected:
 	void replace_illegal_names() override;
 	void emit_function(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_subgroup_op(const Instruction &i) override;
+	void emit_subgroup_op_vec(uint32_t result_type, uint32_t id, uint32_t value_id, const char *func_name);
+	void emit_subgroup_op_vec_binary(uint32_t result_type, uint32_t id, uint32_t value_id, uint32_t extra_id,
+	                                 const char *func_name);
 	void emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression) override;
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
@@ -187,6 +191,16 @@ protected:
 	bool needs_inverse_2 = false;
 	bool needs_inverse_3 = false;
 	bool needs_inverse_4 = false;
+
+	// Subgroup extension requirements discovered during emit_subgroup_op / builtin_to_glsl.
+	// These trigger force_recompile() so emit_header() can emit the correct pragmas.
+	bool needs_subgroup_vote = false;
+	bool needs_subgroup_ballot = false;
+	bool needs_subgroup_arithmetic = false;
+	bool needs_subgroup_shuffle = false;
+	bool needs_subgroup_shuffle_relative = false;
+	bool needs_subgroup_clustered = false;
+	bool needs_subgroup_rotate = false;
 
 	// Matrix type support: tracks which matrix signatures (basetype, vecsize, columns) are needed.
 	struct MatrixTypeKey

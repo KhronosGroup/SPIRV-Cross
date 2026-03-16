@@ -1,0 +1,47 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float fdat;
+	int idat;
+	uint udat;
+};
+
+void main()
+{
+	float fadd = subgroupAdd(fdat);
+	float fmul = subgroupMul(fdat);
+	int iadd = subgroupAdd(idat);
+	int imul = subgroupMul(idat);
+	float fmin_v = subgroupMin(fdat);
+	float fmax_v = subgroupMax(fdat);
+	int smin_v = subgroupMin(idat);
+	int smax_v = subgroupMax(idat);
+	uint umin_v = subgroupMin(udat);
+	uint umax_v = subgroupMax(udat);
+	uint anded = subgroupAnd(udat);
+	uint ored = subgroupOr(udat);
+	uint xored = subgroupXor(udat);
+	bvec4 bval = equal(uvec4(udat), uvec4(42u));
+	bvec4 anded_b = subgroupAnd(bval);
+	bvec4 ored_b = subgroupOr(bval);
+	bvec4 xored_b = subgroupXor(bval);
+
+	float finc_add = subgroupInclusiveAdd(fdat);
+	float finc_mul = subgroupInclusiveMul(fdat);
+	int iinc_add = subgroupInclusiveAdd(idat);
+	int iinc_mul = subgroupInclusiveMul(idat);
+
+	float fexc_add = subgroupExclusiveAdd(fdat);
+	float fexc_mul = subgroupExclusiveMul(fdat);
+	int iexc_add = subgroupExclusiveAdd(idat);
+	int iexc_mul = subgroupExclusiveMul(idat);
+
+	fdat = fadd + fmul + fmin_v + fmax_v + finc_add + finc_mul + fexc_add + fexc_mul
+		+ float(iadd + imul + smin_v + smax_v + iinc_add + iinc_mul + iexc_add + iexc_mul)
+		+ float(umin_v + umax_v + anded + ored + xored)
+		+ float(anded_b.x) + float(ored_b.x) + float(xored_b.x);
+}
