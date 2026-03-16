@@ -8,7 +8,7 @@ struct _3
 
 typedef struct _3 _3;
 
-void _20(__global uchar* _21[16])
+void _20(__global uchar (*_21)[16])
 {
     (*_21)[2u] = (uchar)(0);
 }
@@ -16,6 +16,6 @@ void _20(__global uchar* _21[16])
 __attribute__((reqd_work_group_size(16, 1, 1)))
 __kernel void comp_main(__global uchar* _2)
 {
-    _20(&_2[0]);
+    _20((__global uchar (*)[16])&_2[0]);
 }
 

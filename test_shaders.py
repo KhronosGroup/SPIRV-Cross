@@ -646,7 +646,7 @@ def validate_shader_opencl(shader, opt, paths):
                               [
                                '-emit-llvm', '-target', 'spir64-unknown-unknown',
                                # clang may incorrectly claim that some extension pragmas are unnecessary
-                               '-Wignored-pragmas',
+                               '-Wno-ignored-pragmas',
                                '-Xclang', '-finclude-default-header', '-x', 'cl', '-c', shader,
                                '-o', os.devnull])
 

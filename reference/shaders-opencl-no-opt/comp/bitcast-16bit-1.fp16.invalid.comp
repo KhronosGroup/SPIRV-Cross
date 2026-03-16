@@ -1,0 +1,29 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+struct SSBO0
+{
+    short4 inputs[1];
+};
+
+typedef struct SSBO0 SSBO0;
+
+struct SSBO1
+{
+    int4 outputs[1];
+};
+
+typedef struct SSBO1 SSBO1;
+
+__attribute__((reqd_work_group_size(1, 1, 1)))
+__kernel void comp_main(__global short4* _25, __global int4* _39)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint ident = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x;
+    half2 a = as_half2(_25[ident].xy);
+    _39[ident][0u] = as_int(as_uint(a + (half2)(half(1.0))));
+    _39[ident][1u] = as_int(_25[ident].zw);
+    _39[ident][2u] = as_int(as_uint(as_ushort2(_25[ident].xy)));
+}
+

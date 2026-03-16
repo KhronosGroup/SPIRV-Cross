@@ -36,6 +36,6 @@ __kernel void comp_main(_16 _32)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
     __global _4* _28 = ((__global _4*)(_32._m0));
-    _40(_28, 40, &_28->_m0, &_28->_m1, ((__global int*)(_28->_m1)));
+    _40(_28, 40, &_28->_m0, (__global int* __global *)&_28->_m1, ((__global int*)(_28->_m1)));
 }
 

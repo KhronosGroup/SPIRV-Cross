@@ -2822,7 +2822,43 @@ std::string CompilerOpenCL::to_func_call_arg(const SPIRFunction::Parameter &call
 		}
 	}
 
-	return CompilerGLSL::to_func_call_arg(callee_param, id);
+	// If callee expects a pointer-to-array (e.g., __global uchar (*)[16]) but we have a flat
+	// pointer (e.g., from a flattened SSBO), cast the argument to the expected type.
+	auto &callee_type = expression_type(callee_param.id);
+	if (is_pointer(callee_type) && !callee_type.array.empty())
+	{
+		auto addr_space = get_type_address_space(callee_type, callee_param.id);
+		const auto *pointee = &get<SPIRType>(callee_type.parent_type);
+		while (is_pointer(*pointee))
+			pointee = &get<SPIRType>(pointee->parent_type);
+		string base = type_to_glsl(*pointee, callee_param.id);
+		string array_dims = type_to_array_glsl(callee_type, callee_param.id);
+		string cast_type = (!addr_space.empty() ? addr_space + " " : "") + base + " (*)" + array_dims;
+		return join("(", cast_type, ")", to_pointer_expression(id));
+	}
+
+	// Get the base class result (handles to_pointer_expression for buffer/physical pointers).
+	auto result = CompilerGLSL::to_func_call_arg(callee_param, id);
+
+	// BDA pointer-to-pointer mismatch: struct members store BDA pointers as ulong
+	// (emit_struct_member), so taking &member gives ulong* in C, not the expected
+	// pointer-to-pointer type. Add a cast to the callee's parameter type.
+	// Skip function parameters — they already have the correct pointer type.
+	if (is_pointer(callee_type) && callee_type.storage == StorageClassPhysicalStorageBuffer)
+	{
+		auto &pointee = get<SPIRType>(callee_type.parent_type);
+		if (is_pointer(pointee) && pointee.storage == StorageClassPhysicalStorageBuffer)
+		{
+			auto *var = maybe_get<SPIRVariable>(id);
+			if (!var || !var->parameter)
+			{
+				auto cast_type = type_to_glsl(callee_type, callee_param.id);
+				return join("(", cast_type, ")", result);
+			}
+		}
+	}
+
+	return result;
 }
 
 std::string CompilerOpenCL::entry_point_args(bool append_comma)
@@ -2986,8 +3022,36 @@ void CompilerOpenCL::emit_function_prototype(SPIRFunction &func, const Bitset &r
 
 		// OpenCL C has no in/out/inout qualifiers — skip direction prefix from argument_decl.
 		auto &arg_type = expression_type(arg.id);
-		decl += to_qualifiers_glsl(arg.id);
-		decl += variable_decl(arg_type, to_name(arg.id), arg.id);
+
+		// For StorageBuffer/Uniform pointer params that are never written, add const
+		// to match the constness of NonWritable kernel parameters at call sites.
+		bool is_readonly_ptr =
+		    is_pointer(arg_type) && arg.write_count == 0 &&
+		    (arg_type.storage == StorageClassStorageBuffer || arg_type.storage == StorageClassUniform);
+
+		// Pointer-to-array parameters need special C syntax: "T (*name)[N]" not "T* name[N]".
+		// "T* name[N]" in C means "array of N pointers to T", which is wrong.
+		if (is_pointer(arg_type) && !arg_type.array.empty())
+		{
+			auto addr_space = get_type_address_space(arg_type, arg.id);
+			const auto *pointee = &get<SPIRType>(arg_type.parent_type);
+			while (is_pointer(*pointee))
+				pointee = &get<SPIRType>(pointee->parent_type);
+			string base = type_to_glsl(*pointee, arg.id);
+			string restrict_kw = to_restrict(arg.id, true);
+			if (!addr_space.empty())
+				decl += addr_space + " ";
+			if (is_readonly_ptr)
+				decl += "const ";
+			decl += base + " (*" + restrict_kw + to_name(arg.id) + ")" + type_to_array_glsl(arg_type, arg.id);
+		}
+		else
+		{
+			if (is_readonly_ptr)
+				decl += "const ";
+			decl += to_qualifiers_glsl(arg.id);
+			decl += variable_decl(arg_type, to_name(arg.id), arg.id);
+		}
 
 		if (&arg != &func.arguments.back())
 			decl += ", ";
