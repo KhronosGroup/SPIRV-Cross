@@ -22,7 +22,7 @@ __kernel void comp_main(__global short4* _25, __global int4* _39)
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
     uint ident = ((uint3)(get_global_id(0), get_global_id(1), get_global_id(2))).x;
     half2 a = as_half2(_25[ident].xy);
-    _39[ident][0u] = as_int(as_uint(a + (half2)(half(1.0))));
+    _39[ident][0u] = as_int(as_uint(a + (half2)((half)(1.0))));
     _39[ident][1u] = as_int(_25[ident].zw);
     _39[ident][2u] = as_int(as_uint(as_ushort2(_25[ident].xy)));
 }

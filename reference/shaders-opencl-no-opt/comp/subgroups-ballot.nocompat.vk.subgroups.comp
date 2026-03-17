@@ -1,6 +1,5 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
-#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
 #pragma OPENCL EXTENSION cl_khr_subgroups : enable
 #pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable
 

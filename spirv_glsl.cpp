@@ -6350,11 +6350,14 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 		type.columns = 1;
 
 		if (float_value == numeric_limits<float>::infinity())
-			res = join(type_to_glsl(type), "(1.0 / 0.0)");
+			res = backend.c_style_casts ? join("(", type_to_glsl(type), ")(1.0 / 0.0)") :
+			                              join(type_to_glsl(type), "(1.0 / 0.0)");
 		else if (float_value == -numeric_limits<float>::infinity())
-			res = join(type_to_glsl(type), "(-1.0 / 0.0)");
+			res = backend.c_style_casts ? join("(", type_to_glsl(type), ")(-1.0 / 0.0)") :
+			                              join(type_to_glsl(type), "(-1.0 / 0.0)");
 		else if (std::isnan(float_value))
-			res = join(type_to_glsl(type), "(0.0 / 0.0)");
+			res = backend.c_style_casts ? join("(", type_to_glsl(type), ")(0.0 / 0.0)") :
+			                              join(type_to_glsl(type), "(0.0 / 0.0)");
 		else
 			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
 	}
@@ -6364,7 +6367,10 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 		type.basetype = is_bfloat8 ? SPIRType::FloatE5M2 : SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
-		res = join(type_to_glsl(type), "(", format_float(float_value), ")");
+		if (backend.c_style_casts)
+			res = join("(", type_to_glsl(type), ")(", format_float(float_value), ")");
+		else
+			res = join(type_to_glsl(type), "(", format_float(float_value), ")");
 	}
 
 	return res;

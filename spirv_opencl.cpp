@@ -169,7 +169,9 @@ void CompilerOpenCL::emit_header()
 	statement("// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)");
 	statement("");
 
-	if (opencl_options.opencl_version >= 200)
+	// cl_khr_3d_image_writes is a core feature in OpenCL 2.x (no pragma needed).
+	// For OpenCL < 2.0 or >= 3.0, emit the pragma only when the shader writes to a 3D image.
+	if (needs_3d_image_writes && (opencl_options.opencl_version < 200 || opencl_options.opencl_version >= 300))
 		statement("#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable");
 	if (opencl_options.enable_fp16)
 		statement("#pragma OPENCL EXTENSION cl_khr_fp16 : enable");
@@ -5297,6 +5299,14 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		uint32_t image_id = ops[0];
 		uint32_t coord_id = ops[1];
 		uint32_t texel_id = ops[2];
+
+		// Track if we write to a 3D image (needs cl_khr_3d_image_writes pragma).
+		auto &img_type = expression_type(image_id);
+		if (img_type.image.dim == Dim3D && !needs_3d_image_writes)
+		{
+			needs_3d_image_writes = true;
+			force_recompile();
+		}
 
 		// Unset NonWritable so the variable can be written (mirroring GLSL backend).
 		auto *image_var = maybe_get_backing_variable(image_id);

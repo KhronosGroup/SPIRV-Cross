@@ -192,8 +192,11 @@ protected:
 	bool needs_inverse_3 = false;
 	bool needs_inverse_4 = false;
 
-	// Subgroup extension requirements discovered during emit_subgroup_op / builtin_to_glsl.
+	// Extension requirements discovered during instruction emission.
 	// These trigger force_recompile() so emit_header() can emit the correct pragmas.
+	bool needs_3d_image_writes = false;
+
+	// Subgroup extension requirements discovered during emit_subgroup_op / builtin_to_glsl.
 	bool needs_subgroup_vote = false;
 	bool needs_subgroup_ballot = false;
 	bool needs_subgroup_arithmetic = false;
