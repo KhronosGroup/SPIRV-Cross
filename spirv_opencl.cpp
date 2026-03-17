@@ -504,6 +504,9 @@ void CompilerOpenCL::compute_kernel_resources()
 			func_workgroup_args[kv.first] = sorted;
 		}
 	}
+
+	// Scan for subgroup emulation usage (which functions need scratch params threaded).
+	scan_subgroup_emulation_usage();
 }
 
 void CompilerOpenCL::emit_resources()
@@ -768,6 +771,9 @@ void CompilerOpenCL::emit_resources()
 		statement("");
 	}
 
+	// Subgroup emulation helper functions.
+	emit_subgroup_emulation_helpers();
+
 	// Default sampler for combined image+sampler usage (OpenCL C requires file-scope const sampler_t).
 	if (needs_default_sampler)
 	{
@@ -996,6 +1002,10 @@ void CompilerOpenCL::emit_entry_point_declarations()
 		}
 	}
 
+	// Emit subgroup emulation local variables and scratch buffers.
+	if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		emit_subgroup_emulation_entry_point_vars();
+
 	// Materialize Input builtin variables as local variables.
 	// In OpenCL C, builtins like get_global_id() are function calls, not variables.
 	// When code needs variable pointers to these builtins (either threaded to non-entry
@@ -1089,22 +1099,39 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInGlobalSize:
 		return "((uint3)(get_global_size(0), get_global_size(1), get_global_size(2)))";
 	case BuiltInNumSubgroups:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+			return "_spv_num_subgroups";
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		return "get_num_sub_groups()";
 	case BuiltInSubgroupId:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+			return "_spv_subgroup_id";
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		return "get_sub_group_id()";
 	case BuiltInSubgroupSize:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+			return "_spv_subgroup_size";
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		return "get_sub_group_size()";
 	case BuiltInSubgroupLocalInvocationId:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+			return "_spv_lane_id";
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		return "get_sub_group_local_id()";
 	case BuiltInSubgroupEqMask:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_subgroup_eq_mask(_spv_lane_id)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1114,6 +1141,15 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		return "get_sub_group_eq_mask()";
 	case BuiltInSubgroupGeMask:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_subgroup_ge_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1123,6 +1159,15 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		return "get_sub_group_ge_mask()";
 	case BuiltInSubgroupGtMask:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_subgroup_gt_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1132,6 +1177,15 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		return "get_sub_group_gt_mask()";
 	case BuiltInSubgroupLeMask:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_subgroup_le_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1141,6 +1195,15 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		return "get_sub_group_le_mask()";
 	case BuiltInSubgroupLtMask:
+		if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_subgroup_lt_mask(_spv_lane_id)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -3105,6 +3168,16 @@ void CompilerOpenCL::emit_function_prototype(SPIRFunction &func, const Bitset &r
 				}
 			}
 		}
+
+		// Thread subgroup emulation scratch buffers and emulation state.
+		if (needs_subgroup_emulation_scratch && funcs_using_subgroup_emulation.count(func.self))
+		{
+			if (!first_resource)
+				decl += ", ";
+			first_resource = false;
+			decl += "__local uint* _spv_subgroup_scratch, uint _spv_linear_id, "
+			        "uint _spv_subgroup_base, uint _spv_subgroup_size, uint _spv_lane_id";
+		}
 	}
 
 	decl += ")";
@@ -3158,6 +3231,16 @@ void CompilerOpenCL::append_global_func_args(const SPIRFunction &func, uint32_t 
 				arglist.push_back(is_scalar ? ("&" + to_name(var_id)) : to_name(var_id));
 			}
 		}
+	}
+
+	// Thread subgroup emulation scratch buffers.
+	if (needs_subgroup_emulation_scratch && funcs_using_subgroup_emulation.count(func.self))
+	{
+		arglist.push_back("_spv_subgroup_scratch");
+		arglist.push_back("_spv_linear_id");
+		arglist.push_back("_spv_subgroup_base");
+		arglist.push_back("_spv_subgroup_size");
+		arglist.push_back("_spv_lane_id");
 	}
 }
 
@@ -3375,10 +3458,1371 @@ void CompilerOpenCL::emit_subgroup_op_vec_binary(uint32_t result_type, uint32_t 
 	}
 }
 
+uint32_t CompilerOpenCL::get_emulation_max_workgroup_size() const
+{
+	auto &ep = get_entry_point();
+	uint32_t x = ep.workgroup_size.x;
+	uint32_t y = ep.workgroup_size.y;
+	uint32_t z = ep.workgroup_size.z;
+	if (x != 0 && y != 0 && z != 0)
+		return x * y * z;
+	return opencl_options.max_workgroup_size;
+}
+
+string CompilerOpenCL::get_emulation_subgroup_size_expr() const
+{
+	if (opencl_options.fixed_subgroup_size != 0)
+		return to_string(opencl_options.fixed_subgroup_size) + "u";
+	else
+		return "_spv_linear_workgroup_size";
+}
+
+string CompilerOpenCL::subgroup_emulation_scratch_type(bool is_64bit) const
+{
+	return is_64bit ? "ulong" : "uint";
+}
+
+void CompilerOpenCL::emit_subgroup_emulation_entry_point_vars()
+{
+	uint32_t fixed = opencl_options.fixed_subgroup_size;
+
+	// Linear ID computation
+	statement("uint _spv_linear_workgroup_size = get_local_size(0) * get_local_size(1) * get_local_size(2);");
+	statement("uint _spv_linear_id = (get_local_id(2) * get_local_size(1) * get_local_size(0)) + "
+	          "(get_local_id(1) * get_local_size(0)) + get_local_id(0);");
+
+	if (fixed == 0)
+	{
+		// subgroup_size == workgroup size (one big subgroup)
+		statement("uint _spv_subgroup_size = _spv_linear_workgroup_size;");
+		statement("uint _spv_lane_id = _spv_linear_id;");
+		statement("uint _spv_subgroup_id = 0u;");
+		statement("uint _spv_num_subgroups = 1u;");
+		statement("uint _spv_subgroup_base = 0u;");
+	}
+	else if (fixed == 1)
+	{
+		// Degenerate: each invocation is its own subgroup
+		statement("uint _spv_subgroup_size = 1u;");
+		statement("uint _spv_lane_id = 0u;");
+		statement("uint _spv_subgroup_id = _spv_linear_id;");
+		statement("uint _spv_num_subgroups = _spv_linear_workgroup_size;");
+		statement("uint _spv_subgroup_base = _spv_linear_id;");
+	}
+	else
+	{
+		statement("uint _spv_subgroup_size = ", fixed, "u;");
+		statement("uint _spv_lane_id = _spv_linear_id % ", fixed, "u;");
+		statement("uint _spv_subgroup_id = _spv_linear_id / ", fixed, "u;");
+		statement("uint _spv_num_subgroups = _spv_linear_workgroup_size / ", fixed, "u;");
+		statement("uint _spv_subgroup_base = _spv_subgroup_id * ", fixed, "u;");
+	}
+
+	// Scratch buffers (only when needed)
+	if (needs_subgroup_emulation_scratch)
+	{
+		uint32_t max_wg = get_emulation_max_workgroup_size();
+		statement("__local uint _spv_subgroup_scratch[", max_wg, "];");
+	}
+	if (needs_subgroup_emulation_scratch64)
+	{
+		uint32_t max_wg = get_emulation_max_workgroup_size();
+		statement("__local ulong _spv_subgroup_scratch64[", max_wg, "];");
+	}
+}
+
+void CompilerOpenCL::scan_subgroup_emulation_usage()
+{
+	if (!opencl_options.emulate_subgroups || opencl_options.enable_subgroups)
+		return;
+
+	funcs_using_subgroup_emulation.clear();
+
+	// First pass: find functions that directly use subgroup ops.
+	ir.for_each_typed_id<SPIRFunction>(
+	    [&](uint32_t func_id, SPIRFunction &func)
+	    {
+		    if (func_id == ir.default_entry_point)
+			    return;
+		    for (auto block_id : func.blocks)
+		    {
+			    auto &block = get<SPIRBlock>(block_id);
+			    for (auto &insn : block.ops)
+			    {
+				    auto insn_op = static_cast<Op>(insn.op);
+				    if (insn_op >= OpGroupNonUniformElect && insn_op <= OpGroupNonUniformQuadSwap)
+				    {
+					    funcs_using_subgroup_emulation.insert(func_id);
+					    return;
+				    }
+				    if (insn_op == OpGroupNonUniformRotateKHR || insn_op == OpGroupNonUniformQuadAllKHR ||
+				        insn_op == OpGroupNonUniformQuadAnyKHR)
+				    {
+					    funcs_using_subgroup_emulation.insert(func_id);
+					    return;
+				    }
+			    }
+		    }
+	    });
+
+	// Propagate transitively through call graph.
+	bool changed = true;
+	while (changed)
+	{
+		changed = false;
+		ir.for_each_typed_id<SPIRFunction>(
+		    [&](uint32_t func_id, SPIRFunction &func)
+		    {
+			    if (func_id == ir.default_entry_point)
+				    return;
+			    if (funcs_using_subgroup_emulation.count(func_id))
+				    return;
+			    for (auto block_id : func.blocks)
+			    {
+				    auto &block = get<SPIRBlock>(block_id);
+				    for (auto &insn : block.ops)
+				    {
+					    if (static_cast<Op>(insn.op) == OpFunctionCall)
+					    {
+						    const uint32_t *insn_ops = stream(insn);
+						    uint32_t callee_id = insn_ops[2];
+						    if (funcs_using_subgroup_emulation.count(callee_id))
+						    {
+							    funcs_using_subgroup_emulation.insert(func_id);
+							    changed = true;
+							    return;
+						    }
+					    }
+				    }
+			    }
+		    });
+	}
+}
+
+void CompilerOpenCL::emit_subgroup_emulation_helpers()
+{
+	if (!opencl_options.emulate_subgroups || opencl_options.enable_subgroups)
+		return;
+	if (!needs_subgroup_emulation_scratch)
+		return;
+
+	// Barrier helper name (OpenCL 1.2 vs 2.0)
+	const char *barrier_call = opencl_options.supports_opencl_version(2, 0) ?
+	                               "work_group_barrier(CLK_LOCAL_MEM_FENCE)" :
+	                               "barrier(CLK_LOCAL_MEM_FENCE)";
+
+	// --- Broadcast ---
+	statement("static uint spv_emulate_broadcast_uint(__local uint* scratch, uint val, "
+	          "uint src_lane, uint linear_id, uint subgroup_base) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = scratch[subgroup_base + src_lane];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- BroadcastFirst (lane 0) ---
+	statement("static uint spv_emulate_broadcast_first_uint(__local uint* scratch, uint val, "
+	          "uint linear_id, uint subgroup_base) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = scratch[subgroup_base];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Shuffle ---
+	statement("static uint spv_emulate_shuffle_uint(__local uint* scratch, uint val, "
+	          "uint index, uint linear_id, uint subgroup_base) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = scratch[subgroup_base + index];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- ShuffleXor ---
+	statement("static uint spv_emulate_shuffle_xor_uint(__local uint* scratch, uint val, "
+	          "uint mask, uint lane_id, uint linear_id, uint subgroup_base) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = scratch[subgroup_base + (lane_id ^ mask)];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- ShuffleUp ---
+	statement("static uint spv_emulate_shuffle_up_uint(__local uint* scratch, uint val, "
+	          "uint delta, uint lane_id, uint linear_id, uint subgroup_base) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = (lane_id >= delta) ? scratch[linear_id - delta] : val;");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- ShuffleDown ---
+	statement("static uint spv_emulate_shuffle_down_uint(__local uint* scratch, uint val, "
+	          "uint delta, uint lane_id, uint linear_id, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = (lane_id + delta < subgroup_size) ? scratch[linear_id + delta] : val;");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Rotate ---
+	statement("static uint spv_emulate_rotate_uint(__local uint* scratch, uint val, "
+	          "uint delta, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint r = scratch[subgroup_base + ((lane_id + delta) % subgroup_size)];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Clustered rotate ---
+	statement("static uint spv_emulate_clustered_rotate_uint(__local uint* scratch, uint val, "
+	          "uint delta, uint lane_id, uint linear_id, uint subgroup_base, uint cluster_size) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint cluster_base = (lane_id / cluster_size) * cluster_size;");
+	statement(
+	    "    uint r = scratch[subgroup_base + cluster_base + ((lane_id - cluster_base + delta) % cluster_size)];");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Vote All ---
+	statement("static bool spv_emulate_all(__local uint* scratch, bool predicate, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = predicate ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = true;");
+	statement("    for (uint i = 0u; i < subgroup_size; i++)");
+	statement("        r = r && (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Vote Any ---
+	statement("static bool spv_emulate_any(__local uint* scratch, bool predicate, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = predicate ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < subgroup_size; i++)");
+	statement("        r = r || (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- AllEqual ---
+	statement("static bool spv_emulate_all_equal_uint(__local uint* scratch, uint val, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val;");
+	statement("    ", barrier_call, ";");
+	statement("    uint first = scratch[subgroup_base];");
+	statement("    bool r = true;");
+	statement("    for (uint i = 1u; i < subgroup_size; i++)");
+	statement("        r = r && (scratch[subgroup_base + i] == first);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Ballot ---
+	statement("static uint4 spv_emulate_ballot(__local uint* scratch, bool predicate, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = predicate ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    uint4 r = (uint4)(0u);");
+	statement("    for (uint i = 0u; i < subgroup_size; i++) {");
+	statement("        if (scratch[subgroup_base + i] != 0u) {");
+	statement("            uint word = i / 32u;");
+	statement("            uint bit = i % 32u;");
+	statement("            if (word == 0u) r.x |= (1u << bit);");
+	statement("            else if (word == 1u) r.y |= (1u << bit);");
+	statement("            else if (word == 2u) r.z |= (1u << bit);");
+	statement("            else r.w |= (1u << bit);");
+	statement("        }");
+	statement("    }");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// --- Mask builtins (pure arithmetic, no scratch) ---
+	statement("static uint4 spv_subgroup_eq_mask(uint lane_id) {");
+	statement("    uint4 r = (uint4)(0u);");
+	statement("    uint word = lane_id / 32u;");
+	statement("    uint bit = lane_id % 32u;");
+	statement("    if (word == 0u) r.x = (1u << bit);");
+	statement("    else if (word == 1u) r.y = (1u << bit);");
+	statement("    else if (word == 2u) r.z = (1u << bit);");
+	statement("    else r.w = (1u << bit);");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static uint4 spv_subgroup_ge_mask(uint lane_id, uint subgroup_size) {");
+	statement("    uint4 r = (uint4)(0u);");
+	statement("    for (uint i = lane_id; i < subgroup_size; i++) {");
+	statement("        uint word = i / 32u;");
+	statement("        uint bit = i % 32u;");
+	statement("        if (word == 0u) r.x |= (1u << bit);");
+	statement("        else if (word == 1u) r.y |= (1u << bit);");
+	statement("        else if (word == 2u) r.z |= (1u << bit);");
+	statement("        else r.w |= (1u << bit);");
+	statement("    }");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static uint4 spv_subgroup_gt_mask(uint lane_id, uint subgroup_size) {");
+	statement("    return spv_subgroup_ge_mask(lane_id + 1u, subgroup_size);");
+	statement("}");
+	statement("");
+
+	statement("static uint4 spv_subgroup_le_mask(uint lane_id, uint subgroup_size) {");
+	statement("    return spv_subgroup_ge_mask(0u, lane_id + 1u);");
+	statement("}");
+	statement("");
+
+	statement("static uint4 spv_subgroup_lt_mask(uint lane_id) {");
+	statement("    if (lane_id == 0u) return (uint4)(0u);");
+	statement("    return spv_subgroup_ge_mask(0u, lane_id);");
+	statement("}");
+	statement("");
+
+	// Arithmetic reduce/scan helpers: one set per type+operation.
+	// Uint operations
+	auto emit_arith_set = [&](const char *type_name, const char *as_cast, const char *suffix, const char *op,
+	                          const char *identity, bool use_cast)
+	{
+		string cast_read =
+		    use_cast ? join("as_", as_cast, "(scratch[subgroup_base + i])") : "scratch[subgroup_base + i]";
+		string cast_first = use_cast ? join("as_", as_cast, "(scratch[subgroup_base])") : "scratch[subgroup_base]";
+		string cast_write = use_cast ? join("as_uint(val)") : "val";
+		string cast_clust = use_cast ? join("as_", as_cast, "(scratch[subgroup_base + cluster_base_in_sg + i])") :
+		                               "scratch[subgroup_base + cluster_base_in_sg + i]";
+		string cast_clust_first = use_cast ? join("as_", as_cast, "(scratch[subgroup_base + cluster_base_in_sg])") :
+		                                     "scratch[subgroup_base + cluster_base_in_sg]";
+
+		// Reduce
+		statement("static ", type_name, " spv_emulate_reduce_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", cast_first, ";");
+		statement("    for (uint i = 1u; i < subgroup_size; i++)");
+		statement("        r = r ", op, " ", cast_read, ";");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Inclusive scan
+		statement("static ", type_name, " spv_emulate_inclusive_scan_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", cast_first, ";");
+		statement("    for (uint i = 1u; i <= lane_id; i++)");
+		statement("        r = r ", op, " ", cast_read, ";");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Exclusive scan
+		statement("static ", type_name, " spv_emulate_exclusive_scan_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", identity, ";");
+		statement("    for (uint i = 0u; i < lane_id; i++)");
+		statement("        r = r ", op, " ", cast_read, ";");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Clustered reduce
+		statement("static ", type_name, " spv_emulate_clustered_reduce_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;");
+		statement("    ", type_name, " r = ", cast_clust_first, ";");
+		statement("    for (uint i = 1u; i < cluster_size; i++)");
+		statement("        r = r ", op, " ", cast_clust, ";");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+	};
+
+	// For min/max we need function-call style instead of operator
+	auto emit_arith_func_set = [&](const char *type_name, const char *as_cast, const char *suffix,
+	                               const char *func_name, const char *identity, bool use_cast)
+	{
+		string cast_read =
+		    use_cast ? join("as_", as_cast, "(scratch[subgroup_base + i])") : "scratch[subgroup_base + i]";
+		string cast_first = use_cast ? join("as_", as_cast, "(scratch[subgroup_base])") : "scratch[subgroup_base]";
+		string cast_write = use_cast ? join("as_uint(val)") : "val";
+		string cast_clust = use_cast ? join("as_", as_cast, "(scratch[subgroup_base + cluster_base_in_sg + i])") :
+		                               "scratch[subgroup_base + cluster_base_in_sg + i]";
+		string cast_clust_first = use_cast ? join("as_", as_cast, "(scratch[subgroup_base + cluster_base_in_sg])") :
+		                                     "scratch[subgroup_base + cluster_base_in_sg]";
+
+		// Reduce
+		statement("static ", type_name, " spv_emulate_reduce_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", cast_first, ";");
+		statement("    for (uint i = 1u; i < subgroup_size; i++)");
+		statement("        r = ", func_name, "(r, ", cast_read, ");");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Inclusive scan
+		statement("static ", type_name, " spv_emulate_inclusive_scan_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", cast_first, ";");
+		statement("    for (uint i = 1u; i <= lane_id; i++)");
+		statement("        r = ", func_name, "(r, ", cast_read, ");");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Exclusive scan
+		statement("static ", type_name, " spv_emulate_exclusive_scan_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    ", type_name, " r = ", identity, ";");
+		statement("    for (uint i = 0u; i < lane_id; i++)");
+		statement("        r = ", func_name, "(r, ", cast_read, ");");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+
+		// Clustered reduce
+		statement("static ", type_name, " spv_emulate_clustered_reduce_", suffix, "(__local uint* scratch, ", type_name,
+		          " val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+		statement("    scratch[linear_id] = ", cast_write, ";");
+		statement("    ", barrier_call, ";");
+		statement("    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;");
+		statement("    ", type_name, " r = ", cast_clust_first, ";");
+		statement("    for (uint i = 1u; i < cluster_size; i++)");
+		statement("        r = ", func_name, "(r, ", cast_clust, ");");
+		statement("    ", barrier_call, ";");
+		statement("    return r;");
+		statement("}");
+		statement("");
+	};
+
+	// Integer arithmetic (uint)
+	emit_arith_set("uint", "uint", "add_uint", "+", "0u", false);
+	emit_arith_set("uint", "uint", "mul_uint", "*", "1u", false);
+	emit_arith_func_set("uint", "uint", "min_uint", "min", "UINT_MAX", false);
+	emit_arith_func_set("uint", "uint", "max_uint", "max", "0u", false);
+	emit_arith_set("uint", "uint", "and_uint", "&", "0xFFFFFFFFu", false);
+	emit_arith_set("uint", "uint", "or_uint", "|", "0u", false);
+	emit_arith_set("uint", "uint", "xor_uint", "^", "0u", false);
+
+	// Integer arithmetic (int) — uses as_int/as_uint bitcasts
+	emit_arith_set("int", "int", "add_int", "+", "0", true);
+	emit_arith_set("int", "int", "mul_int", "*", "1", true);
+	emit_arith_func_set("int", "int", "min_int", "min", "INT_MAX", true);
+	emit_arith_func_set("int", "int", "max_int", "max", "INT_MIN", true);
+	emit_arith_set("int", "int", "and_int", "&", "as_int(0xFFFFFFFFu)", true);
+	emit_arith_set("int", "int", "or_int", "|", "0", true);
+	emit_arith_set("int", "int", "xor_int", "^", "0", true);
+
+	// Float arithmetic — uses as_float/as_uint bitcasts
+	emit_arith_set("float", "float", "add_float", "+", "0.0f", true);
+	emit_arith_set("float", "float", "mul_float", "*", "1.0f", true);
+	emit_arith_func_set("float", "float", "min_float", "fmin", "INFINITY", true);
+	emit_arith_func_set("float", "float", "max_float", "fmax", "-INFINITY", true);
+
+	// Logical operations (bool → uint mapping)
+	statement("static bool spv_emulate_reduce_logical_and(__local uint* scratch, bool val, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = true;");
+	statement("    for (uint i = 0u; i < subgroup_size; i++)");
+	statement("        r = r && (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_inclusive_scan_logical_and(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = true;");
+	statement("    for (uint i = 0u; i <= lane_id; i++)");
+	statement("        r = r && (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_exclusive_scan_logical_and(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = true;");
+	statement("    for (uint i = 0u; i < lane_id; i++)");
+	statement("        r = r && (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_clustered_reduce_logical_and(__local uint* scratch, bool val, "
+	          "uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;");
+	statement("    bool r = true;");
+	statement("    for (uint i = 0u; i < cluster_size; i++)");
+	statement("        r = r && (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// logical_or
+	statement("static bool spv_emulate_reduce_logical_or(__local uint* scratch, bool val, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < subgroup_size; i++)");
+	statement("        r = r || (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_inclusive_scan_logical_or(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i <= lane_id; i++)");
+	statement("        r = r || (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_exclusive_scan_logical_or(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < lane_id; i++)");
+	statement("        r = r || (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_clustered_reduce_logical_or(__local uint* scratch, bool val, "
+	          "uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < cluster_size; i++)");
+	statement("        r = r || (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// logical_xor
+	statement("static bool spv_emulate_reduce_logical_xor(__local uint* scratch, bool val, "
+	          "uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < subgroup_size; i++)");
+	statement("        r = r != (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_inclusive_scan_logical_xor(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i <= lane_id; i++)");
+	statement("        r = r != (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_exclusive_scan_logical_xor(__local uint* scratch, bool val, "
+	          "uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < lane_id; i++)");
+	statement("        r = r != (scratch[subgroup_base + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_clustered_reduce_logical_xor(__local uint* scratch, bool val, "
+	          "uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {");
+	statement("    scratch[linear_id] = val ? 1u : 0u;");
+	statement("    ", barrier_call, ";");
+	statement("    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;");
+	statement("    bool r = false;");
+	statement("    for (uint i = 0u; i < cluster_size; i++)");
+	statement("        r = r != (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);");
+	statement("    ", barrier_call, ";");
+	statement("    return r;");
+	statement("}");
+	statement("");
+
+	// Ballot derived operations (pure arithmetic on uint4, no scratch needed)
+	statement("static bool spv_emulate_inverse_ballot(uint4 ballot, uint lane_id) {");
+	statement("    uint word = lane_id / 32u;");
+	statement("    uint bit = lane_id % 32u;");
+	statement("    uint v = (word == 0u) ? ballot.x : (word == 1u) ? ballot.y : (word == 2u) ? ballot.z : ballot.w;");
+	statement("    return (v & (1u << bit)) != 0u;");
+	statement("}");
+	statement("");
+
+	statement("static bool spv_emulate_ballot_bit_extract(uint4 ballot, uint index) {");
+	statement("    uint word = index / 32u;");
+	statement("    uint bit = index % 32u;");
+	statement("    uint v = (word == 0u) ? ballot.x : (word == 1u) ? ballot.y : (word == 2u) ? ballot.z : ballot.w;");
+	statement("    return (v & (1u << bit)) != 0u;");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_popcount4(uint4 v) {");
+	statement("    return popcount(v.x) + popcount(v.y) + popcount(v.z) + popcount(v.w);");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_emulate_ballot_bit_count(uint4 ballot) {");
+	statement("    return spv_popcount4(ballot);");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_emulate_ballot_inclusive_bit_count(uint4 ballot, uint lane_id) {");
+	statement("    uint4 masked = ballot;");
+	statement("    uint word = lane_id / 32u;");
+	statement("    uint bit = lane_id % 32u;");
+	statement("    uint mask = (bit == 31u) ? 0xFFFFFFFFu : ((1u << (bit + 1u)) - 1u);");
+	statement("    if (word == 0u) { masked.x &= mask; masked.y = 0u; masked.z = 0u; masked.w = 0u; }");
+	statement("    else if (word == 1u) { masked.y &= mask; masked.z = 0u; masked.w = 0u; }");
+	statement("    else if (word == 2u) { masked.z &= mask; masked.w = 0u; }");
+	statement("    else { masked.w &= mask; }");
+	statement("    return spv_popcount4(masked);");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_emulate_ballot_exclusive_bit_count(uint4 ballot, uint lane_id) {");
+	statement("    if (lane_id == 0u) return 0u;");
+	statement("    return spv_emulate_ballot_inclusive_bit_count(ballot, lane_id - 1u);");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_emulate_ballot_find_lsb(uint4 ballot) {");
+	statement("    if (ballot.x != 0u) return (uint)clz(ballot.x & (0u - ballot.x));");
+	statement("    if (ballot.y != 0u) return 32u + (uint)clz(ballot.y & (0u - ballot.y));");
+	statement("    if (ballot.z != 0u) return 64u + (uint)clz(ballot.z & (0u - ballot.z));");
+	statement("    if (ballot.w != 0u) return 96u + (uint)clz(ballot.w & (0u - ballot.w));");
+	statement("    return ~0u;");
+	statement("}");
+	statement("");
+
+	statement("static uint spv_emulate_ballot_find_msb(uint4 ballot) {");
+	statement("    if (ballot.w != 0u) return 127u - (uint)clz(ballot.w);");
+	statement("    if (ballot.z != 0u) return 95u - (uint)clz(ballot.z);");
+	statement("    if (ballot.y != 0u) return 63u - (uint)clz(ballot.y);");
+	statement("    if (ballot.x != 0u) return 31u - (uint)clz(ballot.x);");
+	statement("    return ~0u;");
+	statement("}");
+	statement("");
+}
+
+void CompilerOpenCL::emit_subgroup_op_emulated(const Instruction &i)
+{
+	const uint32_t *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+
+	// Validate scope is Subgroup
+	if (op != OpGroupNonUniformQuadAllKHR && op != OpGroupNonUniformQuadAnyKHR)
+	{
+		auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
+		if (scope != ScopeSubgroup)
+			SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+	}
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+	uint32_t fixed = opencl_options.fixed_subgroup_size;
+
+	// Request scratch buffer (triggers recompile if first time).
+	auto require_scratch = [this]()
+	{
+		if (!needs_subgroup_emulation_scratch)
+		{
+			needs_subgroup_emulation_scratch = true;
+			force_recompile();
+		}
+	};
+
+	// Helper to get the as_uint cast for a value
+	auto to_uint_cast = [&](uint32_t value_id) -> string
+	{
+		auto &type = expression_type(value_id);
+		if (type.basetype == SPIRType::UInt)
+			return to_expression(value_id);
+		else if (type.basetype == SPIRType::Int)
+			return join("as_uint(", to_expression(value_id), ")");
+		else if (type.basetype == SPIRType::Float)
+			return join("as_uint(", to_expression(value_id), ")");
+		else if (type.basetype == SPIRType::Boolean)
+			return join("(", to_expression(value_id), " ? 1u : 0u)");
+		return to_expression(value_id);
+	};
+
+	// Helper to wrap result with type cast from uint
+	auto from_uint_cast = [&](const string &expr, uint32_t value_id) -> string
+	{
+		auto &type = expression_type(value_id);
+		if (type.basetype == SPIRType::UInt)
+			return expr;
+		else if (type.basetype == SPIRType::Int)
+			return join("as_int(", expr, ")");
+		else if (type.basetype == SPIRType::Float)
+			return join("as_float(", expr, ")");
+		return expr;
+	};
+
+	// For emulated vector ops, decompose per-component calling the scalar helper.
+	auto emit_emulated_vec = [&](uint32_t value_id, const string &scalar_call_prefix, const string &scalar_call_suffix)
+	{
+		auto &type = expression_type(value_id);
+		if (type.vecsize > 1)
+		{
+			auto &out_type = get<SPIRType>(result_type);
+			string expr = "(" + type_to_glsl(out_type) + ")(";
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				if (c > 0)
+					expr += ", ";
+				string component = join(to_enclosed_expression(value_id), ".", "xyzw"[c]);
+				// Cast component to uint for the helper
+				string as_uint_comp;
+				if (type.basetype == SPIRType::UInt)
+					as_uint_comp = component;
+				else if (type.basetype == SPIRType::Int)
+					as_uint_comp = join("as_uint(", component, ")");
+				else if (type.basetype == SPIRType::Float)
+					as_uint_comp = join("as_uint(", component, ")");
+				else
+					as_uint_comp = component;
+
+				string result_comp = scalar_call_prefix + as_uint_comp + scalar_call_suffix;
+				// Cast back from uint
+				if (type.basetype == SPIRType::Int)
+					result_comp = join("as_int(", result_comp, ")");
+				else if (type.basetype == SPIRType::Float)
+					result_comp = join("as_float(", result_comp, ")");
+				expr += result_comp;
+			}
+			expr += ")";
+			emit_op(result_type, id, expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+		else
+		{
+			string result_expr = scalar_call_prefix + to_uint_cast(value_id) + scalar_call_suffix;
+			result_expr = from_uint_cast(result_expr, value_id);
+			emit_op(result_type, id, result_expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+	};
+
+	switch (op)
+	{
+	case OpGroupNonUniformElect:
+		if (fixed == 1)
+			emit_op(result_type, id, "true", true);
+		else
+			emit_op(result_type, id, "(_spv_lane_id == 0u)", true);
+		break;
+
+	case OpGroupNonUniformAll:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_all(_spv_subgroup_scratch, ", to_expression(ops[3]),
+			             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		break;
+
+	case OpGroupNonUniformAny:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_any(_spv_subgroup_scratch, ", to_expression(ops[3]),
+			             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		break;
+
+	case OpGroupNonUniformAllEqual:
+	{
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, "true", true);
+		}
+		else
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_all_equal_uint(_spv_subgroup_scratch, ", to_uint_cast(ops[3]),
+			             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		break;
+	}
+
+	case OpGroupNonUniformBroadcast:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			string src_lane = to_expression(ops[4]);
+			emit_emulated_vec(ops[3], "spv_emulate_broadcast_uint(_spv_subgroup_scratch, ",
+			                  join(", ", src_lane, ", _spv_linear_id, _spv_subgroup_base)"));
+		}
+		break;
+
+	case OpGroupNonUniformBroadcastFirst:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_emulated_vec(ops[3], "spv_emulate_broadcast_first_uint(_spv_subgroup_scratch, ",
+			                  ", _spv_linear_id, _spv_subgroup_base)");
+		}
+		break;
+
+	case OpGroupNonUniformBallot:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, join("(", to_expression(ops[3]), " ? (uint4)(1u, 0u, 0u, 0u) : (uint4)(0u))"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_ballot(_spv_subgroup_scratch, ", to_expression(ops[3]),
+			             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		require_scratch();
+		emit_op(result_type, id, join("spv_emulate_inverse_ballot(", to_expression(ops[3]), ", _spv_lane_id)"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		require_scratch();
+		emit_op(result_type, id,
+		        join("spv_emulate_ballot_bit_extract(", to_expression(ops[3]), ", ", to_expression(ops[4]), ")"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotFindLSB:
+		require_scratch();
+		emit_op(result_type, id, join("spv_emulate_ballot_find_lsb(", to_expression(ops[3]), ")"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotFindMSB:
+		require_scratch();
+		emit_op(result_type, id, join("spv_emulate_ballot_find_msb(", to_expression(ops[3]), ")"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		require_scratch();
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+		{
+			emit_op(result_type, id, join("spv_emulate_ballot_bit_count(", to_expression(ops[4]), ")"),
+			        should_forward(ops[4]));
+			inherit_expression_dependencies(id, ops[4]);
+		}
+		else if (operation == GroupOperationInclusiveScan)
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_ballot_inclusive_bit_count(", to_expression(ops[4]), ", _spv_lane_id)"),
+			        should_forward(ops[4]));
+			inherit_expression_dependencies(id, ops[4]);
+		}
+		else if (operation == GroupOperationExclusiveScan)
+		{
+			emit_op(result_type, id,
+			        join("spv_emulate_ballot_exclusive_bit_count(", to_expression(ops[4]), ", _spv_lane_id)"),
+			        should_forward(ops[4]));
+			inherit_expression_dependencies(id, ops[4]);
+		}
+		else
+			SPIRV_CROSS_THROW("Invalid group operation for BallotBitCount.");
+		break;
+	}
+
+	case OpGroupNonUniformShuffle:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			string idx = to_expression(ops[4]);
+			emit_emulated_vec(ops[3], "spv_emulate_shuffle_uint(_spv_subgroup_scratch, ",
+			                  join(", ", idx, ", _spv_linear_id, _spv_subgroup_base)"));
+		}
+		break;
+
+	case OpGroupNonUniformShuffleXor:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			string mask = to_expression(ops[4]);
+			emit_emulated_vec(ops[3], "spv_emulate_shuffle_xor_uint(_spv_subgroup_scratch, ",
+			                  join(", ", mask, ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base)"));
+		}
+		break;
+
+	case OpGroupNonUniformShuffleUp:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			string delta = to_expression(ops[4]);
+			emit_emulated_vec(ops[3], "spv_emulate_shuffle_up_uint(_spv_subgroup_scratch, ",
+			                  join(", ", delta, ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base)"));
+		}
+		break;
+
+	case OpGroupNonUniformShuffleDown:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			string delta = to_expression(ops[4]);
+			emit_emulated_vec(ops[3], "spv_emulate_shuffle_down_uint(_spv_subgroup_scratch, ",
+			                  join(", ", delta, ", _spv_lane_id, _spv_linear_id, _spv_subgroup_size)"));
+		}
+		break;
+
+	case OpGroupNonUniformRotateKHR:
+		require_scratch();
+		if (fixed == 1)
+		{
+			emit_op(result_type, id, to_enclosed_expression(ops[3]), should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else if (i.length > 5)
+		{
+			// Clustered rotate
+			string delta = to_expression(ops[4]);
+			string cluster_size = to_expression(ops[5]);
+			emit_emulated_vec(
+			    ops[3], "spv_emulate_clustered_rotate_uint(_spv_subgroup_scratch, ",
+			    join(", ", delta, ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, ", cluster_size, ")"));
+		}
+		else
+		{
+			string delta = to_expression(ops[4]);
+			emit_emulated_vec(
+			    ops[3], "spv_emulate_rotate_uint(_spv_subgroup_scratch, ",
+			    join(", ", delta, ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"));
+		}
+		break;
+
+	// === Arithmetic ops (Reduce / InclusiveScan / ExclusiveScan / ClusteredReduce) ===
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformIAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformIMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformSMin:
+	case OpGroupNonUniformSMax:
+	case OpGroupNonUniformUMin:
+	case OpGroupNonUniformUMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
+	{
+		require_scratch();
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		uint32_t value_id = ops[4];
+
+		if (fixed == 1)
+		{
+			// For subgroup_size==1: reduce/inclusive return val; exclusive returns identity.
+			if (operation == GroupOperationExclusiveScan)
+			{
+				// Return the identity value for the operation
+				auto &type = get<SPIRType>(result_type);
+				string identity;
+				switch (op)
+				{
+				case OpGroupNonUniformFAdd:
+				case OpGroupNonUniformIAdd:
+					identity = (type.basetype == SPIRType::Float) ? "0.0f" : "0";
+					break;
+				case OpGroupNonUniformFMul:
+				case OpGroupNonUniformIMul:
+					identity = (type.basetype == SPIRType::Float) ? "1.0f" : "1";
+					break;
+				case OpGroupNonUniformFMin:
+					identity = "INFINITY";
+					break;
+				case OpGroupNonUniformFMax:
+					identity = "-INFINITY";
+					break;
+				case OpGroupNonUniformSMin:
+					identity = "INT_MAX";
+					break;
+				case OpGroupNonUniformSMax:
+					identity = "INT_MIN";
+					break;
+				case OpGroupNonUniformUMin:
+					identity = "UINT_MAX";
+					break;
+				case OpGroupNonUniformUMax:
+					identity = "0u";
+					break;
+				case OpGroupNonUniformBitwiseAnd:
+					identity = (type.basetype == SPIRType::Int) ? "as_int(0xFFFFFFFFu)" : "0xFFFFFFFFu";
+					break;
+				case OpGroupNonUniformBitwiseOr:
+				case OpGroupNonUniformBitwiseXor:
+					identity = (type.basetype == SPIRType::Int) ? "0" : "0u";
+					break;
+				case OpGroupNonUniformLogicalAnd:
+					identity = "true";
+					break;
+				case OpGroupNonUniformLogicalOr:
+				case OpGroupNonUniformLogicalXor:
+					identity = "false";
+					break;
+				default:
+					identity = "0";
+					break;
+				}
+
+				if (type.vecsize > 1)
+					emit_op(result_type, id, join("(", type_to_glsl(type), ")(", identity, ")"), true);
+				else
+					emit_op(result_type, id, identity, true);
+			}
+			else
+			{
+				// Reduce, InclusiveScan, ClusteredReduce all return the value itself
+				emit_op(result_type, id, to_enclosed_expression(value_id), should_forward(value_id));
+				inherit_expression_dependencies(id, value_id);
+			}
+			break;
+		}
+
+		// Determine the suffix for the helper function
+		const char *op_suffix = nullptr;
+		bool is_logical = false;
+		switch (op)
+		{
+		case OpGroupNonUniformFAdd:
+			op_suffix = "add_float";
+			break;
+		case OpGroupNonUniformIAdd:
+		{
+			auto &type = expression_type(value_id);
+			op_suffix = (type.basetype == SPIRType::Int) ? "add_int" : "add_uint";
+			break;
+		}
+		case OpGroupNonUniformFMul:
+			op_suffix = "mul_float";
+			break;
+		case OpGroupNonUniformIMul:
+		{
+			auto &type = expression_type(value_id);
+			op_suffix = (type.basetype == SPIRType::Int) ? "mul_int" : "mul_uint";
+			break;
+		}
+		case OpGroupNonUniformFMin:
+			op_suffix = "min_float";
+			break;
+		case OpGroupNonUniformFMax:
+			op_suffix = "max_float";
+			break;
+		case OpGroupNonUniformSMin:
+			op_suffix = "min_int";
+			break;
+		case OpGroupNonUniformSMax:
+			op_suffix = "max_int";
+			break;
+		case OpGroupNonUniformUMin:
+			op_suffix = "min_uint";
+			break;
+		case OpGroupNonUniformUMax:
+			op_suffix = "max_uint";
+			break;
+		case OpGroupNonUniformBitwiseAnd:
+		{
+			auto &type = expression_type(value_id);
+			op_suffix = (type.basetype == SPIRType::Int) ? "and_int" : "and_uint";
+			break;
+		}
+		case OpGroupNonUniformBitwiseOr:
+		{
+			auto &type = expression_type(value_id);
+			op_suffix = (type.basetype == SPIRType::Int) ? "or_int" : "or_uint";
+			break;
+		}
+		case OpGroupNonUniformBitwiseXor:
+		{
+			auto &type = expression_type(value_id);
+			op_suffix = (type.basetype == SPIRType::Int) ? "xor_int" : "xor_uint";
+			break;
+		}
+		case OpGroupNonUniformLogicalAnd:
+			op_suffix = "logical_and";
+			is_logical = true;
+			break;
+		case OpGroupNonUniformLogicalOr:
+			op_suffix = "logical_or";
+			is_logical = true;
+			break;
+		case OpGroupNonUniformLogicalXor:
+			op_suffix = "logical_xor";
+			is_logical = true;
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unsupported arithmetic op for emulation.");
+			break;
+		}
+
+		// Determine the group operation prefix
+		const char *group_prefix = nullptr;
+		switch (operation)
+		{
+		case GroupOperationReduce:
+			group_prefix = "reduce";
+			break;
+		case GroupOperationInclusiveScan:
+			group_prefix = "inclusive_scan";
+			break;
+		case GroupOperationExclusiveScan:
+			group_prefix = "exclusive_scan";
+			break;
+		case GroupOperationClusteredReduce:
+			group_prefix = "clustered_reduce";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unsupported group operation for emulation.");
+			break;
+		}
+
+		string helper_name = join("spv_emulate_", group_prefix, "_", op_suffix);
+
+		if (is_logical)
+		{
+			// Logical ops work on bool directly (scalar only)
+			string val_expr = to_expression(value_id);
+			string expr;
+			if (operation == GroupOperationClusteredReduce)
+			{
+				string cluster_size = to_expression(ops[5]);
+				expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr, ", ", cluster_size,
+				            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			}
+			else if (operation == GroupOperationReduce)
+			{
+				expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr,
+				            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			}
+			else
+			{
+				// inclusive/exclusive scan
+				expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr,
+				            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			}
+			emit_op(result_type, id, expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+		else
+		{
+			// Arithmetic ops: use vector decomposition like native subgroup ops
+			auto &type = expression_type(value_id);
+			if (type.vecsize > 1)
+			{
+				auto &out_type = get<SPIRType>(result_type);
+				string expr = "(" + type_to_glsl(out_type) + ")(";
+				for (uint32_t c = 0; c < type.vecsize; c++)
+				{
+					if (c > 0)
+						expr += ", ";
+					string component = join(to_enclosed_expression(value_id), ".", "xyzw"[c]);
+					string call;
+					if (operation == GroupOperationClusteredReduce)
+					{
+						string cluster_size = to_expression(ops[5]);
+						call = join(helper_name, "(_spv_subgroup_scratch, ", component, ", ", cluster_size,
+						            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					}
+					else if (operation == GroupOperationReduce)
+					{
+						call = join(helper_name, "(_spv_subgroup_scratch, ", component,
+						            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					}
+					else
+					{
+						call = join(helper_name, "(_spv_subgroup_scratch, ", component,
+						            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					}
+					expr += call;
+				}
+				expr += ")";
+				emit_op(result_type, id, expr, should_forward(value_id));
+				inherit_expression_dependencies(id, value_id);
+			}
+			else
+			{
+				string val_expr = to_expression(value_id);
+				string expr;
+				if (operation == GroupOperationClusteredReduce)
+				{
+					string cluster_size = to_expression(ops[5]);
+					expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr, ", ", cluster_size,
+					            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				}
+				else if (operation == GroupOperationReduce)
+				{
+					expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr,
+					            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				}
+				else
+				{
+					expr = join(helper_name, "(_spv_subgroup_scratch, ", val_expr,
+					            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				}
+				emit_op(result_type, id, expr, should_forward(value_id));
+				inherit_expression_dependencies(id, value_id);
+			}
+		}
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported subgroup op for OpenCL emulation.");
+	}
+}
+
 void CompilerOpenCL::emit_subgroup_op(const Instruction &i)
 {
 	const uint32_t *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
+
+	if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+	{
+		emit_subgroup_op_emulated(i);
+		return;
+	}
 
 	if (!opencl_options.enable_subgroups)
 		SPIRV_CROSS_THROW("Subgroup operations require enable_subgroups option.");
@@ -4325,21 +5769,36 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 
 		if (execution_scope == ScopeSubgroup)
 		{
-			if (!opencl_options.enable_subgroups)
-				SPIRV_CROSS_THROW("Subgroup barriers require enable_subgroups option.");
-
-			// Subgroup barrier with memory fence flags
-			const uint32_t all_barriers =
-			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
-
-			if (semantics == 0 || (semantics & all_barriers) == all_barriers)
+			if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
 			{
-				statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+				// Emulated subgroup barrier: no-op for subgroup_size==1,
+				// otherwise use work_group_barrier (over-syncs but correct).
+				if (opencl_options.fixed_subgroup_size != 1)
+				{
+					if (opencl_options.supports_opencl_version(2, 0))
+						statement("work_group_barrier(CLK_LOCAL_MEM_FENCE);");
+					else
+						statement("barrier(CLK_LOCAL_MEM_FENCE);");
+				}
 			}
 			else
 			{
-				string fence_flags = opencl_mem_fence_flags(semantics);
-				statement("sub_group_barrier(", fence_flags, ");");
+				if (!opencl_options.enable_subgroups)
+					SPIRV_CROSS_THROW("Subgroup barriers require enable_subgroups option.");
+
+				// Subgroup barrier with memory fence flags
+				const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+				                              MemorySemanticsImageMemoryMask;
+
+				if (semantics == 0 || (semantics & all_barriers) == all_barriers)
+				{
+					statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+				}
+				else
+				{
+					string fence_flags = opencl_mem_fence_flags(semantics);
+					statement("sub_group_barrier(", fence_flags, ");");
+				}
 			}
 		}
 		else
@@ -4378,21 +5837,35 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		{
 			if (memory_scope == ScopeSubgroup)
 			{
-				if (!opencl_options.enable_subgroups)
-					SPIRV_CROSS_THROW("Subgroup memory barriers require enable_subgroups option.");
-
-				const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
-				                              MemorySemanticsImageMemoryMask;
-
-				if ((semantics & all_barriers) == all_barriers ||
-				    (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask)))
+				if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
 				{
-					statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+					// Emulated: no-op for size==1, otherwise work_group_barrier
+					if (opencl_options.fixed_subgroup_size != 1)
+					{
+						if (opencl_options.supports_opencl_version(2, 0))
+							statement("work_group_barrier(CLK_LOCAL_MEM_FENCE);");
+						else
+							statement("barrier(CLK_LOCAL_MEM_FENCE);");
+					}
 				}
 				else
 				{
-					string fence_flags = opencl_mem_fence_flags(semantics);
-					statement("sub_group_barrier(", fence_flags, ");");
+					if (!opencl_options.enable_subgroups)
+						SPIRV_CROSS_THROW("Subgroup memory barriers require enable_subgroups option.");
+
+					const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask |
+					                              MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
+
+					if ((semantics & all_barriers) == all_barriers ||
+					    (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask)))
+					{
+						statement("sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);");
+					}
+					else
+					{
+						string fence_flags = opencl_mem_fence_flags(semantics);
+						statement("sub_group_barrier(", fence_flags, ");");
+					}
 				}
 			}
 			else

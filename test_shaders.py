@@ -586,9 +586,9 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     return (spirv_path, hlsl_path)
 
 def path_to_opencl_standard_cli(shader):
-    # clang seems warn about cl_khr_subgroups unless is specified.
+    # clang seems warn about cl_khr_subgroups unless 2.0 is specified.
     # Revisit when OpenCL 3.0 support is no longer experimental.
-    if '.subgroups.' in shader:
+    if '.subgroups.' in shader or '.subgroups-core.' in shader:
         return '200'
     # OpenCL 3.0 support in clang is experimental and 2.1 and 2.2 seem unsupported.
     if '.cl30.' in shader:
@@ -618,8 +618,10 @@ def validate_shader_opencl(shader, opt, paths):
     if '.fp64.' in shader:
         extensions.append('cl_khr_fp64')
     if '.subgroups-emulate.' in shader:
-        if '.subgroups.' in shader:
-            extensions.append('cl_khr_subgroups')
+        # Make sure no extensions are included
+        pass
+    elif '.subgroups-core.' in shader:
+        extensions.append('cl_khr_subgroups')
     elif '.subgroups.' in shader:
         extensions.append('cl_khr_subgroups')
         extensions.append('cl_khr_subgroup_ballot')
@@ -703,12 +705,14 @@ def cross_compile_opencl(shader, spirv, opt, iterations, paths):
         opencl_args.append('--opencl-fp16')
     if '.fp64.' in shader:
         opencl_args.append('--opencl-fp64')
-    if '.subgroups.' in shader:
-        opencl_args.append('--opencl-subgroups-all')
     if '.subgroups-emulate.' in shader:
+        if '.subgroups.' in shader:
+            opencl_args.append('--opencl-subgroups-all')
         opencl_args.append('--opencl-emulate-subgroups')
         opencl_args.append('--opencl-fixed-subgroup-size')
         opencl_args.append('32')
+    elif '.subgroups.' in shader:
+        opencl_args.append('--opencl-subgroups-all')
 
     if shader_is_invalid_spirv(shader):
         subprocess.run(opencl_args)

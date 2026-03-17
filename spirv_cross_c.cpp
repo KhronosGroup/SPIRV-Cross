@@ -833,6 +833,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_OPENCL_FIXED_SUBGROUP_SIZE:
 		options->opencl.fixed_subgroup_size = value;
 		break;
+	case SPVC_COMPILER_OPTION_OPENCL_MAX_WORKGROUP_SIZE:
+		options->opencl.max_workgroup_size = value;
+		break;
 #endif
 
 	default:

@@ -57,6 +57,8 @@ public:
 		bool emulate_subgroups = false;
 		// Size of subgroup emulation
 		uint32_t fixed_subgroup_size = 0;
+		// Maximum workgroup size (used for scratch buffer sizing when reqd_work_group_size is absent)
+		uint32_t max_workgroup_size = 256;
 
 		void set_opencl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
 		{
@@ -204,6 +206,20 @@ protected:
 	bool needs_subgroup_shuffle_relative = false;
 	bool needs_subgroup_clustered = false;
 	bool needs_subgroup_rotate = false;
+
+	// Subgroup emulation scratch buffer flags (set during emit, trigger force_recompile).
+	bool needs_subgroup_emulation_scratch = false;
+	bool needs_subgroup_emulation_scratch64 = false;
+	// Set of function IDs that need subgroup emulation scratch parameters threaded.
+	std::unordered_set<uint32_t> funcs_using_subgroup_emulation;
+	// Helpers to emit subgroup emulation polyfills and scratch infrastructure.
+	void emit_subgroup_emulation_helpers();
+	void emit_subgroup_emulation_entry_point_vars();
+	uint32_t get_emulation_max_workgroup_size() const;
+	std::string get_emulation_subgroup_size_expr() const;
+	void emit_subgroup_op_emulated(const Instruction &i);
+	std::string subgroup_emulation_scratch_type(bool is_64bit) const;
+	void scan_subgroup_emulation_usage();
 
 	// Matrix type support: tracks which matrix signatures (basetype, vecsize, columns) are needed.
 	struct MatrixTypeKey

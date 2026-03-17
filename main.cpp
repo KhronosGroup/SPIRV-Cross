@@ -785,6 +785,7 @@ struct CLIArguments
 	bool opencl_enable_subgroups_all = false;
 	bool opencl_emulate_subgroups = false;
 	uint32_t opencl_fixed_subgroup_size = 0;
+	uint32_t opencl_max_workgroup_size = 256;
 };
 
 static void print_version()
@@ -1371,6 +1372,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		ocl_opts.enable_subgroups_all = args.opencl_enable_subgroups_all;
 		ocl_opts.emulate_subgroups = args.opencl_emulate_subgroups;
 		ocl_opts.fixed_subgroup_size = args.opencl_fixed_subgroup_size;
+		ocl_opts.max_workgroup_size = args.opencl_max_workgroup_size;
 		ocl_comp->set_opencl_options(ocl_opts);
 	}
 	else if (args.hlsl)
@@ -2009,6 +2011,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--opencl-emulate-subgroups", [&args](CLIParser &) { args.opencl_emulate_subgroups = true; });
 	cbs.add("--opencl-fixed-subgroup-size",
 	        [&args](CLIParser &parser) { args.opencl_fixed_subgroup_size = parser.next_uint(); });
+	cbs.add("--opencl-max-workgroup-size",
+	        [&args](CLIParser &parser) { args.opencl_max_workgroup_size = parser.next_uint(); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point",
 	        [&args](CLIParser &parser)
