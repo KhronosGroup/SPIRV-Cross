@@ -12,6 +12,13 @@ layout(std430, binding = 0) buffer SSBO
 	uint udat;
 };
 
+float helper(float val)
+{
+	float reduced = subgroupAdd(val);
+	bool elected = subgroupElect();
+	return elected ? reduced : 0.0;
+}
+
 void main()
 {
 	// Builtins
@@ -64,9 +71,12 @@ void main()
 	uint uexc_min = subgroupExclusiveMin(udat);
 	uint uexc_max = subgroupExclusiveMax(udat);
 
+	// Call helper function that uses subgroup ops
+	float from_helper = helper(FragColor);
+
 	// Write results to prevent dead-code elimination
 	FragColor = fadd + fmin + fmax + finc_add + finc_min + finc_max + fexc_add + fexc_min + fexc_max
 		+ float(iadd + smin + smax + iinc_add + iinc_min + iinc_max + iexc_add + iexc_min + iexc_max)
 		+ float(umin + umax + uinc_min + uinc_max + uexc_min + uexc_max + broadcasted)
-		+ float(has_all) + float(has_any);
+		+ float(has_all) + float(has_any) + from_helper;
 }

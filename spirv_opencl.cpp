@@ -181,20 +181,26 @@ void CompilerOpenCL::emit_header()
 		statement("#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable");
 	if (opencl_options.enable_subgroups)
 		statement("#pragma OPENCL EXTENSION cl_khr_subgroups : enable");
-	if (needs_subgroup_vote)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable");
-	if (needs_subgroup_ballot)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable");
-	if (needs_subgroup_arithmetic)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_arithmetic : enable");
-	if (needs_subgroup_shuffle)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle : enable");
-	if (needs_subgroup_shuffle_relative)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle_relative : enable");
-	if (needs_subgroup_clustered)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_clustered_reduce : enable");
-	if (needs_subgroup_rotate)
-		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_rotate : enable");
+	// In combined mode, extension-specific pragmas are emitted inside #ifdef blocks
+	// in the wrapper section, not here.
+	bool combined_subgroup_mode = opencl_options.emulate_subgroups && opencl_options.enable_subgroups;
+	if (!combined_subgroup_mode)
+	{
+		if (needs_subgroup_vote)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable");
+		if (needs_subgroup_ballot)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable");
+		if (needs_subgroup_arithmetic)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_arithmetic : enable");
+		if (needs_subgroup_shuffle)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle : enable");
+		if (needs_subgroup_shuffle_relative)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle_relative : enable");
+		if (needs_subgroup_clustered)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_clustered_reduce : enable");
+		if (needs_subgroup_rotate)
+			statement("#pragma OPENCL EXTENSION cl_khr_subgroup_rotate : enable");
+	}
 	statement("");
 
 	// Emit FP_CONTRACT pragma based on ContractionOff execution mode and FPFastMathDefault.
@@ -771,8 +777,11 @@ void CompilerOpenCL::emit_resources()
 		statement("");
 	}
 
-	// Subgroup emulation helper functions.
-	emit_subgroup_emulation_helpers();
+	// Subgroup emulation helper functions and combined-mode wrappers.
+	if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		emit_subgroup_combined_wrappers();
+	else
+		emit_subgroup_emulation_helpers();
 
 	// Default sampler for combined image+sampler usage (OpenCL C requires file-scope const sampler_t).
 	if (needs_default_sampler)
@@ -1003,7 +1012,9 @@ void CompilerOpenCL::emit_entry_point_declarations()
 	}
 
 	// Emit subgroup emulation local variables and scratch buffers.
-	if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
+	if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		emit_subgroup_combined_entry_point_vars();
+	else if (opencl_options.emulate_subgroups && !opencl_options.enable_subgroups)
 		emit_subgroup_emulation_entry_point_vars();
 
 	// Materialize Input builtin variables as local variables.
@@ -1132,6 +1143,20 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "spv_subgroup_eq_mask(_spv_lane_id)";
 		}
+		if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_ballot)
+			{
+				needs_subgroup_ballot = true;
+				force_recompile();
+			}
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_get_sub_group_eq_mask(_spv_lane_id)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1149,6 +1174,20 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 				force_recompile();
 			}
 			return "spv_subgroup_ge_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
+		if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_ballot)
+			{
+				needs_subgroup_ballot = true;
+				force_recompile();
+			}
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_get_sub_group_ge_mask(_spv_lane_id, _spv_subgroup_size)";
 		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
@@ -1168,6 +1207,20 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "spv_subgroup_gt_mask(_spv_lane_id, _spv_subgroup_size)";
 		}
+		if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_ballot)
+			{
+				needs_subgroup_ballot = true;
+				force_recompile();
+			}
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_get_sub_group_gt_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1186,6 +1239,20 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "spv_subgroup_le_mask(_spv_lane_id, _spv_subgroup_size)";
 		}
+		if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_ballot)
+			{
+				needs_subgroup_ballot = true;
+				force_recompile();
+			}
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_get_sub_group_le_mask(_spv_lane_id, _spv_subgroup_size)";
+		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
 		if (!needs_subgroup_ballot)
@@ -1203,6 +1270,20 @@ string CompilerOpenCL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 				force_recompile();
 			}
 			return "spv_subgroup_lt_mask(_spv_lane_id)";
+		}
+		if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+		{
+			if (!needs_subgroup_ballot)
+			{
+				needs_subgroup_ballot = true;
+				force_recompile();
+			}
+			if (!needs_subgroup_emulation_scratch)
+			{
+				needs_subgroup_emulation_scratch = true;
+				force_recompile();
+			}
+			return "spv_get_sub_group_lt_mask(_spv_lane_id)";
 		}
 		if (!opencl_options.enable_subgroups)
 			SPIRV_CROSS_THROW("Subgroup builtins require enable_subgroups option.");
@@ -3533,7 +3614,7 @@ void CompilerOpenCL::emit_subgroup_emulation_entry_point_vars()
 
 void CompilerOpenCL::scan_subgroup_emulation_usage()
 {
-	if (!opencl_options.emulate_subgroups || opencl_options.enable_subgroups)
+	if (!opencl_options.emulate_subgroups)
 		return;
 
 	funcs_using_subgroup_emulation.clear();
@@ -4179,6 +4260,739 @@ void CompilerOpenCL::emit_subgroup_emulation_helpers()
 	statement("");
 }
 
+void CompilerOpenCL::emit_subgroup_combined_entry_point_vars()
+{
+	// In combined mode, derive subgroup geometry from native cl_khr_subgroups builtins.
+	statement("uint _spv_subgroup_size = get_sub_group_size();");
+	statement("uint _spv_lane_id = get_sub_group_local_id();");
+	statement("uint _spv_subgroup_id = get_sub_group_id();");
+	statement("uint _spv_linear_id = _spv_subgroup_id * _spv_subgroup_size + _spv_lane_id;");
+	statement("uint _spv_subgroup_base = _spv_subgroup_id * _spv_subgroup_size;");
+
+	if (needs_subgroup_emulation_scratch)
+	{
+		uint32_t max_wg = get_emulation_max_workgroup_size();
+		statement("__local uint _spv_subgroup_scratch[", max_wg, "];");
+	}
+	if (needs_subgroup_emulation_scratch64)
+	{
+		uint32_t max_wg = get_emulation_max_workgroup_size();
+		statement("__local ulong _spv_subgroup_scratch64[", max_wg, "];");
+	}
+}
+
+void CompilerOpenCL::emit_subgroup_combined_wrappers()
+{
+	if (!opencl_options.emulate_subgroups || !opencl_options.enable_subgroups)
+		return;
+	if (!needs_subgroup_emulation_scratch)
+		return;
+
+	// Emit all emulation helpers unconditionally (unused static functions are DCE'd by compiler).
+	// These are the same helpers as pure emulation mode.
+	emit_subgroup_emulation_helpers();
+
+	// Now emit per-extension #ifdef/#else macro blocks.
+	// In the #ifdef path: macros map spv_* to native calls.
+	// In the #else path: macros map spv_* to the emulation helpers emitted above.
+
+	// === cl_khr_subgroup_non_uniform_vote ===
+	if (needs_subgroup_vote)
+	{
+		statement("#ifdef cl_khr_subgroup_non_uniform_vote");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable");
+		statement("#define spv_sub_group_elect(lane_id) sub_group_elect()");
+		statement("#define spv_all_equal_uint(scratch, val, linear_id, subgroup_base, subgroup_size) "
+		          "sub_group_non_uniform_all_equal((val))");
+		statement("#else");
+		statement("#define spv_sub_group_elect(lane_id) ((lane_id) == 0u)");
+		statement("#define spv_all_equal_uint(scratch, val, linear_id, subgroup_base, subgroup_size) "
+		          "spv_emulate_all_equal_uint((scratch), (val), (linear_id), (subgroup_base), (subgroup_size))");
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_ballot ===
+	if (needs_subgroup_ballot)
+	{
+		statement("#ifdef cl_khr_subgroup_ballot");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_ballot : enable");
+		// Native macros
+		statement("#define spv_broadcast_first_uint(scratch, val, linear_id, subgroup_base) "
+		          "sub_group_broadcast_first((val))");
+		statement("#define spv_ballot(scratch, pred, linear_id, subgroup_base, subgroup_size) "
+		          "sub_group_ballot((pred))");
+		statement("#define spv_inverse_ballot(ballot, lane_id) "
+		          "sub_group_inverse_ballot((ballot))");
+		statement("#define spv_ballot_bit_extract(ballot, idx) "
+		          "sub_group_ballot_bit_extract((ballot), (idx))");
+		statement("#define spv_ballot_bit_count(ballot) "
+		          "sub_group_ballot_bit_count((ballot))");
+		statement("#define spv_ballot_inclusive_bit_count(ballot, lane_id) "
+		          "sub_group_ballot_inclusive_scan((ballot))");
+		statement("#define spv_ballot_exclusive_bit_count(ballot, lane_id) "
+		          "sub_group_ballot_exclusive_scan((ballot))");
+		statement("#define spv_ballot_find_lsb(ballot) sub_group_ballot_find_lsb((ballot))");
+		statement("#define spv_ballot_find_msb(ballot) sub_group_ballot_find_msb((ballot))");
+		// Mask builtins
+		statement("#define spv_get_sub_group_eq_mask(lane_id) get_sub_group_eq_mask()");
+		statement("#define spv_get_sub_group_ge_mask(lane_id, sg_size) get_sub_group_ge_mask()");
+		statement("#define spv_get_sub_group_gt_mask(lane_id, sg_size) get_sub_group_gt_mask()");
+		statement("#define spv_get_sub_group_le_mask(lane_id, sg_size) get_sub_group_le_mask()");
+		statement("#define spv_get_sub_group_lt_mask(lane_id) get_sub_group_lt_mask()");
+		statement("#else");
+		// Emulation macros
+		statement("#define spv_broadcast_first_uint(scratch, val, linear_id, subgroup_base) "
+		          "spv_emulate_broadcast_first_uint((scratch), (val), (linear_id), (subgroup_base))");
+		statement("#define spv_ballot(scratch, pred, linear_id, subgroup_base, subgroup_size) "
+		          "spv_emulate_ballot((scratch), (pred), (linear_id), (subgroup_base), (subgroup_size))");
+		statement("#define spv_inverse_ballot(ballot, lane_id) "
+		          "spv_emulate_inverse_ballot((ballot), (lane_id))");
+		statement("#define spv_ballot_bit_extract(ballot, idx) "
+		          "spv_emulate_ballot_bit_extract((ballot), (idx))");
+		statement("#define spv_ballot_bit_count(ballot) "
+		          "spv_emulate_ballot_bit_count((ballot))");
+		statement("#define spv_ballot_inclusive_bit_count(ballot, lane_id) "
+		          "spv_emulate_ballot_inclusive_bit_count((ballot), (lane_id))");
+		statement("#define spv_ballot_exclusive_bit_count(ballot, lane_id) "
+		          "spv_emulate_ballot_exclusive_bit_count((ballot), (lane_id))");
+		statement("#define spv_ballot_find_lsb(ballot) spv_emulate_ballot_find_lsb((ballot))");
+		statement("#define spv_ballot_find_msb(ballot) spv_emulate_ballot_find_msb((ballot))");
+		statement("#define spv_get_sub_group_eq_mask(lane_id) spv_subgroup_eq_mask((lane_id))");
+		statement("#define spv_get_sub_group_ge_mask(lane_id, sg_size) spv_subgroup_ge_mask((lane_id), (sg_size))");
+		statement("#define spv_get_sub_group_gt_mask(lane_id, sg_size) spv_subgroup_gt_mask((lane_id), (sg_size))");
+		statement("#define spv_get_sub_group_le_mask(lane_id, sg_size) spv_subgroup_le_mask((lane_id), (sg_size))");
+		statement("#define spv_get_sub_group_lt_mask(lane_id) spv_subgroup_lt_mask((lane_id))");
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_shuffle ===
+	if (needs_subgroup_shuffle)
+	{
+		statement("#ifdef cl_khr_subgroup_shuffle");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle : enable");
+		statement("#define spv_shuffle_uint(scratch, val, idx, linear_id, subgroup_base) "
+		          "sub_group_shuffle((val), (idx))");
+		statement("#define spv_shuffle_xor_uint(scratch, val, mask, lane_id, linear_id, subgroup_base) "
+		          "sub_group_shuffle_xor((val), (mask))");
+		statement("#else");
+		statement("#define spv_shuffle_uint(scratch, val, idx, linear_id, subgroup_base) "
+		          "spv_emulate_shuffle_uint((scratch), (val), (idx), (linear_id), (subgroup_base))");
+		statement("#define spv_shuffle_xor_uint(scratch, val, mask, lane_id, linear_id, subgroup_base) "
+		          "spv_emulate_shuffle_xor_uint((scratch), (val), (mask), (lane_id), (linear_id), (subgroup_base))");
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_shuffle_relative ===
+	if (needs_subgroup_shuffle_relative)
+	{
+		statement("#ifdef cl_khr_subgroup_shuffle_relative");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_shuffle_relative : enable");
+		statement("#define spv_shuffle_up_uint(scratch, val, delta, lane_id, linear_id, subgroup_base) "
+		          "sub_group_shuffle_up((val), (delta))");
+		statement("#define spv_shuffle_down_uint(scratch, val, delta, lane_id, linear_id, subgroup_size) "
+		          "sub_group_shuffle_down((val), (delta))");
+		statement("#else");
+		statement("#define spv_shuffle_up_uint(scratch, val, delta, lane_id, linear_id, subgroup_base) "
+		          "spv_emulate_shuffle_up_uint((scratch), (val), (delta), (lane_id), (linear_id), (subgroup_base))");
+		statement("#define spv_shuffle_down_uint(scratch, val, delta, lane_id, linear_id, subgroup_size) "
+		          "spv_emulate_shuffle_down_uint((scratch), (val), (delta), (lane_id), (linear_id), (subgroup_size))");
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_rotate ===
+	if (needs_subgroup_rotate)
+	{
+		statement("#ifdef cl_khr_subgroup_rotate");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_rotate : enable");
+		statement("#define spv_rotate_uint(scratch, val, delta, lane_id, linear_id, subgroup_base, subgroup_size) "
+		          "sub_group_rotate((val), (delta))");
+		statement("#define spv_clustered_rotate_uint(scratch, val, delta, lane_id, linear_id, subgroup_base, "
+		          "cluster_size) sub_group_clustered_rotate((val), (delta), (cluster_size))");
+		statement("#else");
+		statement("#define spv_rotate_uint(scratch, val, delta, lane_id, linear_id, subgroup_base, subgroup_size) "
+		          "spv_emulate_rotate_uint((scratch), (val), (delta), (lane_id), (linear_id), (subgroup_base), "
+		          "(subgroup_size))");
+		statement("#define spv_clustered_rotate_uint(scratch, val, delta, lane_id, linear_id, subgroup_base, "
+		          "cluster_size) spv_emulate_clustered_rotate_uint((scratch), (val), (delta), (lane_id), "
+		          "(linear_id), (subgroup_base), (cluster_size))");
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_non_uniform_arithmetic ===
+	// Covers: mul, and, or, xor, logical_and/or/xor for Reduce/InclusiveScan/ExclusiveScan
+	if (needs_subgroup_arithmetic)
+	{
+		statement("#ifdef cl_khr_subgroup_non_uniform_arithmetic");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_arithmetic : enable");
+
+		// For each non-base arithmetic op, emit native macro.
+		// Native functions are generic (overloaded), so one macro per type-suffix works.
+		auto emit_arith_macros_native = [&](const char *op_suffix, const char *native_reduce,
+		                                    const char *native_inclusive, const char *native_exclusive)
+		{
+			statement("#define spv_reduce_", op_suffix, "(scratch, val, linear_id, subgroup_base, subgroup_size) ",
+			          native_reduce, "((val))");
+			statement("#define spv_inclusive_scan_", op_suffix,
+			          "(scratch, val, lane_id, linear_id, subgroup_base, subgroup_size) ", native_inclusive, "((val))");
+			statement("#define spv_exclusive_scan_", op_suffix,
+			          "(scratch, val, lane_id, linear_id, subgroup_base, subgroup_size) ", native_exclusive, "((val))");
+		};
+
+		emit_arith_macros_native("mul_uint", "sub_group_non_uniform_reduce_mul",
+		                         "sub_group_non_uniform_scan_inclusive_mul",
+		                         "sub_group_non_uniform_scan_exclusive_mul");
+		emit_arith_macros_native("mul_int", "sub_group_non_uniform_reduce_mul",
+		                         "sub_group_non_uniform_scan_inclusive_mul",
+		                         "sub_group_non_uniform_scan_exclusive_mul");
+		emit_arith_macros_native("mul_float", "sub_group_non_uniform_reduce_mul",
+		                         "sub_group_non_uniform_scan_inclusive_mul",
+		                         "sub_group_non_uniform_scan_exclusive_mul");
+		emit_arith_macros_native("and_uint", "sub_group_non_uniform_reduce_and",
+		                         "sub_group_non_uniform_scan_inclusive_and",
+		                         "sub_group_non_uniform_scan_exclusive_and");
+		emit_arith_macros_native("and_int", "sub_group_non_uniform_reduce_and",
+		                         "sub_group_non_uniform_scan_inclusive_and",
+		                         "sub_group_non_uniform_scan_exclusive_and");
+		emit_arith_macros_native("or_uint", "sub_group_non_uniform_reduce_or",
+		                         "sub_group_non_uniform_scan_inclusive_or", "sub_group_non_uniform_scan_exclusive_or");
+		emit_arith_macros_native("or_int", "sub_group_non_uniform_reduce_or", "sub_group_non_uniform_scan_inclusive_or",
+		                         "sub_group_non_uniform_scan_exclusive_or");
+		emit_arith_macros_native("xor_uint", "sub_group_non_uniform_reduce_xor",
+		                         "sub_group_non_uniform_scan_inclusive_xor",
+		                         "sub_group_non_uniform_scan_exclusive_xor");
+		emit_arith_macros_native("xor_int", "sub_group_non_uniform_reduce_xor",
+		                         "sub_group_non_uniform_scan_inclusive_xor",
+		                         "sub_group_non_uniform_scan_exclusive_xor");
+		emit_arith_macros_native("logical_and", "sub_group_non_uniform_reduce_logical_and",
+		                         "sub_group_non_uniform_scan_inclusive_logical_and",
+		                         "sub_group_non_uniform_scan_exclusive_logical_and");
+		emit_arith_macros_native("logical_or", "sub_group_non_uniform_reduce_logical_or",
+		                         "sub_group_non_uniform_scan_inclusive_logical_or",
+		                         "sub_group_non_uniform_scan_exclusive_logical_or");
+		emit_arith_macros_native("logical_xor", "sub_group_non_uniform_reduce_logical_xor",
+		                         "sub_group_non_uniform_scan_inclusive_logical_xor",
+		                         "sub_group_non_uniform_scan_exclusive_logical_xor");
+
+		statement("#else");
+
+		auto emit_arith_macros_emulated = [&](const char *op_suffix)
+		{
+			statement("#define spv_reduce_", op_suffix,
+			          "(scratch, val, linear_id, subgroup_base, subgroup_size) "
+			          "spv_emulate_reduce_",
+			          op_suffix, "((scratch), (val), (linear_id), (subgroup_base), (subgroup_size))");
+			statement("#define spv_inclusive_scan_", op_suffix,
+			          "(scratch, val, lane_id, linear_id, subgroup_base, subgroup_size) "
+			          "spv_emulate_inclusive_scan_",
+			          op_suffix, "((scratch), (val), (lane_id), (linear_id), (subgroup_base), (subgroup_size))");
+			statement("#define spv_exclusive_scan_", op_suffix,
+			          "(scratch, val, lane_id, linear_id, subgroup_base, subgroup_size) "
+			          "spv_emulate_exclusive_scan_",
+			          op_suffix, "((scratch), (val), (lane_id), (linear_id), (subgroup_base), (subgroup_size))");
+		};
+
+		for (const char *suffix : { "mul_uint", "mul_int", "mul_float", "and_uint", "and_int", "or_uint", "or_int",
+		                            "xor_uint", "xor_int", "logical_and", "logical_or", "logical_xor" })
+			emit_arith_macros_emulated(suffix);
+
+		statement("#endif");
+		statement("");
+	}
+
+	// === cl_khr_subgroup_clustered_reduce ===
+	// Covers ALL ops (including add/min/max) with ClusteredReduce
+	if (needs_subgroup_clustered)
+	{
+		statement("#ifdef cl_khr_subgroup_clustered_reduce");
+		statement("#pragma OPENCL EXTENSION cl_khr_subgroup_clustered_reduce : enable");
+
+		auto emit_clustered_native = [&](const char *op_suffix, const char *native_func)
+		{
+			statement("#define spv_clustered_reduce_", op_suffix,
+			          "(scratch, val, cluster, lane_id, linear_id, subgroup_base, subgroup_size) ", native_func,
+			          "((val), (cluster))");
+		};
+
+		emit_clustered_native("add_uint", "sub_group_clustered_reduce_add");
+		emit_clustered_native("add_int", "sub_group_clustered_reduce_add");
+		emit_clustered_native("add_float", "sub_group_clustered_reduce_add");
+		emit_clustered_native("mul_uint", "sub_group_clustered_reduce_mul");
+		emit_clustered_native("mul_int", "sub_group_clustered_reduce_mul");
+		emit_clustered_native("mul_float", "sub_group_clustered_reduce_mul");
+		emit_clustered_native("min_uint", "sub_group_clustered_reduce_min");
+		emit_clustered_native("min_int", "sub_group_clustered_reduce_min");
+		emit_clustered_native("min_float", "sub_group_clustered_reduce_min");
+		emit_clustered_native("max_uint", "sub_group_clustered_reduce_max");
+		emit_clustered_native("max_int", "sub_group_clustered_reduce_max");
+		emit_clustered_native("max_float", "sub_group_clustered_reduce_max");
+		emit_clustered_native("and_uint", "sub_group_clustered_reduce_and");
+		emit_clustered_native("and_int", "sub_group_clustered_reduce_and");
+		emit_clustered_native("or_uint", "sub_group_clustered_reduce_or");
+		emit_clustered_native("or_int", "sub_group_clustered_reduce_or");
+		emit_clustered_native("xor_uint", "sub_group_clustered_reduce_xor");
+		emit_clustered_native("xor_int", "sub_group_clustered_reduce_xor");
+		emit_clustered_native("logical_and", "sub_group_clustered_reduce_logical_and");
+		emit_clustered_native("logical_or", "sub_group_clustered_reduce_logical_or");
+		emit_clustered_native("logical_xor", "sub_group_clustered_reduce_logical_xor");
+
+		statement("#else");
+
+		auto emit_clustered_emulated = [&](const char *op_suffix)
+		{
+			statement("#define spv_clustered_reduce_", op_suffix,
+			          "(scratch, val, cluster, lane_id, linear_id, subgroup_base, subgroup_size) "
+			          "spv_emulate_clustered_reduce_",
+			          op_suffix,
+			          "((scratch), (val), (cluster), (lane_id), (linear_id), (subgroup_base), (subgroup_size))");
+		};
+
+		for (const char *suffix :
+		     { "add_uint", "add_int",   "add_float", "mul_uint", "mul_int",     "mul_float",  "min_uint",
+		       "min_int",  "min_float", "max_uint",  "max_int",  "max_float",   "and_uint",   "and_int",
+		       "or_uint",  "or_int",    "xor_uint",  "xor_int",  "logical_and", "logical_or", "logical_xor" })
+			emit_clustered_emulated(suffix);
+
+		statement("#endif");
+		statement("");
+	}
+}
+
+void CompilerOpenCL::emit_subgroup_op_combined(const Instruction &i)
+{
+	// Combined mode: emit spv_* wrapper macro calls for non-base ops.
+	// Base ops (all, any, broadcast, add/min/max reduce/scan) are handled by the native path.
+	const uint32_t *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+
+	auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
+	if (scope != ScopeSubgroup)
+		SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+
+	auto require_extension = [this](bool &flag)
+	{
+		if (!flag)
+		{
+			flag = true;
+			force_recompile();
+		}
+	};
+
+	auto require_scratch = [this]()
+	{
+		if (!needs_subgroup_emulation_scratch)
+		{
+			needs_subgroup_emulation_scratch = true;
+			force_recompile();
+		}
+	};
+
+	// Helper for vector decomposition with spv_* macros (uint-based, like emulated path)
+	auto to_uint_cast = [&](uint32_t value_id) -> string
+	{
+		auto &type = expression_type(value_id);
+		if (type.basetype == SPIRType::UInt)
+			return to_expression(value_id);
+		else if (type.basetype == SPIRType::Int)
+			return join("as_uint(", to_expression(value_id), ")");
+		else if (type.basetype == SPIRType::Float)
+			return join("as_uint(", to_expression(value_id), ")");
+		else if (type.basetype == SPIRType::Boolean)
+			return join("(", to_expression(value_id), " ? 1u : 0u)");
+		return to_expression(value_id);
+	};
+
+	auto from_uint_cast = [&](const string &expr, uint32_t value_id) -> string
+	{
+		auto &type = expression_type(value_id);
+		if (type.basetype == SPIRType::Int)
+			return join("as_int(", expr, ")");
+		else if (type.basetype == SPIRType::Float)
+			return join("as_float(", expr, ")");
+		return expr;
+	};
+
+	// Vector decomposition calling a spv_* macro per component
+	auto emit_combined_vec = [&](uint32_t value_id, const string &prefix, const string &suffix)
+	{
+		auto &type = expression_type(value_id);
+		if (type.vecsize > 1)
+		{
+			auto &out_type = get<SPIRType>(result_type);
+			string expr = "(" + type_to_glsl(out_type) + ")(";
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				if (c > 0)
+					expr += ", ";
+				string comp = join(to_enclosed_expression(value_id), ".", "xyzw"[c]);
+				string as_uint_comp;
+				if (type.basetype == SPIRType::UInt)
+					as_uint_comp = comp;
+				else if (type.basetype == SPIRType::Int)
+					as_uint_comp = join("as_uint(", comp, ")");
+				else if (type.basetype == SPIRType::Float)
+					as_uint_comp = join("as_uint(", comp, ")");
+				else
+					as_uint_comp = comp;
+				string result_comp = prefix + as_uint_comp + suffix;
+				if (type.basetype == SPIRType::Int)
+					result_comp = join("as_int(", result_comp, ")");
+				else if (type.basetype == SPIRType::Float)
+					result_comp = join("as_float(", result_comp, ")");
+				expr += result_comp;
+			}
+			expr += ")";
+			emit_op(result_type, id, expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+		else
+		{
+			string result_expr = prefix + to_uint_cast(value_id) + suffix;
+			result_expr = from_uint_cast(result_expr, value_id);
+			emit_op(result_type, id, result_expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+	};
+
+	switch (op)
+	{
+	// === Vote ===
+	case OpGroupNonUniformElect:
+		require_extension(needs_subgroup_vote);
+		require_scratch();
+		emit_op(result_type, id, "spv_sub_group_elect(_spv_lane_id)", true);
+		break;
+
+	case OpGroupNonUniformAllEqual:
+	{
+		require_extension(needs_subgroup_vote);
+		require_scratch();
+		auto &type = expression_type(ops[3]);
+		if (type.vecsize > 1)
+		{
+			string expr;
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				if (c > 0)
+					expr += " && ";
+				string comp = join(to_enclosed_expression(ops[3]), ".", "xyzw"[c]);
+				string as_uint_comp = (type.basetype == SPIRType::UInt) ? comp : join("as_uint(", comp, ")");
+				expr += join("spv_all_equal_uint(_spv_subgroup_scratch, ", as_uint_comp,
+				             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			}
+			emit_op(result_type, id, expr, should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		else
+		{
+			emit_op(result_type, id,
+			        join("spv_all_equal_uint(_spv_subgroup_scratch, ", to_uint_cast(ops[3]),
+			             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+			        should_forward(ops[3]));
+			inherit_expression_dependencies(id, ops[3]);
+		}
+		break;
+	}
+
+	// === Ballot ===
+	case OpGroupNonUniformBroadcastFirst:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_combined_vec(ops[3], "spv_broadcast_first_uint(_spv_subgroup_scratch, ",
+		                  ", _spv_linear_id, _spv_subgroup_base)");
+		break;
+
+	case OpGroupNonUniformBallot:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_op(result_type, id,
+		        join("spv_ballot(_spv_subgroup_scratch, ", to_expression(ops[3]),
+		             ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_op(result_type, id, join("spv_inverse_ballot(", to_expression(ops[3]), ", _spv_lane_id)"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_op(result_type, id,
+		        join("spv_ballot_bit_extract(", to_expression(ops[3]), ", ", to_expression(ops[4]), ")"),
+		        should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotFindLSB:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_op(result_type, id, join("spv_ballot_find_lsb(", to_expression(ops[3]), ")"), should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotFindMSB:
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		emit_op(result_type, id, join("spv_ballot_find_msb(", to_expression(ops[3]), ")"), should_forward(ops[3]));
+		inherit_expression_dependencies(id, ops[3]);
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		require_extension(needs_subgroup_ballot);
+		require_scratch();
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+			emit_op(result_type, id, join("spv_ballot_bit_count(", to_expression(ops[4]), ")"), should_forward(ops[4]));
+		else if (operation == GroupOperationInclusiveScan)
+			emit_op(result_type, id, join("spv_ballot_inclusive_bit_count(", to_expression(ops[4]), ", _spv_lane_id)"),
+			        should_forward(ops[4]));
+		else if (operation == GroupOperationExclusiveScan)
+			emit_op(result_type, id, join("spv_ballot_exclusive_bit_count(", to_expression(ops[4]), ", _spv_lane_id)"),
+			        should_forward(ops[4]));
+		else
+			SPIRV_CROSS_THROW("Invalid group operation for BallotBitCount.");
+		inherit_expression_dependencies(id, ops[4]);
+		break;
+	}
+
+	// === Shuffle ===
+	case OpGroupNonUniformShuffle:
+		require_extension(needs_subgroup_shuffle);
+		require_scratch();
+		emit_combined_vec(ops[3], "spv_shuffle_uint(_spv_subgroup_scratch, ",
+		                  join(", ", to_expression(ops[4]), ", _spv_linear_id, _spv_subgroup_base)"));
+		break;
+
+	case OpGroupNonUniformShuffleXor:
+		require_extension(needs_subgroup_shuffle);
+		require_scratch();
+		emit_combined_vec(ops[3], "spv_shuffle_xor_uint(_spv_subgroup_scratch, ",
+		                  join(", ", to_expression(ops[4]), ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base)"));
+		break;
+
+	case OpGroupNonUniformShuffleUp:
+		require_extension(needs_subgroup_shuffle_relative);
+		require_scratch();
+		emit_combined_vec(ops[3], "spv_shuffle_up_uint(_spv_subgroup_scratch, ",
+		                  join(", ", to_expression(ops[4]), ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base)"));
+		break;
+
+	case OpGroupNonUniformShuffleDown:
+		require_extension(needs_subgroup_shuffle_relative);
+		require_scratch();
+		emit_combined_vec(ops[3], "spv_shuffle_down_uint(_spv_subgroup_scratch, ",
+		                  join(", ", to_expression(ops[4]), ", _spv_lane_id, _spv_linear_id, _spv_subgroup_size)"));
+		break;
+
+	// === Rotate ===
+	case OpGroupNonUniformRotateKHR:
+		require_extension(needs_subgroup_rotate);
+		require_scratch();
+		if (i.length > 5)
+		{
+			emit_combined_vec(ops[3], "spv_clustered_rotate_uint(_spv_subgroup_scratch, ",
+			                  join(", ", to_expression(ops[4]), ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, ",
+			                       to_expression(ops[5]), ")"));
+		}
+		else
+		{
+			emit_combined_vec(ops[3], "spv_rotate_uint(_spv_subgroup_scratch, ",
+			                  join(", ", to_expression(ops[4]),
+			                       ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)"));
+		}
+		break;
+
+	// === Arithmetic (non-base: mul, bitwise, logical + clustered reduce for all) ===
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformIAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformIMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformSMin:
+	case OpGroupNonUniformSMax:
+	case OpGroupNonUniformUMin:
+	case OpGroupNonUniformUMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
+	{
+		require_scratch();
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		uint32_t value_id = ops[4];
+
+		// Determine the op suffix (matching emulation helper names)
+		const char *op_suffix = nullptr;
+		bool is_logical = false;
+		switch (op)
+		{
+		case OpGroupNonUniformFAdd:
+			op_suffix = "add_float";
+			break;
+		case OpGroupNonUniformIAdd:
+			op_suffix = (expression_type(value_id).basetype == SPIRType::Int) ? "add_int" : "add_uint";
+			break;
+		case OpGroupNonUniformFMul:
+			op_suffix = "mul_float";
+			break;
+		case OpGroupNonUniformIMul:
+			op_suffix = (expression_type(value_id).basetype == SPIRType::Int) ? "mul_int" : "mul_uint";
+			break;
+		case OpGroupNonUniformFMin:
+			op_suffix = "min_float";
+			break;
+		case OpGroupNonUniformFMax:
+			op_suffix = "max_float";
+			break;
+		case OpGroupNonUniformSMin:
+			op_suffix = "min_int";
+			break;
+		case OpGroupNonUniformSMax:
+			op_suffix = "max_int";
+			break;
+		case OpGroupNonUniformUMin:
+			op_suffix = "min_uint";
+			break;
+		case OpGroupNonUniformUMax:
+			op_suffix = "max_uint";
+			break;
+		case OpGroupNonUniformBitwiseAnd:
+			op_suffix = (expression_type(value_id).basetype == SPIRType::Int) ? "and_int" : "and_uint";
+			break;
+		case OpGroupNonUniformBitwiseOr:
+			op_suffix = (expression_type(value_id).basetype == SPIRType::Int) ? "or_int" : "or_uint";
+			break;
+		case OpGroupNonUniformBitwiseXor:
+			op_suffix = (expression_type(value_id).basetype == SPIRType::Int) ? "xor_int" : "xor_uint";
+			break;
+		case OpGroupNonUniformLogicalAnd:
+			op_suffix = "logical_and";
+			is_logical = true;
+			break;
+		case OpGroupNonUniformLogicalOr:
+			op_suffix = "logical_or";
+			is_logical = true;
+			break;
+		case OpGroupNonUniformLogicalXor:
+			op_suffix = "logical_xor";
+			is_logical = true;
+			break;
+		default:
+			break;
+		}
+
+		// Determine group prefix and required extension
+		const char *group_prefix = nullptr;
+		switch (operation)
+		{
+		case GroupOperationReduce:
+			group_prefix = "spv_reduce_";
+			require_extension(needs_subgroup_arithmetic);
+			break;
+		case GroupOperationInclusiveScan:
+			group_prefix = "spv_inclusive_scan_";
+			require_extension(needs_subgroup_arithmetic);
+			break;
+		case GroupOperationExclusiveScan:
+			group_prefix = "spv_exclusive_scan_";
+			require_extension(needs_subgroup_arithmetic);
+			break;
+		case GroupOperationClusteredReduce:
+			group_prefix = "spv_clustered_reduce_";
+			require_extension(needs_subgroup_clustered);
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unsupported group operation.");
+		}
+
+		string macro_name = join(group_prefix, op_suffix);
+
+		if (is_logical)
+		{
+			string val_expr = to_expression(value_id);
+			string expr;
+			if (operation == GroupOperationClusteredReduce)
+				expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr, ", ", to_expression(ops[5]),
+				            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			else if (operation == GroupOperationReduce)
+				expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr,
+				            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			else
+				expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr,
+				            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+			emit_op(result_type, id, expr, should_forward(value_id));
+			inherit_expression_dependencies(id, value_id);
+		}
+		else
+		{
+			auto &type = expression_type(value_id);
+			if (type.vecsize > 1)
+			{
+				auto &out_type = get<SPIRType>(result_type);
+				string expr = "(" + type_to_glsl(out_type) + ")(";
+				for (uint32_t c = 0; c < type.vecsize; c++)
+				{
+					if (c > 0)
+						expr += ", ";
+					string comp = join(to_enclosed_expression(value_id), ".", "xyzw"[c]);
+					string call;
+					if (operation == GroupOperationClusteredReduce)
+						call = join(macro_name, "(_spv_subgroup_scratch, ", comp, ", ", to_expression(ops[5]),
+						            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					else if (operation == GroupOperationReduce)
+						call = join(macro_name, "(_spv_subgroup_scratch, ", comp,
+						            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					else
+						call = join(macro_name, "(_spv_subgroup_scratch, ", comp,
+						            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+					expr += call;
+				}
+				expr += ")";
+				emit_op(result_type, id, expr, should_forward(value_id));
+				inherit_expression_dependencies(id, value_id);
+			}
+			else
+			{
+				string val_expr = to_expression(value_id);
+				string expr;
+				if (operation == GroupOperationClusteredReduce)
+					expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr, ", ", to_expression(ops[5]),
+					            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				else if (operation == GroupOperationReduce)
+					expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr,
+					            ", _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				else
+					expr = join(macro_name, "(_spv_subgroup_scratch, ", val_expr,
+					            ", _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size)");
+				emit_op(result_type, id, expr, should_forward(value_id));
+				inherit_expression_dependencies(id, value_id);
+			}
+		}
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported subgroup op for OpenCL combined mode.");
+	}
+}
+
 void CompilerOpenCL::emit_subgroup_op_emulated(const Instruction &i)
 {
 	const uint32_t *ops = stream(i);
@@ -4822,6 +5636,45 @@ void CompilerOpenCL::emit_subgroup_op(const Instruction &i)
 	{
 		emit_subgroup_op_emulated(i);
 		return;
+	}
+
+	// Combined mode: non-base ops go through wrapper macros, base ops fall through to native.
+	if (opencl_options.emulate_subgroups && opencl_options.enable_subgroups)
+	{
+		// Base cl_khr_subgroups ops: All, Any, Broadcast, add/min/max Reduce/Scan
+		bool is_base = false;
+		switch (op)
+		{
+		case OpGroupNonUniformAll:
+		case OpGroupNonUniformAny:
+		case OpGroupNonUniformBroadcast:
+			is_base = true;
+			break;
+		case OpGroupNonUniformFAdd:
+		case OpGroupNonUniformIAdd:
+		case OpGroupNonUniformFMin:
+		case OpGroupNonUniformFMax:
+		case OpGroupNonUniformSMin:
+		case OpGroupNonUniformSMax:
+		case OpGroupNonUniformUMin:
+		case OpGroupNonUniformUMax:
+		{
+			// Base only for Reduce/InclusiveScan/ExclusiveScan, not ClusteredReduce
+			auto operation = static_cast<GroupOperation>(ops[3]);
+			if (operation != GroupOperationClusteredReduce)
+				is_base = true;
+			break;
+		}
+		default:
+			break;
+		}
+
+		if (!is_base)
+		{
+			emit_subgroup_op_combined(i);
+			return;
+		}
+		// Base ops fall through to native path below.
 	}
 
 	if (!opencl_options.enable_subgroups)

@@ -215,6 +215,9 @@ protected:
 	// Helpers to emit subgroup emulation polyfills and scratch infrastructure.
 	void emit_subgroup_emulation_helpers();
 	void emit_subgroup_emulation_entry_point_vars();
+	void emit_subgroup_combined_entry_point_vars();
+	void emit_subgroup_combined_wrappers();
+	void emit_subgroup_op_combined(const Instruction &i);
 	uint32_t get_emulation_max_workgroup_size() const;
 	std::string get_emulation_subgroup_size_expr() const;
 	void emit_subgroup_op_emulated(const Instruction &i);

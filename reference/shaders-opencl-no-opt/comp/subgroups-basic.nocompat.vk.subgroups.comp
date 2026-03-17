@@ -1,6 +1,7 @@
 // Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
 
 #pragma OPENCL EXTENSION cl_khr_subgroups : enable
+#pragma OPENCL EXTENSION cl_khr_subgroup_non_uniform_vote : enable
 
 struct SSBO
 {
@@ -11,46 +12,55 @@ struct SSBO
 
 typedef struct SSBO SSBO;
 
+float helper( float* val_1)
+{
+    float reduced_1 = sub_group_reduce_add((*val_1));
+    bool elected_1 = sub_group_elect();
+    return elected_1 ? reduced_1 : 0.0f;
+}
+
 __attribute__((reqd_work_group_size(256, 1, 1)))
-__kernel void comp_main(__global SSBO* _11)
+__kernel void comp_main(__global SSBO* _30)
 {
     uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
-    _11->FragColor = convert_float(get_num_sub_groups());
-    _11->FragColor = convert_float(get_sub_group_id());
-    _11->FragColor = convert_float(get_sub_group_size());
-    _11->FragColor = convert_float(get_sub_group_local_id());
+    _30->FragColor = convert_float(get_num_sub_groups());
+    _30->FragColor = convert_float(get_sub_group_id());
+    _30->FragColor = convert_float(get_sub_group_size());
+    _30->FragColor = convert_float(get_sub_group_local_id());
     sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
     sub_group_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
     sub_group_barrier(CLK_GLOBAL_MEM_FENCE);
     sub_group_barrier(CLK_LOCAL_MEM_FENCE);
     sub_group_barrier(CLK_GLOBAL_MEM_FENCE);
-    bool has_all = sub_group_all(true);
-    bool has_any = sub_group_any(true);
-    uint broadcasted = sub_group_broadcast(42u, 0u);
-    float fadd = sub_group_reduce_add(_11->FragColor);
-    int iadd = sub_group_reduce_add(_11->idat);
-    float fmin = sub_group_reduce_min(_11->FragColor);
-    float fmax = sub_group_reduce_max(_11->FragColor);
-    int smin = sub_group_reduce_min(_11->idat);
-    int smax = sub_group_reduce_max(_11->idat);
-    uint umin = sub_group_reduce_min(_11->udat);
-    uint umax = sub_group_reduce_max(_11->udat);
-    float finc_add = sub_group_scan_inclusive_add(_11->FragColor);
-    float finc_min = sub_group_scan_inclusive_min(_11->FragColor);
-    float finc_max = sub_group_scan_inclusive_max(_11->FragColor);
-    int iinc_add = sub_group_scan_inclusive_add(_11->idat);
-    int iinc_min = sub_group_scan_inclusive_min(_11->idat);
-    int iinc_max = sub_group_scan_inclusive_max(_11->idat);
-    uint uinc_min = sub_group_scan_inclusive_min(_11->udat);
-    uint uinc_max = sub_group_scan_inclusive_max(_11->udat);
-    float fexc_add = sub_group_scan_exclusive_add(_11->FragColor);
-    float fexc_min = sub_group_scan_exclusive_min(_11->FragColor);
-    float fexc_max = sub_group_scan_exclusive_max(_11->FragColor);
-    int iexc_add = sub_group_scan_exclusive_add(_11->idat);
-    int iexc_min = sub_group_scan_exclusive_min(_11->idat);
-    int iexc_max = sub_group_scan_exclusive_max(_11->idat);
-    uint uexc_min = sub_group_scan_exclusive_min(_11->udat);
-    uint uexc_max = sub_group_scan_exclusive_max(_11->udat);
-    _11->FragColor = (((((((((((fadd + fmin) + fmax) + finc_add) + finc_min) + finc_max) + fexc_add) + fexc_min) + fexc_max) + convert_float((((((((iadd + smin) + smax) + iinc_add) + iinc_min) + iinc_max) + iexc_add) + iexc_min) + iexc_max)) + convert_float((((((umin + umax) + uinc_min) + uinc_max) + uexc_min) + uexc_max) + broadcasted)) + (float)(has_all)) + (float)(has_any);
+    bool has_all_1 = sub_group_all(true);
+    bool has_any_1 = sub_group_any(true);
+    uint broadcasted_1 = sub_group_broadcast(42u, 0u);
+    float fadd_1 = sub_group_reduce_add(_30->FragColor);
+    int iadd_1 = sub_group_reduce_add(_30->idat);
+    float fmin_1 = sub_group_reduce_min(_30->FragColor);
+    float fmax_1 = sub_group_reduce_max(_30->FragColor);
+    int smin_1 = sub_group_reduce_min(_30->idat);
+    int smax_1 = sub_group_reduce_max(_30->idat);
+    uint umin_1 = sub_group_reduce_min(_30->udat);
+    uint umax_1 = sub_group_reduce_max(_30->udat);
+    float finc_add_1 = sub_group_scan_inclusive_add(_30->FragColor);
+    float finc_min_1 = sub_group_scan_inclusive_min(_30->FragColor);
+    float finc_max_1 = sub_group_scan_inclusive_max(_30->FragColor);
+    int iinc_add_1 = sub_group_scan_inclusive_add(_30->idat);
+    int iinc_min_1 = sub_group_scan_inclusive_min(_30->idat);
+    int iinc_max_1 = sub_group_scan_inclusive_max(_30->idat);
+    uint uinc_min_1 = sub_group_scan_inclusive_min(_30->udat);
+    uint uinc_max_1 = sub_group_scan_inclusive_max(_30->udat);
+    float fexc_add_1 = sub_group_scan_exclusive_add(_30->FragColor);
+    float fexc_min_1 = sub_group_scan_exclusive_min(_30->FragColor);
+    float fexc_max_1 = sub_group_scan_exclusive_max(_30->FragColor);
+    int iexc_add_1 = sub_group_scan_exclusive_add(_30->idat);
+    int iexc_min_1 = sub_group_scan_exclusive_min(_30->idat);
+    int iexc_max_1 = sub_group_scan_exclusive_max(_30->idat);
+    uint uexc_min_1 = sub_group_scan_exclusive_min(_30->udat);
+    uint uexc_max_1 = sub_group_scan_exclusive_max(_30->udat);
+    float param_1 = _30->FragColor;
+    float from_helper_1 = helper(&param_1);
+    _30->FragColor = ((((((((((((fadd_1 + fmin_1) + fmax_1) + finc_add_1) + finc_min_1) + finc_max_1) + fexc_add_1) + fexc_min_1) + fexc_max_1) + convert_float((((((((iadd_1 + smin_1) + smax_1) + iinc_add_1) + iinc_min_1) + iinc_max_1) + iexc_add_1) + iexc_min_1) + iexc_max_1)) + convert_float((((((umin_1 + umax_1) + uinc_min_1) + uinc_max_1) + uexc_min_1) + uexc_max_1) + broadcasted_1)) + (float)(has_all_1)) + (float)(has_any_1)) + from_helper_1;
 }
 
