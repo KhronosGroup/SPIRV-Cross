@@ -2007,7 +2007,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--opencl-fp64", [&args](CLIParser &) { args.opencl_enable_fp64 = true; });
 	cbs.add("--opencl-64bit-atomics", [&args](CLIParser &) { args.opencl_enable_64bit_atomics = true; });
 	cbs.add("--opencl-subgroups", [&args](CLIParser &) { args.opencl_enable_subgroups = true; });
-	cbs.add("--opencl-subgroups-all", [&args](CLIParser &) { args.opencl_enable_subgroups = true; });
+	cbs.add("--opencl-subgroups-all", [&args](CLIParser &) { args.opencl_enable_subgroups_all = true; });
 	cbs.add("--opencl-emulate-subgroups", [&args](CLIParser &) { args.opencl_emulate_subgroups = true; });
 	cbs.add("--opencl-fixed-subgroup-size",
 	        [&args](CLIParser &parser) { args.opencl_fixed_subgroup_size = parser.next_uint(); });

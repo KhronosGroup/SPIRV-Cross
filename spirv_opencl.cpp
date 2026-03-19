@@ -1626,25 +1626,6 @@ void CompilerOpenCL::prepass_discover_matrix_types()
 
 	// Scan all instructions for matrix operations to discover helpers needed.
 	// We can resolve the matrix type from the SPIR-V type of operands at pre-scan time.
-	auto get_id_type = [&](uint32_t id) -> const SPIRType &
-	{
-		// For value IDs, look up the type from variable, constant, or the instruction result.
-		auto *var = maybe_get<SPIRVariable>(id);
-		if (var)
-			return get_variable_data_type(*var);
-		auto *c = maybe_get<SPIRConstant>(id);
-		if (c)
-			return get<SPIRType>(c->constant_type);
-		// For instruction results, the type is stored in the expression or type_id.
-		if (ir.ids[id].get_type() == TypeExpression)
-			return get<SPIRType>(get<SPIRExpression>(id).expression_type);
-		// For types themselves
-		if (ir.ids[id].get_type() == TypeType)
-			return get<SPIRType>(id);
-		// Fallback: check if there's a result type mapping
-		return get<SPIRType>(id);
-	};
-
 	ir.for_each_typed_id<SPIRFunction>(
 	    [&](uint32_t, SPIRFunction &f)
 	    {
@@ -7058,7 +7039,6 @@ void CompilerOpenCL::emit_instruction(const Instruction &instruction)
 		uint32_t result_id = ops[1];
 		uint32_t base_id = ops[2];
 
-		auto &base_type = expression_type(base_id);
 		TypeID base_type_id = expression_type_id(base_id);
 
 		// Check if custom stride pointer arithmetic is needed.

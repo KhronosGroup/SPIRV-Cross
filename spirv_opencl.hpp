@@ -90,6 +90,9 @@ public:
 	void set_opencl_options(const Options &opts)
 	{
 		opencl_options = opts;
+		// subgroups_all implies subgroups is on.
+		if (opencl_options.enable_subgroups_all)
+			opencl_options.enable_subgroups = true;
 	}
 
 	std::string compile() override;
