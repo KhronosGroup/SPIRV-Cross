@@ -1,0 +1,27 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_vote : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+	uint udat;
+};
+
+void main()
+{
+	// Elect
+	bool elected = subgroupElect();
+
+	// AllEqual
+	bool all_eq_float = subgroupAllEqual(FragColor);
+	bool all_eq_uint = subgroupAllEqual(udat);
+
+	// All / Any
+	bool all_result = subgroupAll(udat > 0u);
+	bool any_result = subgroupAny(udat > 0u);
+
+	FragColor = float(elected) + float(all_eq_float) + float(all_eq_uint)
+		+ float(all_result) + float(any_result);
+}

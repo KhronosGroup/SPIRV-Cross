@@ -1,0 +1,39 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+	int idat;
+	uint udat;
+};
+
+void main()
+{
+	// Mul (non-uniform arithmetic extension)
+	float fmul = subgroupMul(FragColor);
+	int imul = subgroupMul(idat);
+	uint umul = subgroupMul(udat);
+
+	// Bitwise
+	uint band = subgroupAnd(udat);
+	uint bor = subgroupOr(udat);
+	uint bxor = subgroupXor(udat);
+
+	// Logical
+	bool land = subgroupAnd(udat > 0u);
+	bool lor = subgroupOr(udat > 0u);
+	bool lxor = subgroupXor(udat > 0u);
+
+	// Inclusive mul
+	float fmul_inc = subgroupInclusiveMul(FragColor);
+	// Exclusive mul
+	float fmul_exc = subgroupExclusiveMul(FragColor);
+
+	FragColor = fmul + fmul_inc + fmul_exc
+		+ float(imul + int(umul))
+		+ float(band + bor + bxor)
+		+ float(land) + float(lor) + float(lxor);
+}

@@ -1,0 +1,1105 @@
+// Generated from SPIR-V by SPIRV-Cross (OpenCL backend)
+
+
+struct SSBO
+{
+    float FragColor;
+    int idat;
+    uint udat;
+};
+
+typedef struct SSBO SSBO;
+
+static uint spv_emulate_broadcast_uint(__local uint* scratch, uint val, uint src_lane, uint linear_id, uint subgroup_base) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base + src_lane];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_broadcast_first_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_shuffle_uint(__local uint* scratch, uint val, uint index, uint linear_id, uint subgroup_base) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base + index];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_shuffle_xor_uint(__local uint* scratch, uint val, uint mask, uint lane_id, uint linear_id, uint subgroup_base) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base + (lane_id ^ mask)];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_shuffle_up_uint(__local uint* scratch, uint val, uint delta, uint lane_id, uint linear_id, uint subgroup_base) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = (lane_id >= delta) ? scratch[linear_id - delta] : val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_shuffle_down_uint(__local uint* scratch, uint val, uint delta, uint lane_id, uint linear_id, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = (lane_id + delta < subgroup_size) ? scratch[linear_id + delta] : val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_rotate_uint(__local uint* scratch, uint val, uint delta, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base + ((lane_id + delta) % subgroup_size)];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_rotate_uint(__local uint* scratch, uint val, uint delta, uint lane_id, uint linear_id, uint subgroup_base, uint cluster_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base + ((lane_id - cluster_base + delta) % cluster_size)];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_all(__local uint* scratch, bool predicate, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = predicate ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = true;
+    for (uint i = 0u; i < subgroup_size; i++)
+        r = r && (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_any(__local uint* scratch, bool predicate, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = predicate ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i < subgroup_size; i++)
+        r = r || (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_all_equal_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint first = scratch[subgroup_base];
+    bool r = true;
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r && (scratch[subgroup_base + i] == first);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint4 spv_emulate_ballot(__local uint* scratch, bool predicate, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = predicate ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint4 r = (uint4)(0u);
+    for (uint i = 0u; i < subgroup_size; i++) {
+        if (scratch[subgroup_base + i] != 0u) {
+            uint word = i / 32u;
+            uint bit = i % 32u;
+            if (word == 0u) r.x |= (1u << bit);
+            else if (word == 1u) r.y |= (1u << bit);
+            else if (word == 2u) r.z |= (1u << bit);
+            else r.w |= (1u << bit);
+        }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint4 spv_subgroup_eq_mask(uint lane_id) {
+    uint4 r = (uint4)(0u);
+    uint word = lane_id / 32u;
+    uint bit = lane_id % 32u;
+    if (word == 0u) r.x = (1u << bit);
+    else if (word == 1u) r.y = (1u << bit);
+    else if (word == 2u) r.z = (1u << bit);
+    else r.w = (1u << bit);
+    return r;
+}
+
+static uint4 spv_subgroup_ge_mask(uint lane_id, uint subgroup_size) {
+    uint4 r = (uint4)(0u);
+    for (uint i = lane_id; i < subgroup_size; i++) {
+        uint word = i / 32u;
+        uint bit = i % 32u;
+        if (word == 0u) r.x |= (1u << bit);
+        else if (word == 1u) r.y |= (1u << bit);
+        else if (word == 2u) r.z |= (1u << bit);
+        else r.w |= (1u << bit);
+    }
+    return r;
+}
+
+static uint4 spv_subgroup_gt_mask(uint lane_id, uint subgroup_size) {
+    return spv_subgroup_ge_mask(lane_id + 1u, subgroup_size);
+}
+
+static uint4 spv_subgroup_le_mask(uint lane_id, uint subgroup_size) {
+    return spv_subgroup_ge_mask(0u, lane_id + 1u);
+}
+
+static uint4 spv_subgroup_lt_mask(uint lane_id) {
+    if (lane_id == 0u) return (uint4)(0u);
+    return spv_subgroup_ge_mask(0u, lane_id);
+}
+
+static uint spv_emulate_reduce_add_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r + scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_add_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r + scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_add_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 0u;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r + scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_add_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r + scratch[subgroup_base + cluster_base_in_sg + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_mul_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r * scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_mul_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r * scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_mul_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 1u;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r * scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_mul_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r * scratch[subgroup_base + cluster_base_in_sg + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_min_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = min(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_min_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = min(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_min_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = UINT_MAX;
+    for (uint i = 0u; i < lane_id; i++)
+        r = min(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_min_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = min(r, scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_max_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = max(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_max_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = max(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_max_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 0u;
+    for (uint i = 0u; i < lane_id; i++)
+        r = max(r, scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_max_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = max(r, scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_and_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r & scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_and_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r & scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_and_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 0xFFFFFFFFu;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r & scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_and_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r & scratch[subgroup_base + cluster_base_in_sg + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_or_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r | scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_or_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r | scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_or_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 0u;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r | scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_or_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r | scratch[subgroup_base + cluster_base_in_sg + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_reduce_xor_uint(__local uint* scratch, uint val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r ^ scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_inclusive_scan_xor_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = scratch[subgroup_base];
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r ^ scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_exclusive_scan_xor_uint(__local uint* scratch, uint val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint r = 0u;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r ^ scratch[subgroup_base + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static uint spv_emulate_clustered_reduce_xor_uint(__local uint* scratch, uint val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    uint r = scratch[subgroup_base + cluster_base_in_sg];
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r ^ scratch[subgroup_base + cluster_base_in_sg + i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_add_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r + as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_add_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r + as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_add_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = 0;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r + as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_add_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r + as_int(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_mul_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r * as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_mul_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r * as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_mul_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = 1;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r * as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_mul_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r * as_int(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_min_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = min(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_min_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = min(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_min_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = INT_MAX;
+    for (uint i = 0u; i < lane_id; i++)
+        r = min(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_min_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = min(r, as_int(scratch[subgroup_base + cluster_base_in_sg + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_max_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = max(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_max_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = max(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_max_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = INT_MIN;
+    for (uint i = 0u; i < lane_id; i++)
+        r = max(r, as_int(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_max_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = max(r, as_int(scratch[subgroup_base + cluster_base_in_sg + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_and_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r & as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_and_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r & as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_and_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(0xFFFFFFFFu);
+    for (uint i = 0u; i < lane_id; i++)
+        r = r & as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_and_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r & as_int(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_or_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r | as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_or_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r | as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_or_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = 0;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r | as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_or_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r | as_int(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_reduce_xor_int(__local uint* scratch, int val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r ^ as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_inclusive_scan_xor_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = as_int(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r ^ as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_exclusive_scan_xor_int(__local uint* scratch, int val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int r = 0;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r ^ as_int(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static int spv_emulate_clustered_reduce_xor_int(__local uint* scratch, int val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    int r = as_int(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r ^ as_int(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_reduce_add_float(__local uint* scratch, float val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r + as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_inclusive_scan_add_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r + as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_exclusive_scan_add_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = 0.0f;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r + as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_clustered_reduce_add_float(__local uint* scratch, float val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    float r = as_float(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r + as_float(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_reduce_mul_float(__local uint* scratch, float val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = r * as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_inclusive_scan_mul_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = r * as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_exclusive_scan_mul_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = 1.0f;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r * as_float(scratch[subgroup_base + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_clustered_reduce_mul_float(__local uint* scratch, float val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    float r = as_float(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = r * as_float(scratch[subgroup_base + cluster_base_in_sg + i]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_reduce_min_float(__local uint* scratch, float val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = fmin(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_inclusive_scan_min_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = fmin(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_exclusive_scan_min_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = INFINITY;
+    for (uint i = 0u; i < lane_id; i++)
+        r = fmin(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_clustered_reduce_min_float(__local uint* scratch, float val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    float r = as_float(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = fmin(r, as_float(scratch[subgroup_base + cluster_base_in_sg + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_reduce_max_float(__local uint* scratch, float val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i < subgroup_size; i++)
+        r = fmax(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_inclusive_scan_max_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = as_float(scratch[subgroup_base]);
+    for (uint i = 1u; i <= lane_id; i++)
+        r = fmax(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_exclusive_scan_max_float(__local uint* scratch, float val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    float r = -INFINITY;
+    for (uint i = 0u; i < lane_id; i++)
+        r = fmax(r, as_float(scratch[subgroup_base + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static float spv_emulate_clustered_reduce_max_float(__local uint* scratch, float val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = as_uint(val);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    float r = as_float(scratch[subgroup_base + cluster_base_in_sg]);
+    for (uint i = 1u; i < cluster_size; i++)
+        r = fmax(r, as_float(scratch[subgroup_base + cluster_base_in_sg + i]));
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_reduce_logical_and(__local uint* scratch, bool val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = true;
+    for (uint i = 0u; i < subgroup_size; i++)
+        r = r && (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_inclusive_scan_logical_and(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = true;
+    for (uint i = 0u; i <= lane_id; i++)
+        r = r && (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_exclusive_scan_logical_and(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = true;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r && (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_clustered_reduce_logical_and(__local uint* scratch, bool val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    bool r = true;
+    for (uint i = 0u; i < cluster_size; i++)
+        r = r && (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_reduce_logical_or(__local uint* scratch, bool val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i < subgroup_size; i++)
+        r = r || (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_inclusive_scan_logical_or(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i <= lane_id; i++)
+        r = r || (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_exclusive_scan_logical_or(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r || (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_clustered_reduce_logical_or(__local uint* scratch, bool val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    bool r = false;
+    for (uint i = 0u; i < cluster_size; i++)
+        r = r || (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_reduce_logical_xor(__local uint* scratch, bool val, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i < subgroup_size; i++)
+        r = r != (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_inclusive_scan_logical_xor(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i <= lane_id; i++)
+        r = r != (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_exclusive_scan_logical_xor(__local uint* scratch, bool val, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    bool r = false;
+    for (uint i = 0u; i < lane_id; i++)
+        r = r != (scratch[subgroup_base + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_clustered_reduce_logical_xor(__local uint* scratch, bool val, uint cluster_size, uint lane_id, uint linear_id, uint subgroup_base, uint subgroup_size) {
+    scratch[linear_id] = val ? 1u : 0u;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    uint cluster_base_in_sg = (lane_id / cluster_size) * cluster_size;
+    bool r = false;
+    for (uint i = 0u; i < cluster_size; i++)
+        r = r != (scratch[subgroup_base + cluster_base_in_sg + i] != 0u);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    return r;
+}
+
+static bool spv_emulate_inverse_ballot(uint4 ballot, uint lane_id) {
+    uint word = lane_id / 32u;
+    uint bit = lane_id % 32u;
+    uint v = (word == 0u) ? ballot.x : (word == 1u) ? ballot.y : (word == 2u) ? ballot.z : ballot.w;
+    return (v & (1u << bit)) != 0u;
+}
+
+static bool spv_emulate_ballot_bit_extract(uint4 ballot, uint index) {
+    uint word = index / 32u;
+    uint bit = index % 32u;
+    uint v = (word == 0u) ? ballot.x : (word == 1u) ? ballot.y : (word == 2u) ? ballot.z : ballot.w;
+    return (v & (1u << bit)) != 0u;
+}
+
+static uint spv_popcount4(uint4 v) {
+    return popcount(v.x) + popcount(v.y) + popcount(v.z) + popcount(v.w);
+}
+
+static uint spv_emulate_ballot_bit_count(uint4 ballot) {
+    return spv_popcount4(ballot);
+}
+
+static uint spv_emulate_ballot_inclusive_bit_count(uint4 ballot, uint lane_id) {
+    uint4 masked = ballot;
+    uint word = lane_id / 32u;
+    uint bit = lane_id % 32u;
+    uint mask = (bit == 31u) ? 0xFFFFFFFFu : ((1u << (bit + 1u)) - 1u);
+    if (word == 0u) { masked.x &= mask; masked.y = 0u; masked.z = 0u; masked.w = 0u; }
+    else if (word == 1u) { masked.y &= mask; masked.z = 0u; masked.w = 0u; }
+    else if (word == 2u) { masked.z &= mask; masked.w = 0u; }
+    else { masked.w &= mask; }
+    return spv_popcount4(masked);
+}
+
+static uint spv_emulate_ballot_exclusive_bit_count(uint4 ballot, uint lane_id) {
+    if (lane_id == 0u) return 0u;
+    return spv_emulate_ballot_inclusive_bit_count(ballot, lane_id - 1u);
+}
+
+static uint spv_emulate_ballot_find_lsb(uint4 ballot) {
+    if (ballot.x != 0u) return (uint)clz(ballot.x & (0u - ballot.x));
+    if (ballot.y != 0u) return 32u + (uint)clz(ballot.y & (0u - ballot.y));
+    if (ballot.z != 0u) return 64u + (uint)clz(ballot.z & (0u - ballot.z));
+    if (ballot.w != 0u) return 96u + (uint)clz(ballot.w & (0u - ballot.w));
+    return ~0u;
+}
+
+static uint spv_emulate_ballot_find_msb(uint4 ballot) {
+    if (ballot.w != 0u) return 127u - (uint)clz(ballot.w);
+    if (ballot.z != 0u) return 95u - (uint)clz(ballot.z);
+    if (ballot.y != 0u) return 63u - (uint)clz(ballot.y);
+    if (ballot.x != 0u) return 31u - (uint)clz(ballot.x);
+    return ~0u;
+}
+
+__attribute__((reqd_work_group_size(256, 1, 1)))
+__kernel void comp_main(__global SSBO* _13)
+{
+    uint3 spvWorkgroupSize = (uint3)(get_local_size(0), get_local_size(1), get_local_size(2));
+    uint _spv_linear_workgroup_size = get_local_size(0) * get_local_size(1) * get_local_size(2);
+    uint _spv_linear_id = (get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0);
+    uint _spv_subgroup_size = 32u;
+    uint _spv_lane_id = _spv_linear_id % 32u;
+    uint _spv_subgroup_id = _spv_linear_id / 32u;
+    uint _spv_num_subgroups = _spv_linear_workgroup_size / 32u;
+    uint _spv_subgroup_base = _spv_subgroup_id * 32u;
+    __local uint _spv_subgroup_scratch[256];
+    float cred_add_1 = spv_emulate_clustered_reduce_add_float(_spv_subgroup_scratch, _13->FragColor, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    float cred_mul_1 = spv_emulate_clustered_reduce_mul_float(_spv_subgroup_scratch, _13->FragColor, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    float cred_min_1 = spv_emulate_clustered_reduce_min_float(_spv_subgroup_scratch, _13->FragColor, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    float cred_max_1 = spv_emulate_clustered_reduce_max_float(_spv_subgroup_scratch, _13->FragColor, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    int cred_iadd_1 = spv_emulate_clustered_reduce_add_int(_spv_subgroup_scratch, _13->idat, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    uint cred_umin_1 = spv_emulate_clustered_reduce_min_uint(_spv_subgroup_scratch, _13->udat, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    uint cred_and_1 = spv_emulate_clustered_reduce_and_uint(_spv_subgroup_scratch, _13->udat, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    uint cred_or_1 = spv_emulate_clustered_reduce_or_uint(_spv_subgroup_scratch, _13->udat, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    uint cred_xor_1 = spv_emulate_clustered_reduce_xor_uint(_spv_subgroup_scratch, _13->udat, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    bool cred_land_1 = spv_emulate_clustered_reduce_logical_and(_spv_subgroup_scratch, _13->udat > 0u, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    bool cred_lor_1 = spv_emulate_clustered_reduce_logical_or(_spv_subgroup_scratch, _13->udat > 0u, 4u, _spv_lane_id, _spv_linear_id, _spv_subgroup_base, _spv_subgroup_size);
+    _13->FragColor = (((((((cred_add_1 + cred_mul_1) + cred_min_1) + cred_max_1) + convert_float(cred_iadd_1)) + convert_float(cred_umin_1)) + convert_float((cred_and_1 + cred_or_1) + cred_xor_1)) + (float)(cred_land_1)) + (float)(cred_lor_1);
+}
+

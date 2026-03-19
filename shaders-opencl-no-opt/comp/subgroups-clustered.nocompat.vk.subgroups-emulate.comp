@@ -1,0 +1,34 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_clustered : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+	int idat;
+	uint udat;
+};
+
+void main()
+{
+	float cred_add = subgroupClusteredAdd(FragColor, 4u);
+	float cred_mul = subgroupClusteredMul(FragColor, 4u);
+	float cred_min = subgroupClusteredMin(FragColor, 4u);
+	float cred_max = subgroupClusteredMax(FragColor, 4u);
+
+	int cred_iadd = subgroupClusteredAdd(idat, 4u);
+	uint cred_umin = subgroupClusteredMin(udat, 4u);
+
+	uint cred_and = subgroupClusteredAnd(udat, 4u);
+	uint cred_or = subgroupClusteredOr(udat, 4u);
+	uint cred_xor = subgroupClusteredXor(udat, 4u);
+
+	bool cred_land = subgroupClusteredAnd(udat > 0u, 4u);
+	bool cred_lor = subgroupClusteredOr(udat > 0u, 4u);
+
+	FragColor = cred_add + cred_mul + cred_min + cred_max
+		+ float(cred_iadd) + float(cred_umin)
+		+ float(cred_and + cred_or + cred_xor)
+		+ float(cred_land) + float(cred_lor);
+}

@@ -1,0 +1,43 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	float FragColor;
+	uint udat;
+};
+
+void main()
+{
+	// Ballot
+	uvec4 ballot = subgroupBallot(gl_SubgroupInvocationID < 16u);
+
+	// BroadcastFirst
+	float first = subgroupBroadcastFirst(FragColor);
+
+	// Ballot bit ops
+	bool extracted = subgroupBallotBitExtract(ballot, 5u);
+	uint bit_count = subgroupBallotBitCount(ballot);
+	uint inclusive_count = subgroupBallotInclusiveBitCount(ballot);
+	uint exclusive_count = subgroupBallotExclusiveBitCount(ballot);
+	uint find_lsb = subgroupBallotFindLSB(ballot);
+	uint find_msb = subgroupBallotFindMSB(ballot);
+
+	// InverseBallot
+	bool inv_ballot = subgroupInverseBallot(ballot);
+
+	// Mask builtins
+	uvec4 eq_mask = gl_SubgroupEqMask;
+	uvec4 ge_mask = gl_SubgroupGeMask;
+	uvec4 gt_mask = gl_SubgroupGtMask;
+	uvec4 le_mask = gl_SubgroupLeMask;
+	uvec4 lt_mask = gl_SubgroupLtMask;
+
+	FragColor = first
+		+ float(ballot.x + ballot.y + ballot.z + ballot.w)
+		+ float(bit_count + inclusive_count + exclusive_count + find_lsb + find_msb)
+		+ float(extracted) + float(inv_ballot)
+		+ float(eq_mask.x) + float(ge_mask.x) + float(gt_mask.x) + float(le_mask.x) + float(lt_mask.x);
+}
