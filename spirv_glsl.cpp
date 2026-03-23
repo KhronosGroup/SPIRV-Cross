@@ -12432,6 +12432,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Volatile memory access requires the value be read exactly once from
 		// memory.  Do not forward the expression so that re-evaluation at each
 		// use site cannot re-read potentially modified memory.
+		// FIXME: To force implementations to actually respect the volatile nature of the load,
+		// the block itself must be marked volatile, or VulkanMM is used to do an explicit volatile load.
 		if (forward && length >= 4 && (ops[3] & MemoryAccessVolatileMask) != 0)
 			forward = false;
 
