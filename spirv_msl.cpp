@@ -11098,6 +11098,20 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	else if (opcode == OpAtomicSMax || opcode == OpAtomicSMin)
 		expected_type = to_signed_basetype(type.width);
 
+	// Metal does not support float atomics in threadgroup memory.  When the
+	// atomic result type is integer but the pointee type is float (CAS-based
+	// emulation of float atomics), override the pointer cast type to emit
+	// atomic_uint / atomic_ulong instead of atomic_float.  We leave
+	// expected_type unchanged so the result bitcast logic is not affected.
+	auto atomic_cast_type = expected_type;
+	if (ptr_type.storage == spv::StorageClassWorkgroup &&
+	    type_is_floating_point(type))
+	{
+		auto &res_type = get<SPIRType>(result_type);
+		if (type_is_integral(res_type))
+			atomic_cast_type = res_type.basetype;
+	}
+
 	bool use_native_image_atomic;
 	if (msl_options.supports_msl_version(3, 1))
 		use_native_image_atomic = check_atomic_image(obj);
@@ -11108,7 +11122,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		SPIRV_CROSS_THROW("MSL currently does not support 64-bit atomics.");
 
 	auto remapped_type = type;
-	remapped_type.basetype = expected_type;
+	remapped_type.basetype = atomic_cast_type;
 
 	auto *var = maybe_get_backing_variable(obj);
 	const auto *res_type = var ? &get<SPIRType>(var->basetype) : nullptr;
