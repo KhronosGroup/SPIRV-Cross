@@ -8236,6 +8236,17 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	base_args.is_proj = proj != 0;
 
 	string expr;
+
+	// texture() with bias on sampler2DArrayShadow or samplerCubeArrayShadow requires GL_EXT_texture_shadow_lod.
+	// textureOffset() with bias on sampler2DArrayShadow also requires it.
+	if (bias != 0 && dref != 0 && !fetch && !gather &&
+	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) ||
+	     (imgtype.image.arrayed && imgtype.image.dim == DimCube)) &&
+	    is_depth_image(imgtype, img))
+	{
+		require_extension_internal("GL_EXT_texture_shadow_lod");
+	}
+
 	TextureFunctionNameArguments name_args = {};
 
 	name_args.base = base_args;
@@ -8372,10 +8383,12 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	{
 		if (!expression_is_constant_null(args.lod))
 		{
-			SPIRV_CROSS_THROW("textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be "
-			                  "expressed in GLSL.");
+			require_extension_internal("GL_EXT_texture_shadow_lod");
 		}
-		workaround_lod_array_shadow_as_grad = true;
+		else
+		{
+			workaround_lod_array_shadow_as_grad = true;
+		}
 	}
 
 	if (args.is_sparse_feedback)
@@ -8510,9 +8523,11 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
+	// If GL_EXT_texture_shadow_lod is in use, textureLod is available directly with arbitrary LOD.
 	bool workaround_lod_array_shadow_as_grad =
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    is_depth_image(imgtype, img) && args.lod != 0 && !args.base.is_fetch;
+	    is_depth_image(imgtype, img) && args.lod != 0 && !args.base.is_fetch &&
+	    !has_extension("GL_EXT_texture_shadow_lod");
 
 	if (args.dref)
 	{
