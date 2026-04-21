@@ -440,6 +440,10 @@ def shader_model_hlsl(shader):
         return '-Tcs_5_1'
     elif '.geom' in shader:
         return '-Tgs_5_1'
+    elif '.tesc' in shader:
+        return '-Ths_5_1'
+    elif '.tese' in shader:
+        return '-Tds_5_1'
     elif '.mesh' in shader:
         return '-Tms_6_5'
     elif '.task' in shader:
