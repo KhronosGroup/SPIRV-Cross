@@ -17943,13 +17943,30 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block, bool follow_tr
 	return merge(statements);
 }
 
+// Loop variable with OpUndef init: zero-init instead of leaving uninitialized (FXC X4555/X4000).
+std::string CompilerGLSL::undef_loop_variable_initializer_suffix(const SPIRVariable &var)
+{
+	if (!backend.requires_phi_undef_zero_init)
+		return "";
+
+	uint32_t expr = var.static_expression;
+	if (expr == 0 || ir.ids[expr].get_type() != TypeUndef)
+		return "";
+
+	auto &type = get<SPIRType>(var.basetype);
+	if (!type_can_zero_initialize(type))
+		return "";
+
+	return join(" = ", to_zero_initialized_expression(var.basetype));
+}
+
 void CompilerGLSL::emit_while_loop_initializers(const SPIRBlock &block)
 {
 	// While loops do not take initializers, so declare all of them outside.
 	for (auto &loop_var : block.loop_variables)
 	{
 		auto &var = get<SPIRVariable>(loop_var);
-		statement(variable_decl(var), ";");
+		statement(variable_decl(var), undef_loop_variable_initializer_suffix(var), ";");
 	}
 }
 
@@ -17981,7 +17998,10 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 	else if (!same_types || missing_initializers == uint32_t(block.loop_variables.size()))
 	{
 		for (auto &loop_var : block.loop_variables)
-			statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
+		{
+			auto &var = get<SPIRVariable>(loop_var);
+			statement(variable_decl(var), undef_loop_variable_initializer_suffix(var), ";");
+		}
 		return "";
 	}
 	else
@@ -17992,10 +18012,11 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 
 		for (auto &loop_var : block.loop_variables)
 		{
-			uint32_t static_expr = get<SPIRVariable>(loop_var).static_expression;
+			auto &var_for_undef = get<SPIRVariable>(loop_var);
+			uint32_t static_expr = var_for_undef.static_expression;
 			if (static_expr == 0 || ir.ids[static_expr].get_type() == TypeUndef)
 			{
-				statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
+				statement(variable_decl(var_for_undef), undef_loop_variable_initializer_suffix(var_for_undef), ";");
 			}
 			else
 			{
