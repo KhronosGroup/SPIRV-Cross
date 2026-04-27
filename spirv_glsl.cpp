@@ -3782,6 +3782,49 @@ void CompilerGLSL::emit_resources()
 		statement("");
 	emitted = false;
 
+	SmallVector<ConstantID, 3> spec_const_dependencies;
+	bool legacy_spec_constant_workgroup = execution.model == ExecutionModelGLCompute && !options.vulkan_semantics &&
+	                                      (execution.workgroup_size.constant != 0 || execution.flags.get(
+		                                       ExecutionModeLocalSizeId));
+	if (legacy_spec_constant_workgroup)
+	{
+		SpecializationConstant wg_x, wg_y, wg_z;
+		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+		if (wg_x.id != ConstantID(0))
+			spec_const_dependencies.push_back(wg_x.id);
+		if (wg_y.id != ConstantID(0))
+			spec_const_dependencies.push_back(wg_y.id);
+		if (wg_z.id != ConstantID(0))
+			spec_const_dependencies.push_back(wg_z.id);
+	}
+
+	const auto notify_spec_constant = [&](ConstantID id)
+	{
+		if (legacy_spec_constant_workgroup)
+		{
+			auto itr = std::find(spec_const_dependencies.begin(), spec_const_dependencies.end(), id);
+
+			if (itr == spec_const_dependencies.end())
+				return;
+
+			spec_const_dependencies.erase(itr);
+			if (spec_const_dependencies.empty())
+			{
+				SpecializationConstant wg_x, wg_y, wg_z;
+				// We have declared all dependencies. We must delcare the workgroup size immediately
+				// as subsequent spec constant ops may depend on the declaration.
+				// Newer glslang does not allow gl_WorkGroupSize to be accessed before layout(local_size) in;
+				get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+				SmallVector<string> inputs;
+				build_workgroup_size(inputs, wg_x, wg_y, wg_z);
+				statement("layout(", merge(inputs), ") in;");
+				statement("");
+				legacy_spec_constant_workgroup = false;
+			}
+		}
+	};
+
 	// If emitted Vulkan GLSL,
 	// emit specialization constants as actual floats,
 	// spec op expressions will redirect to the constant name.
@@ -3812,11 +3855,15 @@ void CompilerGLSL::emit_resources()
 					emit_constant(c);
 					emitted = true;
 				}
+
+				if (c.specialization)
+					notify_spec_constant(ConstantID(c.self));
 			}
 			else if (id.get_type() == TypeConstantOp)
 			{
 				emit_specialization_constant_op(id.get<SPIRConstantOp>());
 				emitted = true;
+				notify_spec_constant(ConstantID(id.get_id()));
 			}
 			else if (id.get_type() == TypeType)
 			{
@@ -3870,24 +3917,6 @@ void CompilerGLSL::emit_resources()
 
 	if (emitted)
 		statement("");
-
-	// If we needed to declare work group size late, check here.
-	// If the work group size depends on a specialization constant, we need to declare the layout() block
-	// after constants (and their macros) have been declared.
-	if (execution.model == ExecutionModelGLCompute && !options.vulkan_semantics &&
-	    (execution.workgroup_size.constant != 0 || execution.flags.get(ExecutionModeLocalSizeId)))
-	{
-		SpecializationConstant wg_x, wg_y, wg_z;
-		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
-
-		if ((wg_x.id != ConstantID(0)) || (wg_y.id != ConstantID(0)) || (wg_z.id != ConstantID(0)))
-		{
-			SmallVector<string> inputs;
-			build_workgroup_size(inputs, wg_x, wg_y, wg_z);
-			statement("layout(", merge(inputs), ") in;");
-			statement("");
-		}
-	}
 
 	emitted = false;
 
