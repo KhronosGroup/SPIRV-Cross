@@ -9054,7 +9054,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			for (uint32_t i = 3; i < length; i++)
 				rematerialize_ops.push_back(ops[i]);
 
-			return emit_tessellation_access_chain(rematerialize_ops.data(), rematerialize_ops.size());
+			return emit_tessellation_access_chain(rematerialize_ops.data(), uint32_t(rematerialize_ops.size()));
 		}
 
 		// If output is masked, it is emitted as a "normal" variable, just go through normal code paths.
