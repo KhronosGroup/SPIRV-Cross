@@ -26,64 +26,64 @@ layout(std430, binding = 1) buffer InOut3 {
 } comp3;
 
 // Signed integer dot with unsigned integer
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4450)
 int sdot_int_result(u16vec4 x, u16vec4 y);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4450)
 uint sdot_uint_result(u16vec4 x, u16vec4 y);
 
 // Unsigned integer dot with signed integer. Only unsigned result is allowed in SPIR-V.
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4451)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4451)
 uint udot_uint_result(u16vec4 x, u16vec4 y);
 
 // Mixed integer dot with unsigned integer
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4452)
 int sudot_int_result(u16vec4 x, u16vec4 y);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4452)
 uint sudot_uint_result(u16vec4 x, u16vec4 y);
 
 // Signed packed dot product with different output widths.
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4450)
 uint8_t spdot_to_8(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4450)
 uint16_t spdot_to_16(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4450)
 uint spdot_to_32(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4450)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4450)
 int spdot_to_i32(uint x, uint y, spirv_literal uint packedFormat);
 
 // Unsigned packed dot product with different output widths.
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4451)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4451)
 uint8_t updot_to_8(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4451)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4451)
 uint16_t updot_to_16(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4451)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4451)
 uint updot_to_32(uint x, uint y, spirv_literal uint packedFormat);
 
 // Mixed packed dot product with different output widths.
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4452)
 uint8_t supdot_to_8(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4452)
 uint16_t supdot_to_16(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4452)
 uint supdot_to_32(uint x, uint y, spirv_literal uint packedFormat);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4452)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6018], id = 4452)
 int supdot_to_i32(uint x, uint y, spirv_literal uint packedFormat);
 
 // SDotAccSat with unsigned input and result type
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4453)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4453)
 int sdotaddsat_int_result(u16vec4 x, u16vec4 y, int acc);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4453)
-uint sdotaddsat_uint_result(u16vec4 x, u16vec4 y, int acc);
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4453)
+uint sdotaddsat_uint_result(u16vec4 x, u16vec4 y, uint acc);
 
 // UDotAccSat. Result type must be unsigned in SPIR-V.
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4454)
-uint udotaddsat(u16vec4 x, u16vec4 y, int acc);
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4454)
+uint udotaddsat(u16vec4 x, u16vec4 y, uint acc);
 
 // SUDotAccSat
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4455)
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4455)
 int sudotaddsat_int_result(u16vec4 x, u16vec4 y, int acc);
-spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019], id = 4455)
-uint sudotaddsat_uint_result(u16vec4 x, u16vec4 y, int acc);
+spirv_instruction (extensions = ["SPV_KHR_integer_dot_product"], capabilities = [6019, 6016], id = 4455)
+uint sudotaddsat_uint_result(u16vec4 x, u16vec4 y, uint acc);
 
 void main() {
     int sdot_int = sdot_int_result(comp3.x, comp3.y);

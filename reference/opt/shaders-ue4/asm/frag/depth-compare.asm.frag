@@ -189,7 +189,7 @@ struct type_Globals
     float4 PointLightDepthBiasAndProjParameters;
 };
 
-constant float4 _453 = {};
+constant float4 _459 = {};
 
 struct main0_out
 {
@@ -253,7 +253,7 @@ fragment main0_out main0(constant type_View& View [[buffer(0)]], constant type_G
     float _448;
     if (_248)
     {
-        float4 _260 = SSProfilesTexture.read(uint2(int3(1, int(uint((select(float4(0.0), SceneTexturesStruct_GBufferDTexture.sample(SceneTexturesStruct_GBufferDTextureSampler, _114, level(0.0)), bool4(!((_240 & 16u) != 0u))).x * 255.0) + 0.5)), 0).xy), 0);
+        float4 _260 = SSProfilesTexture.read(uint2(int3(1, int(uint((select(float4(0.0), SceneTexturesStruct_GBufferDTexture.sample(SceneTexturesStruct_GBufferDTextureSampler, _114, level(0.0)), bool4((_240 & 16u) == 0u)).x * 255.0) + 0.5)), 0).xy), 0);
         float _263 = _260.y * 0.5;
         float3 _266 = _148 - (_236 * float3(_263));
         float _274 = powr(fast::clamp(dot(-(_152 * float3(rsqrt(dot(_152, _152)))), _236), 0.0, 1.0), 1.0);
@@ -296,7 +296,7 @@ fragment main0_out main0(constant type_View& View [[buffer(0)]], constant type_G
             float _387 = (_329 - ((1.0 / ((float4(ShadowDepthCubeTexture.sample(ShadowDepthTextureSampler, ((_278 + (_285 * float3(1.46946299076080322265625))) + (_286 * float3(-2.0225429534912109375))), level(0.0))).x * _Globals.PointLightDepthBiasAndProjParameters.z) - _Globals.PointLightDepthBiasAndProjParameters.w)) * _Globals.LightPositionAndInvRadius.w)) * _323;
             float _410 = (_329 - ((1.0 / ((float4(ShadowDepthCubeTexture.sample(ShadowDepthTextureSampler, ((_278 + (_285 * float3(-1.46946299076080322265625))) + (_286 * float3(-2.02254199981689453125))), level(0.0))).x * _Globals.PointLightDepthBiasAndProjParameters.z) - _Globals.PointLightDepthBiasAndProjParameters.w)) * _Globals.LightPositionAndInvRadius.w)) * _323;
             float _433 = (_329 - ((1.0 / ((float4(ShadowDepthCubeTexture.sample(ShadowDepthTextureSampler, ((_278 + (_285 * float3(-2.3776409626007080078125))) + (_286 * float3(0.772543013095855712890625))), level(0.0))).x * _Globals.PointLightDepthBiasAndProjParameters.z) - _Globals.PointLightDepthBiasAndProjParameters.w)) * _Globals.LightPositionAndInvRadius.w)) * _323;
-            _445 = (((((fast::clamp(abs((_342 > 0.0) ? (_342 + _263) : fast::max(0.0, (_342 * _274) + _263)), 0.1500000059604644775390625, 5.0) + 0.25) + (fast::clamp(abs((_364 > 0.0) ? (_364 + _263) : fast::max(0.0, (_364 * _274) + _263)), 0.1500000059604644775390625, 5.0) + 0.25)) + (fast::clamp(abs((_387 > 0.0) ? (_387 + _263) : fast::max(0.0, (_387 * _274) + _263)), 0.1500000059604644775390625, 5.0) + 0.25)) + (fast::clamp(abs((_410 > 0.0) ? (_410 + _263) : fast::max(0.0, (_410 * _274) + _263)), 0.1500000059604644775390625, 5.0) + 0.25)) + (fast::clamp(abs((_433 > 0.0) ? (_433 + _263) : fast::max(0.0, (_433 * _274) + _263)), 0.1500000059604644775390625, 5.0) + 0.25)) * 0.20000000298023223876953125;
+            _445 = (1.25 + ((((fast::clamp(abs((_342 > 0.0) ? (_342 + _263) : fast::max(0.0, (_342 * _274) + _263)), 0.1500000059604644775390625, 5.0) + fast::clamp(abs((_364 > 0.0) ? (_364 + _263) : fast::max(0.0, (_364 * _274) + _263)), 0.1500000059604644775390625, 5.0)) + fast::clamp(abs((_387 > 0.0) ? (_387 + _263) : fast::max(0.0, (_387 * _274) + _263)), 0.1500000059604644775390625, 5.0)) + fast::clamp(abs((_410 > 0.0) ? (_410 + _263) : fast::max(0.0, (_410 * _274) + _263)), 0.1500000059604644775390625, 5.0)) + fast::clamp(abs((_433 > 0.0) ? (_433 + _263) : fast::max(0.0, (_433 * _274) + _263)), 0.1500000059604644775390625, 5.0))) * 0.20000000298023223876953125;
         }
         else
         {

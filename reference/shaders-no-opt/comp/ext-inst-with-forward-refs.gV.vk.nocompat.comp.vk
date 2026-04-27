@@ -19,10 +19,10 @@ layout(buffer_reference, std430) buffer Foo
 layout(push_constant, std430) uniform Registers
 {
     Blah blah;
-} _61;
+} _57;
 
 void main()
 {
-    _61.blah.a = 10;
+    _57.blah.a = 10;
 }
 
