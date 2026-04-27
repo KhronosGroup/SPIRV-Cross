@@ -246,7 +246,7 @@ struct main0_patchIn
     float4 _210 = float4(_190 * 3.0);
     float4 _214 = float4(_191 * 3.0);
     float4 _221 = float4(_192 * 3.0);
-    float4 _235 = ((((((((((patchIn.gl_in[0u][6u].x * float4(_190)) * _198) + ((patchIn.gl_in[1u][6u].x * float4(_191)) * _202)) + ((patchIn.gl_in[2u][6u].x * float4(_192)) * _207)) + ((patchIn.gl_in[0u][6u].y * _210) * _202)) + ((patchIn.gl_in[0u][6u].z * _214) * _198)) + ((patchIn.gl_in[1u][6u].y * _214) * _207)) + ((patchIn.gl_in[1u][6u].z * _221) * _202)) + ((patchIn.gl_in[2u][6u].y * _221) * _198)) + ((patchIn.gl_in[2u][6u].z * _210) * _207)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _207) * _198) * _202);
+    float4 _235 = ((((((((((patchIn.gl_in[0u].in_var_PN_POSITION_0 * float4(_190)) * _198) + ((patchIn.gl_in[1u].in_var_PN_POSITION_0 * float4(_191)) * _202)) + ((patchIn.gl_in[2u].in_var_PN_POSITION_0 * float4(_192)) * _207)) + ((patchIn.gl_in[0u].in_var_PN_POSITION_1 * _210) * _202)) + ((patchIn.gl_in[0u].in_var_PN_POSITION_2 * _214) * _198)) + ((patchIn.gl_in[1u].in_var_PN_POSITION_1 * _214) * _207)) + ((patchIn.gl_in[1u].in_var_PN_POSITION_2 * _221) * _202)) + ((patchIn.gl_in[2u].in_var_PN_POSITION_1 * _221) * _198)) + ((patchIn.gl_in[2u].in_var_PN_POSITION_2 * _210) * _207)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _207) * _198) * _202);
     float3 _237 = float3(gl_TessCoord.x);
     float3 _240 = float3(gl_TessCoord.y);
     float3 _254 = float3(gl_TessCoord.z);
