@@ -795,7 +795,8 @@ string CompilerGLSL::compile()
 		// Need to figure out all the aliased types that view the heap.
 		// In GLSL, each unique type must be declared with layout(descriptor_heap) type-decl spvSomeIdentResourceHeap[];
 		// During untyped access chain traversal, we prefix the name to match the aliases.
-		// HLSL has more direct native support and will not need these.
+		// HLSL has more direct native support and will not need these, but we still need to call this function
+		// to verify that descriptor strides make sense.
 		analyze_descriptor_heap_types();
 	}
 

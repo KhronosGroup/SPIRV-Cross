@@ -5449,8 +5449,54 @@ void Compiler::analyze_descriptor_heap_types()
 				if (compiler.is_pointer(data_type))
 					SPIRV_CROSS_THROW("pointer type not allowed.");
 
-				if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::SampledImage ||
-					data_type.basetype == SPIRType::Sampler)
+				// Need to validate the array stride and types. HLLs are not flexible enough to support the full flexibility of SPIR-V.
+				if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInResourceHeapEXT)
+				{
+					if (!compiler.is_runtime_size_array(data_type))
+						SPIRV_CROSS_THROW("Descriptor heap must be accessed as a runtime array.");
+
+					// The only meaningful use of this is ArrayStride equal to sizeof(sampler) right now.
+					uint32_t array_stride_id = compiler.get_decoration(args[2], DecorationArrayStrideIdEXT);
+					if (!array_stride_id)
+						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for resource heap.");
+
+					auto &c = compiler.get<SPIRConstant>(array_stride_id);
+					if (!c.size_of_type)
+						SPIRV_CROSS_THROW("Resource heap array stride must be ConstantSizeOfEXT for high level languages.");
+
+					auto &element_type = compiler.get<SPIRType>(data_type.parent_type);
+
+					if (element_type.basetype == SPIRType::DescriptorHeapBuffer)
+					{
+						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::DescriptorHeapBuffer)
+							SPIRV_CROSS_THROW("Buffer descriptors in heap must be ConstantSizeOfEXT(OpTypeBufferEXT) for GLSL.");
+					}
+					else if (data_type.basetype == SPIRType::Image)
+					{
+						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::Image)
+							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeImage) for GLSL.");
+					}
+				}
+				else if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInSamplerHeapEXT)
+				{
+					if (!compiler.is_runtime_size_array(data_type))
+						SPIRV_CROSS_THROW("Descriptor heap must be accessed as a runtime array.");
+
+					// The only meaningful use of this is ArrayStride equal to sizeof(sampler) right now.
+					uint32_t array_stride_id = compiler.get_decoration(args[2], DecorationArrayStrideIdEXT);
+					if (!array_stride_id)
+						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for sampler heap.");
+
+					auto &c = compiler.get<SPIRConstant>(array_stride_id);
+					if (!c.size_of_type || compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::Sampler)
+						SPIRV_CROSS_THROW("Sampler heap array stride must be ConstantSizeOfEXT(OpTypeSampler) for high level languages.");
+				}
+
+				if (data_type.basetype == SPIRType::SampledImage)
+				{
+					SPIRV_CROSS_THROW("Attempting to access heap as combined sampler image. This does not make sense.");
+				}
+				else if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::Sampler)
 				{
 					add_unique_type(data_type.self);
 				}
