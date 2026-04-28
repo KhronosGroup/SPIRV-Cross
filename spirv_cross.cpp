@@ -5429,6 +5429,68 @@ void Compiler::analyze_non_block_pointer_types()
 	physical_storage_type_to_alignment = std::move(handler.physical_block_type_meta);
 }
 
+void Compiler::analyze_descriptor_heap_types()
+{
+	struct HeapHandler : OpcodeHandler
+	{
+		bool handle(Op opcode, const uint32_t *args, uint32_t) override
+		{
+			switch (opcode)
+			{
+			case OpBufferPointerEXT:
+				buffer_pointers.insert(args[1]);
+				break;
+
+			case OpUntypedAccessChainKHR:
+			case OpUntypedInBoundsAccessChainKHR:
+			{
+				auto &data_type = compiler.get<SPIRType>(args[2]);
+
+				if (compiler.is_pointer(data_type))
+					SPIRV_CROSS_THROW("pointer type not allowed.");
+
+				if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::SampledImage ||
+					data_type.basetype == SPIRType::Sampler)
+				{
+					add_unique_type(data_type.self);
+				}
+				else if (buffer_pointers.count(args[3]) != 0)
+				{
+					if (!compiler.has_decoration(data_type.self, DecorationBlock) &&
+					    !compiler.has_decoration(data_type.self, DecorationBufferBlock))
+					{
+						SPIRV_CROSS_THROW("BufferPointerEXT must reference a block type.");
+					}
+					add_unique_type(data_type.self);
+				}
+				break;
+			}
+
+			default:
+				break;
+			}
+
+			return true;
+		}
+
+		explicit HeapHandler(Compiler &compiler_) : OpcodeHandler(compiler_) {}
+
+		std::vector<uint32_t> heap_types;
+		std::unordered_set<uint32_t> buffer_pointers;
+
+		void add_unique_type(uint32_t id)
+		{
+			assert(id != 0);
+			if (std::find(heap_types.begin(), heap_types.end(), id) == heap_types.end())
+				heap_types.push_back(id);
+		}
+	};
+
+	HeapHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+	descriptor_heap_types = std::move(handler.heap_types);
+}
+
 bool Compiler::InterlockedResourceAccessPrepassHandler::handle(Op op, const uint32_t *, uint32_t)
 {
 	if (op == OpBeginInvocationInterlockEXT || op == OpEndInvocationInterlockEXT)

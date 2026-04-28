@@ -608,7 +608,8 @@ struct SPIRType : IVariant
 		FloatE4M3,
 		FloatE5M2,
 
-		Tensor
+		Tensor,
+		DescriptorHeapBuffer
 	};
 
 	// Scalar/vector/matrix support.
@@ -655,6 +656,11 @@ struct SPIRType : IVariant
 			uint32_t rank;
 			uint32_t shape;
 		} tensor;
+
+		struct
+		{
+			spv::StorageClass storage;
+		} descriptor_heap_buffer;
 	} ext;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
@@ -807,6 +813,9 @@ struct SPIRExpression : IVariant
 
 	// Whether or not gl_MeshVerticesEXT[].gl_Position (as a whole or .y) is referenced
 	bool access_meshlet_position_y = false;
+
+	// If this expression represents a OpBufferPointerEXT cast.
+	bool buffer_pointer = false;
 
 	// A list of expressions which this expression depends on.
 	SmallVector<ID> expression_dependencies;
@@ -1541,6 +1550,9 @@ struct SPIRConstant : IVariant
 	// preprocessor directives before compiling the shader.
 	std::string specialization_constant_macro_name;
 
+	// ConstantSizeOfEXT.
+	ID size_of_type = 0;
+
 	SPIRV_CROSS_DECLARE_CLONE(SPIRConstant)
 };
 
@@ -1821,10 +1833,12 @@ struct Meta
 		uint32_t set = 0;
 		uint32_t binding = 0;
 		uint32_t offset = 0;
+		uint32_t offset_id = 0;
 		uint32_t xfb_buffer = 0;
 		uint32_t xfb_stride = 0;
 		uint32_t stream = 0;
 		uint32_t array_stride = 0;
+		uint32_t array_stride_id = 0;
 		uint32_t matrix_stride = 0;
 		uint32_t input_attachment = 0;
 		uint32_t spec_id = 0;

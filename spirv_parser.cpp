@@ -627,6 +627,12 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	// MemberDecorateIdEXT only applies to OffsetIdEXT when descriptors are packed in structs.
+	// This is currently unsupported and will fail in compilation.
+	// Pass it through in case someone just needs reflection.
+	case OpMemberDecorateIdEXT:
+		break;
+
 	case OpMemberDecorateStringGOOGLE:
 	{
 		uint32_t id = ops[0];
@@ -1157,6 +1163,24 @@ void Parser::parse(const Instruction &instruction)
 			}
 			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
 		}
+		break;
+	}
+
+	case OpConstantSizeOfEXT:
+	{
+		uint32_t id = ops[1];
+		uint32_t type = ops[0];
+		auto &c = set<SPIRConstant>(id, type);
+		c.size_of_type = ops[2];
+		break;
+	}
+
+	case OpTypeBufferEXT:
+	{
+		uint32_t type = ops[0];
+		auto &t = set<SPIRType>(type, OpTypeBufferEXT);
+		t.basetype = SPIRType::DescriptorHeapBuffer;
+		t.ext.descriptor_heap_buffer.storage = static_cast<StorageClass>(ops[1]);
 		break;
 	}
 

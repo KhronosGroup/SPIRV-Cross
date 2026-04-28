@@ -1090,6 +1090,9 @@ protected:
 	SmallVector<uint32_t> physical_storage_non_block_pointer_types;
 	std::unordered_map<uint32_t, PhysicalBlockMeta> physical_storage_type_to_alignment;
 
+	std::vector<uint32_t> descriptor_heap_types;
+	void analyze_descriptor_heap_types();
+
 	void analyze_variable_scope(SPIRFunction &function, AnalyzeVariableScopeAccessHandler &handler);
 	void find_function_local_luts(SPIRFunction &function, const AnalyzeVariableScopeAccessHandler &handler,
 	                              bool single_function);

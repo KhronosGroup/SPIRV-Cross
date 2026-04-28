@@ -689,6 +689,12 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_ARM_tensors");
 			break;
 
+		case CapabilityDescriptorHeapEXT:
+			if (!options.vulkan_semantics)
+				SPIRV_CROSS_THROW("DescriptorHeapEXT requires Vulkan semantics.");
+			require_extension_internal("GL_EXT_descriptor_heap");
+			break;
+
 		default:
 			break;
 		}
@@ -782,6 +788,16 @@ string CompilerGLSL::compile()
 	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
 	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
 		analyze_non_block_pointer_types();
+
+	if (std::find(ir.declared_capabilities.begin(), ir.declared_capabilities.end(),
+	              CapabilityDescriptorHeapEXT) != ir.declared_capabilities.end())
+	{
+		// Need to figure out all the aliased types that view the heap.
+		// In GLSL, each unique type must be declared with layout(descriptor_heap) type-decl spvSomeIdentResourceHeap[];
+		// During untyped access chain traversal, we prefix the name to match the aliases.
+		// HLSL has more direct native support and will not need these.
+		analyze_descriptor_heap_types();
+	}
 
 	uint32_t pass_count = 0;
 	do
@@ -10559,6 +10575,15 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_ClusterIDNV";
 	}
 
+	case BuiltInResourceHeapEXT:
+		// This builtin name is a placeholder.
+		// We will override this name later with prefix per actual type.
+		// However, this allows untyped access chain to index into the heap directly.
+		return "ResourceHeap";
+
+	case BuiltInSamplerHeapEXT:
+		return "SamplerHeap";
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
@@ -12874,6 +12899,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto e = access_chain(ptr_id, &ops[indices_start], length - indices_start, target_type, &meta, ptr_chain,
 		                      untyped ? &get<SPIRType>(ops[2]) : nullptr);
 
+		if (untyped)
+		{
+			auto &data_type = get<SPIRType>(ops[2]);
+			auto *ptr_expr = maybe_get<SPIRExpression>(ptr_id);
+			if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::Sampler ||
+				data_type.basetype == SPIRType::SampledImage ||
+				(ptr_expr && ptr_expr->buffer_pointer))
+			{
+				// We can resolve this type now.
+				// For further buffer access chains, we don't do any fixups since we have resolved to proper types.
+				// For buffer types we only prepend when the access chain starts from a BufferPointerEXT base.
+				// Multi-stage access chains are not possible for image types.
+				e = join("spv", to_name(data_type.self), e);
+			}
+		}
+
 		// If the base is flattened UBO of struct type, the expression has to be a composite.
 		// In that case, backends which do not support inline syntax need it to be bound to a temporary.
 		// Otherwise, invalid expressions like ({UBO[0].xyz, UBO[0].w, UBO[1]}).member are emitted.
@@ -12965,6 +13006,30 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			convert_non_uniform_expression(e, ops[2]);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type,
 		                    true);
+		break;
+	}
+
+	case OpBufferPointerEXT:
+	{
+		uint32_t type_id = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t ptr_id = ops[2];
+
+		auto *backing_variable = maybe_get_backing_variable(ptr_id);
+		if (!backing_variable)
+			SPIRV_CROSS_THROW("There is no backing variable for BufferPointerEXT.");
+
+		auto *chain_expr = maybe_get<SPIRExpression>(ptr_id);
+		if (!chain_expr || !chain_expr->access_chain)
+			SPIRV_CROSS_THROW("Expected to see access chain for BufferPointerEXT.");
+
+		auto &expr = set<SPIRExpression>(result_id, to_expression(ptr_id), type_id, true);
+		expr.loaded_from = chain_expr->loaded_from;
+		expr.access_chain = true;
+		expr.buffer_pointer = true;
+		expr.implied_read_expressions = chain_expr->implied_read_expressions;
+		expr.expression_dependencies = chain_expr->expression_dependencies;
+
 		break;
 	}
 
