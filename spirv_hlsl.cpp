@@ -5237,7 +5237,8 @@ string CompilerHLSL::write_access_chain_value(uint32_t value, const SmallVector<
 	{
 		AccessChainMeta meta;
 		ret = access_chain_internal(value, composite_chain.data(), uint32_t(composite_chain.size()),
-		                            ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_LITERAL_MSB_FORCE_ID, &meta);
+		                            ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_LITERAL_MSB_FORCE_ID, &meta,
+		                            nullptr);
 	}
 
 	if (enclose)

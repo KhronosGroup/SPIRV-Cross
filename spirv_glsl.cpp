@@ -4180,19 +4180,19 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 					if (type_is_array && !is_control_point)
 					{
 						uint32_t indices[2] = { j, i };
-						auto chain = access_chain_internal(var.self, indices, 2, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+						auto chain = access_chain_internal(var.self, indices, 2, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta, nullptr);
 						statement(chain, " = ", lut_name, "[", j, "];");
 					}
 					else if (is_control_point)
 					{
 						uint32_t indices[2] = { invocation_id, member_index_id };
-						auto chain = access_chain_internal(var.self, indices, 2, 0, &meta);
+						auto chain = access_chain_internal(var.self, indices, 2, 0, &meta, nullptr);
 						statement(chain, " = ", lut_name, "[", builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
 					}
 					else
 					{
 						auto chain =
-								access_chain_internal(var.self, &i, 1, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+								access_chain_internal(var.self, &i, 1, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta, nullptr);
 						statement(chain, " = ", to_expression(c.subconstants[i]), ";");
 					}
 
@@ -5948,7 +5948,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		else
 		{
 			expr = access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1),
-			                             ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+			                             ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
 		}
 		return expr;
 	}
@@ -10620,7 +10620,8 @@ bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                           AccessChainFlags flags, AccessChainMeta *meta)
+                                           AccessChainFlags flags, AccessChainMeta *meta,
+                                           const SPIRType *untyped_data_type)
 {
 	string expr;
 
@@ -10646,7 +10647,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
 	uint32_t type_id = expression_type_id(base);
-	const auto *type = &get_pointee_type(type_id);
+
+	// If nullptr we're doing untyped pointers.
+	// For now we don't really care about types since we're just doing a single index into the heap.
+	// If we intend to support complete untyped pointers usage later, we need to pass down the base type
+	// and override chain type based on that.
+	const auto *type = untyped_data_type ? untyped_data_type : &get_pointee_type(type_id);
 
 	if (!backend.native_pointers)
 	{
@@ -11230,10 +11236,13 @@ uint32_t CompilerGLSL::get_physical_type_id_stride(TypeID) const
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-                                  AccessChainMeta *meta, bool ptr_chain)
+                                  AccessChainMeta *meta, bool ptr_chain, const SPIRType *untyped_data_type)
 {
 	if (flattened_buffer_blocks.count(base))
 	{
+		if (untyped_data_type)
+			SPIRV_CROSS_THROW("Flattening not compatible with untyped pointers.");
+
 		uint32_t matrix_stride = 0;
 		uint32_t array_stride = 0;
 		bool need_transpose = false;
@@ -11251,6 +11260,9 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{
+		if (untyped_data_type)
+			SPIRV_CROSS_THROW("Flattening not compatible with untyped pointers.");
+
 		AccessChainFlags flags = ACCESS_CHAIN_CHAIN_ONLY_BIT | ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT;
 		if (ptr_chain)
 			flags |= ACCESS_CHAIN_PTR_CHAIN_BIT;
@@ -11262,7 +11274,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 				meta->flattened_struct = target_type.basetype == SPIRType::Struct;
 		}
 
-		auto chain = access_chain_internal(base, indices, count, flags, nullptr).substr(1);
+		auto chain = access_chain_internal(base, indices, count, flags, nullptr, nullptr).substr(1);
 		if (meta)
 		{
 			meta->need_transpose = false;
@@ -11299,7 +11311,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			}
 		}
 
-		return access_chain_internal(base, indices, count, flags, meta);
+		return access_chain_internal(base, indices, count, flags, meta, untyped_data_type);
 	}
 }
 
@@ -12822,11 +12834,35 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpUntypedPtrAccessChainKHR:
+		SPIRV_CROSS_THROW("OpUntypedPtrAccessChainKHR is not supported.");
+		break;
+
+	case OpUntypedAccessChainKHR:
+	case OpUntypedInBoundsAccessChainKHR:
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
 	case OpPtrAccessChain:
 	{
-		auto *var = maybe_get<SPIRVariable>(ops[2]);
+		bool untyped = opcode == OpUntypedAccessChainKHR || opcode == OpUntypedInBoundsAccessChainKHR;
+
+		uint32_t type_id = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t ptr_id = ops[untyped ? 3 : 2];
+		uint32_t indices_start = untyped ? 4 : 3;
+
+		if (untyped)
+		{
+			auto *var = maybe_get_backing_variable(ptr_id);
+			if (!var || !has_decoration(var->self, DecorationBuiltIn) ||
+				(BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInResourceHeapEXT &&
+				 BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInSamplerHeapEXT))
+			{
+				SPIRV_CROSS_THROW("Untyped pointer access chains are currently only supported for descriptor heap access.");
+			}
+		}
+
+		auto *var = maybe_get<SPIRVariable>(ptr_id);
 		if (var)
 			flush_variable_declaration(var->self);
 
@@ -12834,57 +12870,59 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		AccessChainMeta meta;
 		bool ptr_chain = opcode == OpPtrAccessChain;
-		auto &target_type = get<SPIRType>(ops[0]);
-		auto e = access_chain(ops[2], &ops[3], length - 3, target_type, &meta, ptr_chain);
+		auto &target_type = get<SPIRType>(type_id);
+		auto e = access_chain(ptr_id, &ops[indices_start], length - indices_start, target_type, &meta, ptr_chain,
+		                      untyped ? &get<SPIRType>(ops[2]) : nullptr);
 
 		// If the base is flattened UBO of struct type, the expression has to be a composite.
 		// In that case, backends which do not support inline syntax need it to be bound to a temporary.
 		// Otherwise, invalid expressions like ({UBO[0].xyz, UBO[0].w, UBO[1]}).member are emitted.
 		bool requires_temporary = false;
-		if (flattened_buffer_blocks.count(ops[2]) && target_type.basetype == SPIRType::Struct)
+		if (flattened_buffer_blocks.count(ptr_id) && target_type.basetype == SPIRType::Struct)
 			requires_temporary = !backend.can_declare_struct_inline;
 
 		auto &expr = requires_temporary ?
-                         emit_op(ops[0], ops[1], std::move(e), false) :
-                         set<SPIRExpression>(ops[1], std::move(e), ops[0], should_forward(ops[2]));
+                         emit_op(type_id, result_id, std::move(e), false) :
+                         set<SPIRExpression>(result_id, std::move(e), type_id, should_forward(ptr_id));
 
-		auto *backing_variable = maybe_get_backing_variable(ops[2]);
-		expr.loaded_from = backing_variable ? backing_variable->self : ID(ops[2]);
+		auto *backing_variable = maybe_get_backing_variable(ptr_id);
+		expr.loaded_from = backing_variable ? backing_variable->self : ID(ptr_id);
 		expr.need_transpose = meta.need_transpose;
 		expr.access_chain = true;
 		expr.access_meshlet_position_y = meta.access_meshlet_position_y;
 
 		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
 		if (meta.storage_is_packed)
-			set_extended_decoration(ops[1], SPIRVCrossDecorationPhysicalTypePacked);
+			set_extended_decoration(result_id, SPIRVCrossDecorationPhysicalTypePacked);
 		if (meta.storage_physical_type != 0)
-			set_extended_decoration(ops[1], SPIRVCrossDecorationPhysicalTypeID, meta.storage_physical_type);
+			set_extended_decoration(result_id, SPIRVCrossDecorationPhysicalTypeID, meta.storage_physical_type);
 		if (meta.storage_is_invariant)
-			set_decoration(ops[1], DecorationInvariant);
+			set_decoration(result_id, DecorationInvariant);
 		if (meta.flattened_struct)
-			flattened_structs[ops[1]] = true;
+			flattened_structs[result_id] = true;
 		if (meta.relaxed_precision && backend.requires_relaxed_precision_analysis)
-			set_decoration(ops[1], DecorationRelaxedPrecision);
+			set_decoration(result_id, DecorationRelaxedPrecision);
 		if (meta.chain_is_builtin)
-			set_decoration(ops[1], DecorationBuiltIn, meta.builtin);
+			set_decoration(result_id, DecorationBuiltIn, meta.builtin);
 
 		// If we have some expression dependencies in our access chain, this access chain is technically a forwarded
 		// temporary which could be subject to invalidation.
 		// Need to assume we're forwarded while calling inherit_expression_depdendencies.
-		forwarded_temporaries.insert(ops[1]);
+		forwarded_temporaries.insert(result_id);
 		// The access chain itself is never forced to a temporary, but its dependencies might.
-		suppressed_usage_tracking.insert(ops[1]);
+		suppressed_usage_tracking.insert(result_id);
 
-		for (uint32_t i = 2; i < length; i++)
+		// Include the base pointer.
+		for (uint32_t i = indices_start - 1; i < length; i++)
 		{
-			inherit_expression_dependencies(ops[1], ops[i]);
+			inherit_expression_dependencies(result_id, ops[i]);
 			add_implied_read_expression(expr, ops[i]);
 		}
 
 		// If we have no dependencies after all, i.e., all indices in the access chain are immutable temporaries,
 		// we're not forwarded after all.
 		if (expr.expression_dependencies.empty())
-			forwarded_temporaries.erase(ops[1]);
+			forwarded_temporaries.erase(result_id);
 
 		break;
 	}
@@ -12922,7 +12960,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		auto e = access_chain_internal(ops[2], &ops[3], length - 3, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+		auto e = access_chain_internal(ops[2], &ops[3], length - 3, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
 		if (has_decoration(ops[2], DecorationNonUniform))
 			convert_non_uniform_expression(e, ops[2]);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type,
@@ -13160,7 +13198,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Make a copy, then use access chain to store the variable.
 		statement(declare_temporary(result_type, id), to_expression(vec), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
-		auto chain = access_chain_internal(id, &index, 1, 0, nullptr);
+		auto chain = access_chain_internal(id, &index, 1, 0, nullptr, nullptr);
 		statement(chain, " = ", to_unpacked_expression(comp), ";");
 		break;
 	}
@@ -13170,7 +13208,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto expr = access_chain_internal(ops[2], &ops[3], 1, 0, nullptr);
+		auto expr = access_chain_internal(ops[2], &ops[3], 1, 0, nullptr, nullptr);
 		emit_op(result_type, id, expr, should_forward(ops[2]));
 		inherit_expression_dependencies(id, ops[2]);
 		inherit_expression_dependencies(id, ops[3]);
@@ -13234,7 +13272,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
 			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT |
-			                                  ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
+			                                  ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta, nullptr);
 			e = &emit_op(result_type, id, expr, true, should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
@@ -13245,7 +13283,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
-			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT,
+			                                  &meta, nullptr);
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
@@ -13313,7 +13352,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (!forced_temporaries.count(composite))
 				force_temporary_and_recompile(composite);
 
-			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
+			                                   nullptr, nullptr);
 			statement(chain, " = ", to_unpacked_expression(obj), ";");
 			set<SPIRExpression>(id, to_expression(composite), result_type, true);
 			invalid_expressions.insert(composite);
@@ -13332,7 +13372,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				set<SPIRExpression>(id, to_name(id), result_type, true);
 			}
 
-			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
 			statement(chain, " = ", to_unpacked_expression(obj), ";");
 		}
 
@@ -19719,9 +19759,9 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 
 		AccessChainMeta lhs_meta, rhs_meta;
 		auto lhs = access_chain_internal(lhs_id, chain.data(), uint32_t(chain.size()),
-		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
+		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta, nullptr);
 		auto rhs = access_chain_internal(rhs_id, chain.data(), uint32_t(chain.size()),
-		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
+		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta, nullptr);
 
 		uint32_t id = ir.increase_bound_by(2);
 		lhs_id = id;

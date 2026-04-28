@@ -1200,6 +1200,12 @@ struct SPIRVariable : IVariant
 	// Used to find global LUTs
 	bool is_written_to = false;
 
+	// Untyped pointer. The pointer of the variable is effectively void.
+	// The underlying payload for allocation is in alloca_type, but may be 0 too.
+	// This is mostly here to support descriptor heap proxy.
+	bool untyped = false;
+	ID untyped_alloca_type = 0;
+
 	SPIRFunction::Parameter *parameter = nullptr;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRVariable)

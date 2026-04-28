@@ -772,7 +772,7 @@ protected:
 	                                        AccessChainFlags flags, bool &access_chain_is_arrayed, uint32_t index);
 
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
-	                                  AccessChainMeta *meta);
+	                                  AccessChainMeta *meta, const SPIRType *untyped_data_type);
 
 	// Only meaningful on backends with physical pointer support ala MSL.
 	// Relevant for PtrAccessChain / BDA.
@@ -786,7 +786,8 @@ protected:
 	                                                    StorageClass storage, bool &is_packed);
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
+	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false,
+	                         const SPIRType *untyped_data_type = nullptr);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
