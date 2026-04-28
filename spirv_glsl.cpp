@@ -693,6 +693,9 @@ void CompilerGLSL::find_static_extensions()
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("DescriptorHeapEXT requires Vulkan semantics.");
 			require_extension_internal("GL_EXT_descriptor_heap");
+			require_extension_internal("GL_EXT_nonuniform_qualifier");
+			// We lose information about writeonly/readonly in SPIR-V. Just pre-empt this to avoid complicating code later.
+			require_extension_internal("GL_EXT_shader_image_load_formatted");
 			break;
 
 		default:
@@ -2397,7 +2400,7 @@ void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
 	else if (options.vulkan_semantics)
 		emit_push_constant_block_vulkan(var);
 	else if (options.emit_push_constant_as_uniform_buffer)
-		emit_buffer_block_native(var);
+		emit_buffer_block_native(&var, nullptr);
 	else
 		emit_push_constant_block_glsl(var);
 }
@@ -2446,7 +2449,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	         (ubo_block && options.emit_uniform_buffer_as_plain_uniforms))
 		emit_buffer_block_legacy(var);
 	else
-		emit_buffer_block_native(var);
+		emit_buffer_block_native(&var, nullptr);
 }
 
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
@@ -2592,30 +2595,38 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 	}
 }
 
-void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
+void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, SPIRType *type, StorageClass storage)
 {
-	auto &type = get<SPIRType>(var.basetype);
+	if (!type)
+		type = &get<SPIRType>(var->basetype);
 
-	Bitset flags = ir.get_buffer_block_flags(var);
-	bool ssbo = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferKHR ||
-	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+	Bitset flags = var ? ir.get_buffer_block_flags(*var) : ir.get_buffer_block_type_flags(*type);
+	if (var)
+		storage = var->storage;
+
+	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
+	            has_decoration(type->self, DecorationBufferBlock);
+
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
 	bool is_readonly = ssbo && flags.get(DecorationNonWritable);
 	bool is_coherent = ssbo && flags.get(DecorationCoherent);
 
 	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
-	auto buffer_name = to_name(type.self, false);
+	auto buffer_name = to_name(type->self, false);
 
 	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
 	// If we have a collision for any reason, just fallback immediately.
-	if (ir.meta[type.self].decoration.alias.empty() || block_namespace.find(buffer_name) != end(block_namespace) ||
-	    resource_names.find(buffer_name) != end(resource_names))
+	if (var)
 	{
-		buffer_name = get_block_fallback_name(var.self);
+		if (ir.meta[type->self].decoration.alias.empty() || block_namespace.find(buffer_name) != end(block_namespace) ||
+			resource_names.find(buffer_name) != end(resource_names))
+		{
+			buffer_name = get_block_fallback_name(var->self);
+		}
 	}
 
 	// Make sure we get something unique for both global name scope and block name scope.
@@ -2626,40 +2637,66 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	// This cannot conflict with anything else, so we're safe now.
 	// We cannot reuse this fallback name in neither global scope (blocked by block_names) nor block name scope.
 	if (buffer_name.empty())
-		buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
+	{
+		if (var)
+			buffer_name = join("_", get<SPIRType>(var->basetype).self, "_", var->self);
+		else
+			buffer_name = join("_", type->self);
+	}
 
 	block_names.insert(buffer_name);
 	block_namespace.insert(buffer_name);
 
 	// Save for post-reflection later.
-	declared_block_names[var.self] = buffer_name;
+	if (var)
+		declared_block_names[var->self] = buffer_name;
 
-	statement(layout_for_variable(var), is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
+	string layout;
+
+	if (var)
+	{
+		layout = layout_for_variable(*var);
+	}
+	else
+	{
+		auto packing_standard = buffer_to_packing_standard(*type, ssbo, true);
+		layout = join("layout(descriptor_heap, ", packing_standard, ") ");
+	}
+
+	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
 	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
 	          buffer_name);
 
 	begin_scope();
 
-	type.member_name_cache.clear();
+	type->member_name_cache.clear();
 
 	uint32_t i = 0;
-	for (auto &member : type.member_types)
+	for (auto &member : type->member_types)
 	{
-		add_member_name(type, i);
-		emit_struct_member(type, member, i);
+		add_member_name(*type, i);
+		emit_struct_member(*type, member, i);
 		i++;
 	}
 
 	// Don't declare empty blocks in GLSL, this is not allowed.
-	if (type_is_empty(type) && !backend.supports_empty_struct)
+	if (type_is_empty(*type) && !backend.supports_empty_struct)
 		statement("int empty_struct_member;");
 
 	// var.self can be used as a backup name for the block name,
 	// so we need to make sure we don't disturb the name here on a recompile.
 	// It will need to be reset if we have to recompile.
-	preserve_alias_on_reset(var.self);
-	add_resource_name(var.self);
-	end_scope_decl(to_name(var.self) + type_to_array_glsl(type, var.self));
+	if (var)
+	{
+		preserve_alias_on_reset(var->self);
+		add_resource_name(var->self);
+		end_scope_decl(to_name(var->self) + type_to_array_glsl(*type, var->self));
+	}
+	else
+	{
+		end_scope_decl(join("spv", to_name(type->self), "ResourceHeap[]"));
+	}
+
 	statement("");
 }
 
@@ -4105,6 +4142,32 @@ void CompilerGLSL::emit_resources()
 		else if (var.initializer && maybe_get<SPIRConstant>(var.initializer) != nullptr)
 		{
 			emit_output_variable_initializer(var);
+		}
+	}
+
+	for (const auto &heap_type : descriptor_heap_types)
+	{
+		auto &type = get<SPIRType>(heap_type.first);
+
+		if (type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
+		{
+			string type_layout;
+
+			// We use NonWritable / NonReadable information. Unsure if this is SPIR-V oversight or glslang issue.
+			if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.format != ImageFormatUnknown)
+				type_layout = join("layout(descriptor_heap, ", format_to_glsl(type.image.format), ") uniform ");
+			else
+				type_layout = join("layout(descriptor_heap) uniform ");
+
+			statement(type_layout, variable_decl(type, join("spv", to_name(type.self), "ResourceHeap")), "[];");
+		}
+		else if (type.basetype == SPIRType::Sampler)
+		{
+			statement("layout(descriptor_heap) uniform ", variable_decl(type, join("spv", to_name(type.self), "SamplerHeap")), "[];");
+		}
+		else
+		{
+			emit_buffer_block_native(nullptr, &type, heap_type.second);
 		}
 	}
 
@@ -8182,6 +8245,9 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 
 	case OpImageFetch:
 	case OpImageSparseFetch:
+		if (options.vulkan_semantics && !dummy_sampler_id && (op == OpImageFetch || op == OpImageSparseFetch))
+			require_extension_internal("GL_EXT_samplerless_texture_functions");
+		// fallthrough
 	case OpImageRead: // Reads == fetches in Metal (other langs will not get here)
 		opt = &ops[4];
 		length -= 4;
@@ -12905,7 +12971,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			auto &data_type = get<SPIRType>(ops[2]);
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr_id);
 			if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::Sampler ||
-				data_type.basetype == SPIRType::SampledImage ||
+				data_type.basetype == SPIRType::AccelerationStructure ||
 				(ptr_expr && ptr_expr->buffer_pointer))
 			{
 				// We can resolve this type now.
@@ -12998,15 +13064,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpUntypedArrayLengthKHR:
 	case OpArrayLength:
 	{
+		bool untyped = opcode == OpUntypedArrayLengthKHR;
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		auto e = access_chain_internal(ops[2], &ops[3], length - 3, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
-		if (has_decoration(ops[2], DecorationNonUniform))
-			convert_non_uniform_expression(e, ops[2]);
-		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type,
-		                    true);
+
+		const SPIRType *untyped_data_type = untyped ? &get<SPIRType>(ops[2]) : nullptr;
+		uint32_t ptr_id = ops[untyped ? 3 : 2];
+		uint32_t index_offset = untyped ? 4 : 3;
+
+		auto e = access_chain_internal(ptr_id, &ops[index_offset], length - index_offset,
+		                               ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
+		                               nullptr, untyped_data_type);
+
+		if (has_decoration(ptr_id, DecorationNonUniform))
+			convert_non_uniform_expression(e, ptr_id);
+		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type, true);
 		break;
 	}
 
@@ -15007,23 +15082,28 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpUntypedImageTexelPointerEXT:
 	case OpImageTexelPointer:
 	{
+		bool untyped = opcode == OpUntypedImageTexelPointerEXT;
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto coord_expr = to_expression(ops[3]);
-		auto target_coord_type = expression_type(ops[3]);
-		target_coord_type.basetype = SPIRType::Int;
-		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
+		uint32_t image_id = ops[untyped ? 3 : 2];
+		uint32_t coord_id = ops[untyped ? 4 : 3];
 
-		auto expr = join(to_expression(ops[2]), ", ", coord_expr);
+		auto coord_expr = to_expression(coord_id);
+		auto target_coord_type = expression_type(coord_id);
+		target_coord_type.basetype = SPIRType::Int;
+		coord_expr = bitcast_expression(target_coord_type, expression_type(coord_id).basetype, coord_expr);
+
+		auto expr = join(to_expression(image_id), ", ", coord_expr);
 		auto &e = set<SPIRExpression>(id, expr, result_type, true);
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
-		auto *var = maybe_get_backing_variable(ops[2]);
+		auto *var = maybe_get_backing_variable(image_id);
 		e.loaded_from = var ? var->self : ID(0);
-		inherit_expression_dependencies(id, ops[3]);
+		inherit_expression_dependencies(id, coord_id);
 		break;
 	}
 

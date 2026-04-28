@@ -78,6 +78,11 @@ string Compiler::compile()
 bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 {
 	auto &type = get<SPIRType>(v.basetype);
+
+	// Untyped pointer, assume full aliasing.
+	if (type.basetype == SPIRType::Void)
+		return true;
+
 	bool ssbo = v.storage == StorageClassStorageBuffer ||
 	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool image = type.basetype == SPIRType::Image;
@@ -474,7 +479,12 @@ void Compiler::register_write(uint32_t chain)
 		// If our variable is in a storage class which can alias with other buffers,
 		// invalidate all variables which depend on aliased variables. And if this is a
 		// variable pointer, then invalidate all variables regardless.
-		if (get_variable_data_type(*var).pointer)
+		if (BuiltIn(get_decoration(var->self, DecorationBuiltIn)) == BuiltInResourceHeapEXT)
+		{
+			// Very free form aliasing, be conservative.
+			flush_all_active_variables();
+		}
+		else if (get_variable_data_type(*var).pointer)
 		{
 			flush_all_active_variables();
 
@@ -5476,6 +5486,11 @@ void Compiler::analyze_descriptor_heap_types()
 						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::Image)
 							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeImage) for GLSL.");
 					}
+					else if (data_type.basetype == SPIRType::AccelerationStructure)
+					{
+						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::AccelerationStructure)
+							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeAccelerationStructure) for GLSL.");
+					}
 				}
 				else if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInSamplerHeapEXT)
 				{
@@ -5496,9 +5511,11 @@ void Compiler::analyze_descriptor_heap_types()
 				{
 					SPIRV_CROSS_THROW("Attempting to access heap as combined sampler image. This does not make sense.");
 				}
-				else if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::Sampler)
+				else if (data_type.basetype == SPIRType::Image ||
+				         data_type.basetype == SPIRType::AccelerationStructure ||
+				         data_type.basetype == SPIRType::Sampler)
 				{
-					add_unique_type(data_type.self);
+					add_unique_type(data_type.self, StorageClassUniformConstant);
 				}
 				else if (buffer_pointers.count(args[3]) != 0)
 				{
@@ -5507,7 +5524,7 @@ void Compiler::analyze_descriptor_heap_types()
 					{
 						SPIRV_CROSS_THROW("BufferPointerEXT must reference a block type.");
 					}
-					add_unique_type(data_type.self);
+					add_unique_type(data_type.self, compiler.get<SPIRType>(args[0]).storage);
 				}
 				break;
 			}
@@ -5521,14 +5538,18 @@ void Compiler::analyze_descriptor_heap_types()
 
 		explicit HeapHandler(Compiler &compiler_) : OpcodeHandler(compiler_) {}
 
-		std::vector<uint32_t> heap_types;
+		std::vector<std::pair<uint32_t, StorageClass>> heap_types;
 		std::unordered_set<uint32_t> buffer_pointers;
 
-		void add_unique_type(uint32_t id)
+		void add_unique_type(uint32_t id, StorageClass storage)
 		{
 			assert(id != 0);
-			if (std::find(heap_types.begin(), heap_types.end(), id) == heap_types.end())
-				heap_types.push_back(id);
+
+			for (auto &type : heap_types)
+				if (type.first == id)
+					return;
+
+			heap_types.emplace_back(id, storage);
 		}
 	};
 
