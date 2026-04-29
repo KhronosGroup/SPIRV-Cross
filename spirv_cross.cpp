@@ -5448,11 +5448,12 @@ void Compiler::analyze_descriptor_heap_types()
 			switch (opcode)
 			{
 			case OpBufferPointerEXT:
-				buffer_pointers.insert(args[1]);
+				buffer_pointers[args[1]] = compiler.get<SPIRType>(args[0]).storage;
 				break;
 
 			case OpUntypedAccessChainKHR:
 			case OpUntypedInBoundsAccessChainKHR:
+			case OpUntypedArrayLengthKHR:
 			{
 				auto &data_type = compiler.get<SPIRType>(args[2]);
 
@@ -5524,7 +5525,7 @@ void Compiler::analyze_descriptor_heap_types()
 					{
 						SPIRV_CROSS_THROW("BufferPointerEXT must reference a block type.");
 					}
-					add_unique_type(data_type.self, compiler.get<SPIRType>(args[0]).storage);
+					add_unique_type(data_type.self, buffer_pointers[args[3]]);
 				}
 				break;
 			}
@@ -5539,7 +5540,7 @@ void Compiler::analyze_descriptor_heap_types()
 		explicit HeapHandler(Compiler &compiler_) : OpcodeHandler(compiler_) {}
 
 		std::vector<std::pair<uint32_t, StorageClass>> heap_types;
-		std::unordered_set<uint32_t> buffer_pointers;
+		std::unordered_map<uint32_t, StorageClass> buffer_pointers;
 
 		void add_unique_type(uint32_t id, StorageClass storage)
 		{

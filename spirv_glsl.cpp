@@ -13079,6 +13079,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		                               ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
 		                               nullptr, untyped_data_type);
 
+		if (untyped)
+		{
+			auto &data_type = get<SPIRType>(ops[2]);
+			auto *ptr_expr = maybe_get<SPIRExpression>(ptr_id);
+			if (ptr_expr && ptr_expr->buffer_pointer)
+				e = join("spv", to_name(data_type.self), e);
+		}
+
 		if (has_decoration(ptr_id, DecorationNonUniform))
 			convert_non_uniform_expression(e, ptr_id);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type, true);
