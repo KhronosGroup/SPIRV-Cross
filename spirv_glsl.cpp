@@ -2595,14 +2595,44 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 	}
 }
 
-void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, SPIRType *type, StorageClass storage)
+std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 {
-	if (!type)
+	auto itr = std::find_if(descriptor_heap_types.begin(), descriptor_heap_types.end(),
+		[&](const DescriptorHeapMeta &meta) { return meta.buffer_pointer_id == ptr_id; });
+
+	assert(itr != descriptor_heap_types.end());
+
+	auto name = to_name(itr->type);
+
+	// The same block type can be instantiated with different read-write decorations.
+	if (itr->nonreadable)
+		name += "NoRead";
+	if (itr->nonwritable)
+		name += "NoWrite";
+
+	return join("spv", name);
+}
+
+void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const DescriptorHeapMeta *heap_meta)
+{
+	assert(var || heap_meta);
+
+	SPIRType *type;
+	if (var)
 		type = &get<SPIRType>(var->basetype);
+	else
+		type = &get<SPIRType>(heap_meta->type);
 
 	Bitset flags = var ? ir.get_buffer_block_flags(*var) : ir.get_buffer_block_type_flags(*type);
-	if (var)
-		storage = var->storage;
+	auto storage = var ? var->storage : heap_meta->storage;
+
+	if (heap_meta)
+	{
+		if (heap_meta->nonreadable)
+			flags.set(DecorationNonReadable);
+		if (heap_meta->nonwritable)
+			flags.set(DecorationNonWritable);
+	}
 
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
@@ -2614,6 +2644,15 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, SPIRType *t
 
 	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 	auto buffer_name = to_name(type->self, false);
+
+	if (heap_meta)
+	{
+		// The same block type can be instantiated with different read-write decorations.
+		if (heap_meta->nonreadable)
+			buffer_name += "NoRead";
+		if (heap_meta->nonwritable)
+			buffer_name += "NoWrite";
+	}
 
 	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
 
@@ -2694,7 +2733,15 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, SPIRType *t
 	}
 	else
 	{
-		end_scope_decl(join("spv", to_name(type->self), "ResourceHeap[]"));
+		auto name = to_name(type->self);
+
+		// The same block type can be instantiated with different read-write decorations.
+		if (heap_meta->nonreadable)
+			name += "NoRead";
+		if (heap_meta->nonwritable)
+			name += "NoWrite";
+
+		end_scope_decl(join("spv", name, "ResourceHeap[]"));
 	}
 
 	statement("");
@@ -4147,7 +4194,7 @@ void CompilerGLSL::emit_resources()
 
 	for (const auto &heap_type : descriptor_heap_types)
 	{
-		auto &type = get<SPIRType>(heap_type.first);
+		auto &type = get<SPIRType>(heap_type.type);
 
 		if (type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
 		{
@@ -4167,7 +4214,7 @@ void CompilerGLSL::emit_resources()
 		}
 		else
 		{
-			emit_buffer_block_native(nullptr, &type, heap_type.second);
+			emit_buffer_block_native(nullptr, &heap_type);
 		}
 	}
 
@@ -12946,11 +12993,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (untyped)
 		{
 			auto *var = maybe_get_backing_variable(ptr_id);
-			if (!var || !has_decoration(var->self, DecorationBuiltIn) ||
-				(BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInResourceHeapEXT &&
-				 BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInSamplerHeapEXT))
+
+			// Chase back to base SPIRExpression.
+			auto *expr = maybe_get<SPIRExpression>(ptr_id);
+			while (expr && !expr->buffer_pointer && expr->loaded_from)
+				expr = maybe_get<SPIRExpression>(expr->loaded_from);
+
+			// Buffer pointers stop the loaded from chain to deal with aliasing better, so carve that out specifically.
+			bool is_buffer_pointer = expr && expr->buffer_pointer;
+
+			if (!is_buffer_pointer)
 			{
-				SPIRV_CROSS_THROW("Untyped pointer access chains are currently only supported for descriptor heap access.");
+				if (!var || !has_decoration(var->self, DecorationBuiltIn) ||
+					(BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInResourceHeapEXT &&
+					 BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInSamplerHeapEXT))
+				{
+					SPIRV_CROSS_THROW("Untyped pointer access chains are currently only supported for descriptor heap access.");
+				}
 			}
 		}
 
@@ -12978,7 +13037,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				// For further buffer access chains, we don't do any fixups since we have resolved to proper types.
 				// For buffer types we only prepend when the access chain starts from a BufferPointerEXT base.
 				// Multi-stage access chains are not possible for image types.
-				e = join("spv", to_name(data_type.self), e);
+				if (ptr_expr && ptr_expr->buffer_pointer)
+					e = join(to_buffer_pointer_name_prefix(ptr_expr->self), e);
+				else
+					e = join("spv", to_name(data_type.self), e);
 			}
 		}
 
@@ -13081,10 +13143,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (untyped)
 		{
-			auto &data_type = get<SPIRType>(ops[2]);
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr_id);
 			if (ptr_expr && ptr_expr->buffer_pointer)
-				e = join("spv", to_name(data_type.self), e);
+				e = join(to_buffer_pointer_name_prefix(ptr_expr->self), e);
 		}
 
 		if (has_decoration(ptr_id, DecorationNonUniform))
@@ -13112,10 +13173,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// BufferPointerEXT can return a typed pointer, in which case we need to resolve the heap alias now.
 		auto &type = get<SPIRType>(type_id);
 		if (type.basetype == SPIRType::Struct)
-			e = join("spv", to_name(type.self), e);
+			e = join(to_buffer_pointer_name_prefix(result_id), e);
 
 		auto &expr = set<SPIRExpression>(result_id, std::move(e), type_id, true);
-		expr.loaded_from = chain_expr->loaded_from;
+		// There isn't any backing variable here. OpBufferPointerEXT is meant to be a memory declaration instruction.
+		expr.loaded_from = 0;
 		expr.access_chain = true;
 		expr.buffer_pointer = true;
 		expr.implied_read_expressions = chain_expr->implied_read_expressions;

@@ -1090,7 +1090,17 @@ protected:
 	SmallVector<uint32_t> physical_storage_non_block_pointer_types;
 	std::unordered_map<uint32_t, PhysicalBlockMeta> physical_storage_type_to_alignment;
 
-	std::vector<std::pair<uint32_t, StorageClass>> descriptor_heap_types;
+	struct DescriptorHeapMeta
+	{
+		TypeID type;
+
+		// For buffers
+		ID buffer_pointer_id;
+		StorageClass storage;
+		bool nonwritable;
+		bool nonreadable;
+	};
+	std::vector<DescriptorHeapMeta> descriptor_heap_types;
 	void analyze_descriptor_heap_types();
 
 	void analyze_variable_scope(SPIRFunction &function, AnalyzeVariableScopeAccessHandler &handler);

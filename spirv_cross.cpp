@@ -5453,7 +5453,15 @@ void Compiler::analyze_descriptor_heap_types()
 				// BufferPointerEXT can return untyped or typed pointers.
 				// If it's typed, we resolve it here.
 				if (ptr_type.basetype == SPIRType::Struct)
-					add_unique_type(ptr_type.self, ptr_type.storage);
+				{
+					DescriptorHeapMeta meta = {};
+					meta.type = ptr_type.self;
+					meta.buffer_pointer_id = args[1];
+					meta.storage = ptr_type.storage;
+					meta.nonreadable = compiler.has_decoration(args[1], DecorationNonReadable);
+					meta.nonwritable = compiler.has_decoration(args[1], DecorationNonWritable);
+					add_unique_type(meta);
+				}
 				buffer_pointers[args[1]] = args[0];
 				break;
 			}
@@ -5523,7 +5531,9 @@ void Compiler::analyze_descriptor_heap_types()
 				         data_type.basetype == SPIRType::AccelerationStructure ||
 				         data_type.basetype == SPIRType::Sampler)
 				{
-					add_unique_type(data_type.self, StorageClassUniformConstant);
+					DescriptorHeapMeta meta = {};
+					meta.type = data_type.self;
+					add_unique_type(meta);
 				}
 				else if (buffer_pointers.count(args[3]) != 0)
 				{
@@ -5537,7 +5547,13 @@ void Compiler::analyze_descriptor_heap_types()
 					if (buffer_type.basetype == SPIRType::Void)
 					{
 						// This is where the pointer becomes typed, so register it here.
-						add_unique_type(data_type.self, buffer_type.storage);
+						DescriptorHeapMeta meta = {};
+						meta.type = data_type.self;
+						meta.buffer_pointer_id = args[3];
+						meta.storage = buffer_type.storage;
+						meta.nonreadable = compiler.has_decoration(args[3], DecorationNonReadable);
+						meta.nonwritable = compiler.has_decoration(args[3], DecorationNonWritable);
+						add_unique_type(meta);
 					}
 				}
 				break;
@@ -5552,18 +5568,24 @@ void Compiler::analyze_descriptor_heap_types()
 
 		explicit HeapHandler(Compiler &compiler_) : OpcodeHandler(compiler_) {}
 
-		std::vector<std::pair<uint32_t, StorageClass>> heap_types;
+		std::vector<DescriptorHeapMeta> heap_types;
 		std::unordered_map<uint32_t, TypeID> buffer_pointers;
 
-		void add_unique_type(uint32_t id, StorageClass storage)
+		void add_unique_type(const DescriptorHeapMeta &meta)
 		{
-			assert(id != 0);
+			assert(meta.type != 0);
 
 			for (auto &type : heap_types)
-				if (type.first == id)
+			{
+				if (type.type == meta.type && type.storage == meta.storage &&
+					type.buffer_pointer_id == meta.buffer_pointer_id &&
+					type.nonreadable == meta.nonreadable && type.nonwritable == meta.nonwritable)
+				{
 					return;
+				}
+			}
 
-			heap_types.emplace_back(id, storage);
+			heap_types.push_back(meta);
 		}
 	};
 
