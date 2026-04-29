@@ -13107,7 +13107,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!chain_expr || !chain_expr->access_chain)
 			SPIRV_CROSS_THROW("Expected to see access chain for BufferPointerEXT.");
 
-		auto &expr = set<SPIRExpression>(result_id, to_expression(ptr_id), type_id, true);
+		auto e = to_expression(ptr_id);
+
+		// BufferPointerEXT can return a typed pointer, in which case we need to resolve the heap alias now.
+		auto &type = get<SPIRType>(type_id);
+		if (type.basetype == SPIRType::Struct)
+			e = join("spv", to_name(type.self), e);
+
+		auto &expr = set<SPIRExpression>(result_id, std::move(e), type_id, true);
 		expr.loaded_from = chain_expr->loaded_from;
 		expr.access_chain = true;
 		expr.buffer_pointer = true;
