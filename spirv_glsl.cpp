@@ -368,6 +368,7 @@ void CompilerGLSL::reset(uint32_t iteration_count)
 	expression_usage_counts.clear();
 	forwarded_temporaries.clear();
 	suppressed_usage_tracking.clear();
+	buffer_pointer_variables.clear();
 
 	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	flushed_phi_variables.clear();
@@ -8499,13 +8500,16 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 	return c->constant_is_null();
 }
 
-bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
+bool CompilerGLSL::expression_is_non_value_type_array(uint32_t value_type_id, uint32_t ptr)
 {
-	auto &type = expression_type(ptr);
-	if (!is_array(get_pointee_type(type)))
+	auto &type = get<SPIRType>(value_type_id);
+	if (!is_array(type))
 		return false;
 
 	if (!backend.array_is_value_type)
+		return true;
+
+	if (!backend.array_is_value_type_in_buffer_blocks && maybe_get_backing_buffer_pointer(ptr))
 		return true;
 
 	auto *var = maybe_get_backing_variable(ptr);
@@ -8513,6 +8517,8 @@ bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 		return false;
 
 	auto &backed_type = get<SPIRType>(var->basetype);
+
+	// Only consider explicitly laid out types here, not IO blocks.
 	return !backend.array_is_value_type_in_buffer_blocks && backed_type.basetype == SPIRType::Struct &&
 	       has_member_decoration(backed_type.self, 0, DecorationOffset);
 }
@@ -11950,6 +11956,9 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	if (is_immutable(id))
 		return true;
 
+	if (expr && expr->buffer_pointer)
+		return true;
+
 	return false;
 }
 
@@ -12038,6 +12047,8 @@ void CompilerGLSL::register_impure_function_call()
 		flush_dependees(get<SPIRVariable>(global));
 	for (auto aliased : aliased_variables)
 		flush_dependees(get<SPIRVariable>(aliased));
+	for (auto ptr : buffer_pointer_variables)
+		flush_dependees(get<SPIRExpression>(ptr));
 }
 
 void CompilerGLSL::register_call_out_argument(uint32_t id)
@@ -12935,7 +12946,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool usage_tracking = flattened && (type.basetype == SPIRType::Struct || (type.columns > 1));
 
 		SPIRExpression *e = nullptr;
-		if (!forward && expression_is_non_value_type_array(ptr))
+		if (!forward && expression_is_non_value_type_array(result_type, ptr))
 		{
 			// Complicated load case where we need to make a copy of ptr, but we cannot, because
 			// it is an array, and our backend does not support arrays as value types.
@@ -13176,7 +13187,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		expr.buffer_pointer = true;
 		expr.implied_read_expressions = chain_expr->implied_read_expressions;
 		expr.expression_dependencies = chain_expr->expression_dependencies;
+		expr.immutable = false;
 
+		// If the buffer pointer is marked non-writable, ignore alias tracking by flagging the expression as immutable.
+		for (auto &heap : descriptor_heap_types)
+		{
+			if (heap.buffer_pointer_id == result_id)
+			{
+				if (heap.nonwritable)
+					expr.immutable = true;
+				break;
+			}
+		}
+
+		if (!expr.immutable && ir.get_buffer_block_type_flags(get<SPIRType>(type_id)).get(DecorationNonWritable))
+			expr.immutable = true;
+
+		// Used for load-store tracking.
+		buffer_pointer_variables.push_back(result_id);
 		break;
 	}
 

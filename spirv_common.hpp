@@ -817,6 +817,10 @@ struct SPIRExpression : IVariant
 	// If this expression represents a OpBufferPointerEXT cast.
 	bool buffer_pointer = false;
 
+	// Temporaries which can remain forwarded as long as this variable is not modified.
+	// Only used for buffer pointers.
+	SmallVector<ID> buffer_pointer_dependees;
+
 	// A list of expressions which this expression depends on.
 	SmallVector<ID> expression_dependencies;
 

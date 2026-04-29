@@ -585,6 +585,7 @@ protected:
 	// (SSBO, image load store, etc)
 	SmallVector<uint32_t> global_variables;
 	SmallVector<uint32_t> aliased_variables;
+	SmallVector<uint32_t> buffer_pointer_variables;
 
 	SPIRFunction *current_function = nullptr;
 	SPIRBlock *current_block = nullptr;
@@ -705,7 +706,7 @@ protected:
 	bool expression_is_lvalue(uint32_t id) const;
 	bool variable_storage_is_aliased(const SPIRVariable &var);
 	SPIRVariable *maybe_get_backing_variable(uint32_t chain);
-	const SPIRExpression *maybe_get_backing_buffer_pointer(uint32_t chain) const;
+	SPIRExpression *maybe_get_backing_buffer_pointer(uint32_t chain);
 
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);
@@ -740,6 +741,7 @@ protected:
 
 	// Dependency tracking for temporaries read from variables.
 	void flush_dependees(SPIRVariable &var);
+	void flush_dependees(SPIRExpression &expr);
 	void flush_all_active_variables();
 	void flush_control_dependent_expressions(uint32_t block);
 	void flush_all_atomic_capable_variables();

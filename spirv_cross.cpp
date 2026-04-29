@@ -434,7 +434,7 @@ SPIRVariable *Compiler::maybe_get_backing_variable(uint32_t chain)
 	return var;
 }
 
-const SPIRExpression *Compiler::maybe_get_backing_buffer_pointer(uint32_t chain) const
+SPIRExpression *Compiler::maybe_get_backing_buffer_pointer(uint32_t chain)
 {
 	auto *expr = maybe_get<SPIRExpression>(chain);
 	while (expr && !expr->buffer_pointer && expr->loaded_from)
@@ -446,6 +446,7 @@ void Compiler::register_read(uint32_t expr, uint32_t chain, bool forwarded)
 {
 	auto &e = get<SPIRExpression>(expr);
 	auto *var = maybe_get_backing_variable(chain);
+	auto *buffer_pointer = maybe_get_backing_buffer_pointer(chain);
 
 	if (var)
 	{
@@ -459,6 +460,13 @@ void Compiler::register_read(uint32_t expr, uint32_t chain, bool forwarded)
 		// The default is "in" however, so we never invalidate our compilation by reading.
 		if (var && var->parameter)
 			var->parameter->read_count++;
+	}
+	else if (buffer_pointer)
+	{
+		e.loaded_from = buffer_pointer->self;
+		// If the backing variable is immutable, we do not need to depend on the variable.
+		if (forwarded && !is_immutable(buffer_pointer->self))
+			buffer_pointer->buffer_pointer_dependees.push_back(e.self);
 	}
 }
 
@@ -477,6 +485,8 @@ void Compiler::register_write(uint32_t chain)
 			var = maybe_get<SPIRVariable>(access_chain->loaded_from);
 	}
 
+	auto *buffer_pointer = maybe_get_backing_buffer_pointer(chain);
+
 	auto &chain_type = expression_type(chain);
 
 	if (var)
@@ -487,12 +497,7 @@ void Compiler::register_write(uint32_t chain)
 		// If our variable is in a storage class which can alias with other buffers,
 		// invalidate all variables which depend on aliased variables. And if this is a
 		// variable pointer, then invalidate all variables regardless.
-		if (BuiltIn(get_decoration(var->self, DecorationBuiltIn)) == BuiltInResourceHeapEXT)
-		{
-			// Very free form aliasing, be conservative.
-			flush_all_active_variables();
-		}
-		else if (get_variable_data_type(*var).pointer)
+		if (get_variable_data_type(*var).pointer)
 		{
 			flush_all_active_variables();
 
@@ -526,6 +531,10 @@ void Compiler::register_write(uint32_t chain)
 			force_recompile();
 		}
 	}
+	else if (buffer_pointer)
+	{
+		flush_dependees(*buffer_pointer);
+	}
 	else if (chain_type.pointer)
 	{
 		// If we stored through a variable pointer, then we don't know which
@@ -547,6 +556,16 @@ void Compiler::flush_dependees(SPIRVariable &var)
 	var.dependees.clear();
 }
 
+void Compiler::flush_dependees(SPIRExpression &expr)
+{
+	// A little ugly to split things up like this since BufferPointerEXT is a weird case
+	// where it's both an expression (chain into global heap) and a memory declaration at the same time ...
+	assert(expr.buffer_pointer);
+	for (auto dep : expr.buffer_pointer_dependees)
+		invalid_expressions.insert(dep);
+	expr.buffer_pointer_dependees.clear();
+}
+
 void Compiler::flush_all_aliased_variables()
 {
 	for (auto aliased : aliased_variables)
@@ -557,6 +576,8 @@ void Compiler::flush_all_atomic_capable_variables()
 {
 	for (auto global : global_variables)
 		flush_dependees(get<SPIRVariable>(global));
+	for (auto global : buffer_pointer_variables)
+		flush_dependees(get<SPIRExpression>(global));
 	flush_all_aliased_variables();
 }
 
@@ -578,6 +599,8 @@ void Compiler::flush_all_active_variables()
 		flush_dependees(get<SPIRVariable>(arg.id));
 	for (auto global : global_variables)
 		flush_dependees(get<SPIRVariable>(global));
+	for (auto global : buffer_pointer_variables)
+		flush_dependees(get<SPIRExpression>(global));
 
 	flush_all_aliased_variables();
 }
