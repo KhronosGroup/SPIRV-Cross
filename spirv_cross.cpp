@@ -5487,6 +5487,7 @@ void Compiler::analyze_descriptor_heap_types()
 				{
 					DescriptorHeapMeta meta = {};
 					meta.type = ptr_type.self;
+					meta.hlsl_style_stride = hlsl_style_stride_access_chains.count(args[2]);
 					meta.buffer_pointer_id = args[1];
 					meta.storage = ptr_type.storage;
 					meta.nonreadable = compiler.has_decoration(args[1], DecorationNonReadable);
@@ -5495,7 +5496,7 @@ void Compiler::analyze_descriptor_heap_types()
 					meta.is_volatile = compiler.has_decoration(args[1], DecorationVolatile);
 					add_unique_type(meta);
 				}
-				buffer_pointers[args[1]] = args[0];
+				buffer_pointers[args[1]] = { args[0], hlsl_style_stride_access_chains.count(args[2]) != 0 };
 				break;
 			}
 
@@ -5508,6 +5509,8 @@ void Compiler::analyze_descriptor_heap_types()
 				if (compiler.is_pointer(data_type))
 					SPIRV_CROSS_THROW("pointer type not allowed.");
 
+				bool hlsl_style_stride = false;
+
 				// Need to validate the array stride and types. HLLs are not flexible enough to support the full flexibility of SPIR-V.
 				if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInResourceHeapEXT)
 				{
@@ -5519,25 +5522,48 @@ void Compiler::analyze_descriptor_heap_types()
 					if (!array_stride_id)
 						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for resource heap.");
 
-					auto &c = compiler.get<SPIRConstant>(array_stride_id);
-					if (!c.size_of_type)
+					auto *spec_c = compiler.maybe_get<SPIRConstantOp>(array_stride_id);
+					auto *c = compiler.maybe_get<SPIRConstant>(array_stride_id);
+
+					if (!spec_c && !c)
+						SPIRV_CROSS_THROW("Array stride must be some constant expression.");
+
+					if (spec_c)
+					{
+						// This gets potentially infinitely weird, but if we get HLSL-style shaders
+						// we expect the array stride to be max(buffer, image) since all descriptors have equal size in D3D12.
+						// We just have to be a bit loose here since it's impossible to anticipate every theoretical formulation.
+						// Anything non-conforming to strict GLSL is flagged in the codegen output.
+						if (spec_c->opcode == OpSelect)
+						{
+							auto *true_value = compiler.maybe_get<SPIRConstant>(spec_c->arguments[1]);
+							auto *false_value = compiler.maybe_get<SPIRConstant>(spec_c->arguments[2]);
+							hlsl_style_stride = true_value && true_value->size_of_type &&
+							                    false_value && false_value->size_of_type;
+						}
+
+						if (!hlsl_style_stride)
+							SPIRV_CROSS_THROW("Unusual pattern of descriptor stride detected. This probably cannot be expressed in current GLSL.");
+					}
+
+					if (c && !c->size_of_type)
 						SPIRV_CROSS_THROW("Resource heap array stride must be ConstantSizeOfEXT for high level languages.");
 
 					auto &element_type = compiler.get<SPIRType>(data_type.parent_type);
 
 					if (element_type.basetype == SPIRType::DescriptorHeapBuffer)
 					{
-						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::DescriptorHeapBuffer)
+						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::DescriptorHeapBuffer)
 							SPIRV_CROSS_THROW("Buffer descriptors in heap must be ConstantSizeOfEXT(OpTypeBufferEXT) for GLSL.");
 					}
 					else if (data_type.basetype == SPIRType::Image)
 					{
-						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::Image)
+						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::Image)
 							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeImage) for GLSL.");
 					}
 					else if (data_type.basetype == SPIRType::AccelerationStructure)
 					{
-						if (compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::AccelerationStructure)
+						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::AccelerationStructure)
 							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeAccelerationStructure) for GLSL.");
 					}
 				}
@@ -5551,10 +5577,14 @@ void Compiler::analyze_descriptor_heap_types()
 					if (!array_stride_id)
 						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for sampler heap.");
 
-					auto &c = compiler.get<SPIRConstant>(array_stride_id);
-					if (!c.size_of_type || compiler.get<SPIRType>(c.size_of_type).basetype != SPIRType::Sampler)
+					auto *c = compiler.maybe_get<SPIRConstant>(array_stride_id);
+					if (!c || !c->size_of_type || compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::Sampler)
 						SPIRV_CROSS_THROW("Sampler heap array stride must be ConstantSizeOfEXT(OpTypeSampler) for high level languages.");
 				}
+
+				// Remember this for OpBufferPointerEXT.
+				if (hlsl_style_stride)
+					hlsl_style_stride_access_chains.insert(args[1]);
 
 				if (data_type.basetype == SPIRType::SampledImage)
 				{
@@ -5566,6 +5596,7 @@ void Compiler::analyze_descriptor_heap_types()
 				{
 					DescriptorHeapMeta meta = {};
 					meta.type = data_type.self;
+					meta.hlsl_style_stride = hlsl_style_stride;
 					add_unique_type(meta);
 				}
 				else if (buffer_pointers.count(args[3]) != 0)
@@ -5576,12 +5607,14 @@ void Compiler::analyze_descriptor_heap_types()
 						SPIRV_CROSS_THROW("BufferPointerEXT must reference a block type.");
 					}
 
-					auto &buffer_type = compiler.get<SPIRType>(buffer_pointers[args[3]]);
+					auto &pointer_meta = buffer_pointers[args[3]];
+					auto &buffer_type = compiler.get<SPIRType>(pointer_meta.type);
 					if (buffer_type.basetype == SPIRType::Void)
 					{
 						// This is where the pointer becomes typed, so register it here.
 						DescriptorHeapMeta meta = {};
 						meta.type = data_type.self;
+						meta.hlsl_style_stride = pointer_meta.hlsl_style_stride;
 						meta.buffer_pointer_id = args[3];
 						meta.storage = buffer_type.storage;
 						meta.nonreadable = compiler.has_decoration(args[3], DecorationNonReadable);
@@ -5604,7 +5637,14 @@ void Compiler::analyze_descriptor_heap_types()
 		explicit HeapHandler(Compiler &compiler_) : OpcodeHandler(compiler_) {}
 
 		std::vector<DescriptorHeapMeta> heap_types;
-		std::unordered_map<uint32_t, TypeID> buffer_pointers;
+
+		struct BufferPointerMeta
+		{
+			TypeID type;
+			bool hlsl_style_stride;
+		};
+		std::unordered_map<uint32_t, BufferPointerMeta> buffer_pointers;
+		std::unordered_set<uint32_t> hlsl_style_stride_access_chains;
 
 		void add_unique_type(const DescriptorHeapMeta &meta)
 		{
@@ -5617,6 +5657,7 @@ void Compiler::analyze_descriptor_heap_types()
 				    type.nonreadable == meta.nonreadable &&
 				    type.nonwritable == meta.nonwritable &&
 				    type.coherent == meta.coherent &&
+				    type.hlsl_style_stride == meta.hlsl_style_stride &&
 				    type.is_volatile == meta.is_volatile)
 				{
 					return;

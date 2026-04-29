@@ -4193,15 +4193,21 @@ void CompilerGLSL::emit_resources()
 	{
 		auto &type = get<SPIRType>(heap_type.type);
 
+		const char *comment = heap_type.hlsl_style_stride ?
+			"// WARNING: HLSL style descriptor heap stride is assumed. Allowing for compatibility with HLSL shaders.\n"
+			"// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).\n"
+			"// Application side can convert bindless indices accordingly to compensate or use explicit mapping API.\n"
+			: "";
+
 		if (type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
 		{
 			string type_layout;
 
 			// We use NonWritable / NonReadable information. Unsure if this is SPIR-V oversight or glslang issue.
 			if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.format != ImageFormatUnknown)
-				type_layout = join("layout(descriptor_heap, ", format_to_glsl(type.image.format), ") uniform ");
+				type_layout = join(comment, "layout(descriptor_heap, ", format_to_glsl(type.image.format), ") uniform ");
 			else
-				type_layout = join("layout(descriptor_heap) uniform ");
+				type_layout = join(comment, "layout(descriptor_heap) uniform ");
 
 			statement(type_layout, variable_decl(type, join("spv", to_name(type.self), "ResourceHeap")), "[];");
 		}
@@ -4211,6 +4217,8 @@ void CompilerGLSL::emit_resources()
 		}
 		else
 		{
+			if (*comment != '\0')
+				statement(comment);
 			emit_buffer_block_native(nullptr, &heap_type);
 		}
 	}

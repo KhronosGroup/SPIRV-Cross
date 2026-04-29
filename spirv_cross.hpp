@@ -1096,6 +1096,7 @@ protected:
 	struct DescriptorHeapMeta
 	{
 		TypeID type;
+		bool hlsl_style_stride;
 
 		// For buffers
 		ID buffer_pointer_id;
