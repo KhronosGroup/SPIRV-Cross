@@ -5491,6 +5491,8 @@ void Compiler::analyze_descriptor_heap_types()
 					meta.storage = ptr_type.storage;
 					meta.nonreadable = compiler.has_decoration(args[1], DecorationNonReadable);
 					meta.nonwritable = compiler.has_decoration(args[1], DecorationNonWritable);
+					meta.coherent = compiler.has_decoration(args[1], DecorationCoherent);
+					meta.is_volatile = compiler.has_decoration(args[1], DecorationVolatile);
 					add_unique_type(meta);
 				}
 				buffer_pointers[args[1]] = args[0];
@@ -5584,6 +5586,8 @@ void Compiler::analyze_descriptor_heap_types()
 						meta.storage = buffer_type.storage;
 						meta.nonreadable = compiler.has_decoration(args[3], DecorationNonReadable);
 						meta.nonwritable = compiler.has_decoration(args[3], DecorationNonWritable);
+						meta.coherent = compiler.has_decoration(args[3], DecorationCoherent);
+						meta.is_volatile = compiler.has_decoration(args[3], DecorationVolatile);
 						add_unique_type(meta);
 					}
 				}
@@ -5609,8 +5613,11 @@ void Compiler::analyze_descriptor_heap_types()
 			for (auto &type : heap_types)
 			{
 				if (type.type == meta.type && type.storage == meta.storage &&
-					type.buffer_pointer_id == meta.buffer_pointer_id &&
-					type.nonreadable == meta.nonreadable && type.nonwritable == meta.nonwritable)
+				    type.buffer_pointer_id == meta.buffer_pointer_id &&
+				    type.nonreadable == meta.nonreadable &&
+				    type.nonwritable == meta.nonwritable &&
+				    type.coherent == meta.coherent &&
+				    type.is_volatile == meta.is_volatile)
 				{
 					return;
 				}

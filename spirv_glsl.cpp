@@ -2610,6 +2610,10 @@ std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 		name += "NoRead";
 	if (itr->nonwritable)
 		name += "NoWrite";
+	if (itr->coherent)
+		name += "Coherent";
+	if (itr->is_volatile)
+		name += "Volatile";
 
 	return join("spv", name);
 }
@@ -2734,15 +2738,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	}
 	else
 	{
-		auto name = to_name(type->self);
-
-		// The same block type can be instantiated with different read-write decorations.
-		if (heap_meta->nonreadable)
-			name += "NoRead";
-		if (heap_meta->nonwritable)
-			name += "NoWrite";
-
-		end_scope_decl(join("spv", name, "ResourceHeap[]"));
+		end_scope_decl(join(to_buffer_pointer_name_prefix(heap_meta->buffer_pointer_id), "ResourceHeap[]"));
 	}
 
 	statement("");

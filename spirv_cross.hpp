@@ -1102,6 +1102,8 @@ protected:
 		StorageClass storage;
 		bool nonwritable;
 		bool nonreadable;
+		bool coherent;
+		bool is_volatile;
 	};
 	std::vector<DescriptorHeapMeta> descriptor_heap_types;
 	void analyze_descriptor_heap_types();
