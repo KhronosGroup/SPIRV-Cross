@@ -12993,16 +12993,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (untyped)
 		{
 			auto *var = maybe_get_backing_variable(ptr_id);
-
-			// Chase back to base SPIRExpression.
-			auto *expr = maybe_get<SPIRExpression>(ptr_id);
-			while (expr && !expr->buffer_pointer && expr->loaded_from)
-				expr = maybe_get<SPIRExpression>(expr->loaded_from);
-
 			// Buffer pointers stop the loaded from chain to deal with aliasing better, so carve that out specifically.
-			bool is_buffer_pointer = expr && expr->buffer_pointer;
+			auto *expr = maybe_get_backing_buffer_pointer(ptr_id);
 
-			if (!is_buffer_pointer)
+			if (!expr)
 			{
 				if (!var || !has_decoration(var->self, DecorationBuiltIn) ||
 					(BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInResourceHeapEXT &&

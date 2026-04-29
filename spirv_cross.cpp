@@ -434,6 +434,14 @@ SPIRVariable *Compiler::maybe_get_backing_variable(uint32_t chain)
 	return var;
 }
 
+const SPIRExpression *Compiler::maybe_get_backing_buffer_pointer(uint32_t chain) const
+{
+	auto *expr = maybe_get<SPIRExpression>(chain);
+	while (expr && !expr->buffer_pointer && expr->loaded_from)
+		expr = maybe_get<SPIRExpression>(expr->loaded_from);
+	return expr && expr->buffer_pointer ? expr : nullptr;
+}
+
 void Compiler::register_read(uint32_t expr, uint32_t chain, bool forwarded)
 {
 	auto &e = get<SPIRExpression>(expr);

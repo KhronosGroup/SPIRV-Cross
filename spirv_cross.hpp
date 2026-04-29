@@ -705,6 +705,7 @@ protected:
 	bool expression_is_lvalue(uint32_t id) const;
 	bool variable_storage_is_aliased(const SPIRVariable &var);
 	SPIRVariable *maybe_get_backing_variable(uint32_t chain);
+	const SPIRExpression *maybe_get_backing_buffer_pointer(uint32_t chain) const;
 
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);
