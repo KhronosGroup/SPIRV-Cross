@@ -678,7 +678,8 @@ protected:
 	void emit_extension_workarounds(ExecutionModel model);
 	void emit_subgroup_arithmetic_workaround(const std::string &func, Op op, GroupOperation group_op);
 	void emit_polyfills(uint32_t polyfills, bool relaxed);
-	void emit_buffer_block_native(const SPIRVariable &var);
+	void emit_buffer_block_native(const SPIRVariable *var, const DescriptorHeapMeta *heap_meta = nullptr);
+	std::string to_buffer_pointer_name_prefix(uint32_t ptr_id) const;
 	void emit_buffer_reference_block(uint32_t type_id, bool forward_declaration);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
 	void emit_buffer_block_flattened(const SPIRVariable &type);
@@ -772,7 +773,7 @@ protected:
 	                                        AccessChainFlags flags, bool &access_chain_is_arrayed, uint32_t index);
 
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
-	                                  AccessChainMeta *meta);
+	                                  AccessChainMeta *meta, const SPIRType *untyped_data_type);
 
 	// Only meaningful on backends with physical pointer support ala MSL.
 	// Relevant for PtrAccessChain / BDA.
@@ -786,7 +787,8 @@ protected:
 	                                                    StorageClass storage, bool &is_packed);
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
+	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false,
+	                         const SPIRType *untyped_data_type = nullptr);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
@@ -1057,7 +1059,7 @@ protected:
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
 
 	bool expression_is_constant_null(uint32_t id) const;
-	bool expression_is_non_value_type_array(uint32_t ptr);
+	bool expression_is_non_value_type_array(uint32_t value_type_id, uint32_t ptr);
 	virtual void emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression);
 
 	uint32_t get_integer_width_for_instruction(const Instruction &instr) const;

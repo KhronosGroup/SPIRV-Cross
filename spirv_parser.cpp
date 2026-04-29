@@ -627,6 +627,12 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	// MemberDecorateIdEXT only applies to OffsetIdEXT when descriptors are packed in structs.
+	// This is currently unsupported and will fail in compilation.
+	// Pass it through in case someone just needs reflection.
+	case OpMemberDecorateIdEXT:
+		break;
+
 	case OpMemberDecorateStringGOOGLE:
 	{
 		uint32_t id = ops[0];
@@ -859,6 +865,7 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpTypeUntypedPointerKHR:
 	case OpTypePointer:
 	{
 		uint32_t id = ops[0];
@@ -866,7 +873,7 @@ void Parser::parse(const Instruction &instruction)
 		// Very rarely, we might receive a FunctionPrototype here.
 		// We won't be able to compile it, but we shouldn't crash when parsing.
 		// We should be able to reflect.
-		auto *base = maybe_get<SPIRType>(ops[2]);
+		auto *base = op == OpTypePointer ? maybe_get<SPIRType>(ops[2]) : nullptr;
 		auto &ptrbase = set<SPIRType>(id, op);
 
 		if (base)
@@ -885,7 +892,10 @@ void Parser::parse(const Instruction &instruction)
 		if (base && base->forward_pointer)
 			forward_pointer_fixups.push_back({ id, ops[2] });
 
-		ptrbase.parent_type = ops[2];
+		if (op == OpTypePointer)
+			ptrbase.parent_type = ops[2];
+		else
+			ptrbase.basetype = SPIRType::Void;
 
 		// Do NOT set ptrbase.self!
 		break;
@@ -1002,6 +1012,27 @@ void Parser::parse(const Instruction &instruction)
 		}
 
 		set<SPIRVariable>(id, type, storage, initializer);
+		break;
+	}
+
+	case OpUntypedVariableKHR:
+	{
+		uint32_t type = ops[0];
+		uint32_t id = ops[1];
+		auto storage = static_cast<StorageClass>(ops[2]);
+		uint32_t data_type = length >= 4 ? ops[3] : 0;
+		uint32_t initializer = length >= 5 ? ops[4] : 0;
+
+		if (storage == StorageClassFunction)
+		{
+			if (!current_function)
+				SPIRV_CROSS_THROW("No function currently in scope");
+			current_function->add_local_variable(id);
+		}
+
+		auto &v = set<SPIRVariable>(id, type, storage, initializer);
+		v.untyped = true;
+		v.untyped_alloca_type = data_type;
 		break;
 	}
 
@@ -1132,6 +1163,24 @@ void Parser::parse(const Instruction &instruction)
 			}
 			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
 		}
+		break;
+	}
+
+	case OpConstantSizeOfEXT:
+	{
+		uint32_t id = ops[1];
+		uint32_t type = ops[0];
+		auto &c = set<SPIRConstant>(id, type);
+		c.size_of_type = ops[2];
+		break;
+	}
+
+	case OpTypeBufferEXT:
+	{
+		uint32_t type = ops[0];
+		auto &t = set<SPIRType>(type, OpTypeBufferEXT);
+		t.basetype = SPIRType::DescriptorHeapBuffer;
+		t.ext.descriptor_heap_buffer.storage = static_cast<StorageClass>(ops[1]);
 		break;
 	}
 

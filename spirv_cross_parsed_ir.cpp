@@ -404,6 +404,10 @@ void ParsedIR::set_decoration(ID id, Decoration decoration, uint32_t argument)
 		dec.offset = argument;
 		break;
 
+	case DecorationOffsetIdEXT:
+		dec.offset_id = argument;
+		break;
+
 	case DecorationXfbBuffer:
 		dec.xfb_buffer = argument;
 		break;
@@ -418,6 +422,10 @@ void ParsedIR::set_decoration(ID id, Decoration decoration, uint32_t argument)
 
 	case DecorationArrayStride:
 		dec.array_stride = argument;
+		break;
+
+	case DecorationArrayStrideIdEXT:
+		dec.array_stride_id = argument;
 		break;
 
 	case DecorationMatrixStride:
@@ -490,6 +498,10 @@ void ParsedIR::set_member_decoration(TypeID id, uint32_t index, Decoration decor
 
 	case DecorationOffset:
 		dec.offset = argument;
+		break;
+
+	case DecorationOffsetIdEXT:
+		dec.offset_id = argument;
 		break;
 
 	case DecorationXfbBuffer:
@@ -645,6 +657,8 @@ uint32_t ParsedIR::get_decoration(ID id, Decoration decoration) const
 		return dec.component;
 	case DecorationOffset:
 		return dec.offset;
+	case DecorationOffsetIdEXT:
+		return dec.offset_id;
 	case DecorationXfbBuffer:
 		return dec.xfb_buffer;
 	case DecorationXfbStride:
@@ -661,6 +675,8 @@ uint32_t ParsedIR::get_decoration(ID id, Decoration decoration) const
 		return dec.spec_id;
 	case DecorationArrayStride:
 		return dec.array_stride;
+	case DecorationArrayStrideIdEXT:
+		return dec.array_stride_id;
 	case DecorationMatrixStride:
 		return dec.matrix_stride;
 	case DecorationIndex:
@@ -718,6 +734,10 @@ void ParsedIR::unset_decoration(ID id, Decoration decoration)
 
 	case DecorationOffset:
 		dec.offset = 0;
+		break;
+
+	case DecorationOffsetIdEXT:
+		dec.offset_id = 0;
 		break;
 
 	case DecorationXfbBuffer:
@@ -806,6 +826,8 @@ uint32_t ParsedIR::get_member_decoration(TypeID id, uint32_t index, Decoration d
 		return dec.binding;
 	case DecorationOffset:
 		return dec.offset;
+	case DecorationOffsetIdEXT:
+		return dec.offset_id;
 	case DecorationXfbBuffer:
 		return dec.xfb_buffer;
 	case DecorationXfbStride:
@@ -901,6 +923,10 @@ void ParsedIR::unset_member_decoration(TypeID id, uint32_t index, Decoration dec
 
 	case DecorationOffset:
 		dec.offset = 0;
+		break;
+
+	case DecorationOffsetIdEXT:
+		dec.offset_id = 0;
 		break;
 
 	case DecorationXfbBuffer:
