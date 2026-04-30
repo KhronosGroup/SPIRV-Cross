@@ -612,7 +612,7 @@ void CompilerGLSL::find_static_extensions()
 	{
 		switch (cap)
 		{
-		case CapabilityShaderNonUniformEXT:
+		case CapabilityShaderNonUniform:
 			if (!options.vulkan_semantics)
 				require_extension_internal("GL_NV_gpu_shader5");
 			else
@@ -19717,16 +19717,28 @@ void CompilerGLSL::convert_non_uniform_expression(string &expr, uint32_t ptr_id)
 		return;
 
 	auto *var = maybe_get_backing_variable(ptr_id);
-	if (!var)
+	auto *buffer_pointer = maybe_get_backing_buffer_pointer(ptr_id);
+	if (!var && !buffer_pointer)
 		return;
 
-	if (var->storage != StorageClassUniformConstant &&
+	if (!buffer_pointer &&
+		var->storage != StorageClassUniformConstant &&
 	    var->storage != StorageClassStorageBuffer &&
 	    var->storage != StorageClassUniform)
 		return;
 
-	auto &backing_type = get<SPIRType>(var->basetype);
-	if (backing_type.array.empty())
+	auto &backing_type = get<SPIRType>(var ? var->basetype : buffer_pointer->expression_type);
+
+	bool descriptor_heap = false;
+	if (var)
+	{
+		auto builtin = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+		descriptor_heap = builtin == BuiltInResourceHeapEXT || builtin == BuiltInSamplerHeapEXT;
+	}
+	else if (buffer_pointer)
+		descriptor_heap = true;
+
+	if (!descriptor_heap && backing_type.array.empty())
 		return;
 
 	// If we get here, we know we're accessing an arrayed resource which
@@ -20728,6 +20740,20 @@ bool CompilerGLSL::is_descriptor_non_uniform(uint32_t id) const
 {
 	if (has_decoration(id, DecorationNonUniform))
 		return true;
+
+	// Only infer nonuniform for descriptors.
+	auto &type = expression_type(id);
+
+	if (is_pointer(type))
+	{
+		if (type.storage != StorageClassUniform && type.storage != StorageClassStorageBuffer &&
+			type.storage != StorageClassUniformConstant && type.storage != StorageClassImage)
+			return false;
+	}
+	else if (!type_is_opaque_value(type))
+	{
+		return false;
+	}
 
 	if (descriptor_heap_mappings.empty())
 		return false;

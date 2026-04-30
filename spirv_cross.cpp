@@ -783,17 +783,17 @@ bool Compiler::is_array(const SPIRType &type) const
 
 bool Compiler::is_pointer(const SPIRType &type) const
 {
-	return type.op == OpTypePointer && type.basetype != SPIRType::Unknown; // Ignore function pointers.
+	return (type.op == OpTypePointer || type.op == OpTypeUntypedPointerKHR) && type.basetype != SPIRType::Unknown; // Ignore function pointers.
 }
 
 bool Compiler::is_physical_pointer(const SPIRType &type) const
 {
-	return type.op == OpTypePointer && type.storage == StorageClassPhysicalStorageBuffer;
+	return (type.op == OpTypePointer || type.op == OpTypeUntypedPointerKHR) && type.storage == StorageClassPhysicalStorageBuffer;
 }
 
 bool Compiler::is_physical_or_buffer_pointer(const SPIRType &type) const
 {
-	return type.op == OpTypePointer &&
+	return (type.op == OpTypePointer || type.op == OpTypeUntypedPointerKHR) &&
 	       (type.storage == StorageClassPhysicalStorageBuffer || type.storage == StorageClassUniform ||
 	        type.storage == StorageClassStorageBuffer || type.storage == StorageClassWorkgroup ||
 	        type.storage == StorageClassPushConstant);
