@@ -7,20 +7,20 @@ layout(location = 0) out float FragColor;
 layout(descriptor_heap, std430) readonly buffer SSBONoWrite
 {
     vec4 data[];
-} spvSSBONoWriteResourceHeap[];
+} spvSSBONoWrite_9ResourceHeap[];
 
 layout(descriptor_heap, std430) buffer SSBO
 {
     vec4 data[];
-} spvSSBOCoherentResourceHeap[];
+} spvSSBOCoherent_10ResourceHeap[];
 
 
 void main()
 {
-    spvSSBOCoherentResourceHeap[2].data[0].z = 0.0;
-    FragColor = spvSSBONoWriteResourceHeap[2].data[2].z;
-    float _34 = spvSSBOCoherentResourceHeap[2].data[0].z;
-    spvSSBOCoherentResourceHeap[2].data[0].z = 0.0;
+    spvSSBOCoherent_10ResourceHeap[2].data[0].z = 0.0;
+    FragColor = spvSSBONoWrite_9ResourceHeap[2].data[2].z;
+    float _34 = spvSSBOCoherent_10ResourceHeap[2].data[0].z;
+    spvSSBOCoherent_10ResourceHeap[2].data[0].z = 0.0;
     FragColor = _34;
 }
 

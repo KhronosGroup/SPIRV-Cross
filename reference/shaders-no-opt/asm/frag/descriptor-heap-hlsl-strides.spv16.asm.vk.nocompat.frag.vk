@@ -14,7 +14,7 @@ layout(descriptor_heap) uniform texture1D spv_23ResourceHeap[];
 layout(descriptor_heap, std140) uniform UBO140
 {
     float data[2];
-} spvUBO140ResourceHeap[];
+} spvUBO140_42ResourceHeap[];
 
 layout(descriptor_heap) uniform accelerationStructureEXT spv_51ResourceHeap[];
 // WARNING: HLSL style descriptor heap stride is assumed for one or more descriptors. Allowing for compatibility with HLSL shaders.
@@ -25,7 +25,7 @@ void main()
 {
     FragColor = vec4(0.0);
     FragColor += texelFetch(spv_23ResourceHeap[int(gl_FragCoord.x)], 0, 0);
-    FragColor += vec4(spvUBO140ResourceHeap[50].data[1]);
+    FragColor += vec4(spvUBO140_42ResourceHeap[50].data[1]);
     rayQueryInitializeEXT(rq, spv_51ResourceHeap[50], 0u, 0u, vec3(0.0), 0.0, vec3(1.0, 0.0, 0.0), 1.0);
 }
 

@@ -2615,6 +2615,9 @@ std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 	if (itr->is_volatile)
 		name += "Volatile";
 
+	// Disambiguate since we can create multiple buffer pointers with same types.
+	name += to_name(itr->buffer_pointer_id);
+
 	return join("spv", name);
 }
 
