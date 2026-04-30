@@ -75,6 +75,8 @@ void main()
 	FragColor += texelFetch(Images1D[desc_index + 0], 0, 0);
 	FragColor += texelFetch(Images2D[desc_index + 1], ivec2(0), 0);
 	FragColor += texelFetch(Images3D[desc_index + 2], ivec3(0), 0);
+	FragColor += texture(sampler2D(Images2D[int(gl_FragCoord.x)], Samplers[int(gl_FragCoord.y)]), vec2(0), 0);
+	FragColor += texture(sampler2DShadow(Images2D[int(gl_FragCoord.x)], Samplers[int(gl_FragCoord.y)]), vec3(0), 0);
 
 	imageStore(WriteImages1D[desc_index + 3], 0, FragColor);
 	imageStore(WriteImages2D[desc_index + 4], ivec2(0), FragColor);
