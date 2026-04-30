@@ -2614,6 +2614,8 @@ std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 		name += "Coherent";
 	if (itr->is_volatile)
 		name += "Volatile";
+	if (itr->is_restrict)
+		name += "Restrict";
 
 	// Disambiguate since we can create multiple buffer pointers with same types.
 	name += to_name(itr->buffer_pointer_id);
