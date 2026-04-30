@@ -20806,7 +20806,7 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 
 	case SPIRType::Image:
 		dim = type.image.dim == DimBuffer ? DimBuffer : Dim2D;
-		resource = type.image.sampled == 2 ? ResourceTypeStorageImage : ResourceTypeSeparateSamplers;
+		resource = type.image.sampled == 2 ? ResourceTypeStorageImage : ResourceTypeSeparateImage;
 		break;
 
 	case SPIRType::SampledImage:
