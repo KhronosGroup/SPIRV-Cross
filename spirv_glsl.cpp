@@ -2596,6 +2596,24 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 	}
 }
 
+std::string CompilerGLSL::heap_meta_to_prefix(const DescriptorHeapMeta &meta)
+{
+	std::string prefix;
+
+	if (meta.nonreadable)
+		prefix += "NoRead";
+	if (meta.nonwritable)
+		prefix += "NoWrite";
+	if (meta.coherent)
+		prefix += "Coherent";
+	if (meta.is_volatile)
+		prefix += "Volatile";
+	if (meta.is_restrict)
+		prefix += "Restrict";
+
+	return prefix;
+}
+
 std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 {
 	auto itr = std::find_if(descriptor_heap_types.begin(), descriptor_heap_types.end(),
@@ -2606,16 +2624,7 @@ std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 	auto name = to_name(itr->type);
 
 	// The same block type can be instantiated with different read-write decorations.
-	if (itr->nonreadable)
-		name += "NoRead";
-	if (itr->nonwritable)
-		name += "NoWrite";
-	if (itr->coherent)
-		name += "Coherent";
-	if (itr->is_volatile)
-		name += "Volatile";
-	if (itr->is_restrict)
-		name += "Restrict";
+	name += heap_meta_to_prefix(*itr);
 
 	// Disambiguate since we can create multiple buffer pointers with same types.
 	name += to_name(itr->buffer_pointer_id);
@@ -2664,10 +2673,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	if (heap_meta)
 	{
 		// The same block type can be instantiated with different read-write decorations.
-		if (heap_meta->nonreadable)
-			buffer_name += "NoRead";
-		if (heap_meta->nonwritable)
-			buffer_name += "NoWrite";
+		buffer_name += heap_meta_to_prefix(*heap_meta);
 	}
 
 	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
