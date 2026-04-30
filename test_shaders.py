@@ -684,6 +684,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fo
         extra_args += ['--glsl-force-flattened-io-blocks']
     if '.relax-nan.' in shader:
         extra_args.append('--relax-nan-checks')
+    if '.heap-legacy-mapping.' in shader:
+        extra_args += ['--glsl-descriptor-heap-set-binding', '1', '2']
 
     spirv_cross_path = paths.spirv_cross
 

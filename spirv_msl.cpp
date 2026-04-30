@@ -8727,7 +8727,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			const uint32_t indices[2] = { i, interface_index };
 			AccessChainMeta meta;
 			expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta, nullptr);
 			if (i + 1 < num_control_points)
 				expr += ", ";
 		}
@@ -8763,7 +8763,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 				AccessChainMeta meta;
 				expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-				                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+				                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+				                              &meta, nullptr);
 				if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
 					expr_type.vecsize > sub_type.vecsize)
 					expr += vector_swizzle(sub_type.vecsize, 0);
@@ -8821,7 +8822,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 							AccessChainMeta meta;
 							expr += access_chain_internal(
 									stage_in_ptr_var_id, indices, 2,
-									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+									&meta, nullptr);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -8845,7 +8847,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 							AccessChainMeta meta;
 							expr += access_chain_internal(
 									stage_in_ptr_var_id, indices, 2,
-									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+									&meta, nullptr);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -8865,7 +8868,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 						AccessChainMeta meta;
 						expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
 						                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
-						                              &meta);
+						                              &meta, nullptr);
 					}
 					else
 						expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -8910,7 +8913,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 					AccessChainMeta meta;
 					expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+					                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+					                              &meta, nullptr);
 					if (expr_type.vecsize > result_type.vecsize)
 						expr += vector_swizzle(result_type.vecsize, 0);
 					if (j + 1 < result_type.columns)
@@ -8955,7 +8959,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 			AccessChainMeta meta;
 			expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+			                              &meta, nullptr);
 			if (expr_type.vecsize > result_type.vecsize)
 				expr += vector_swizzle(result_type.vecsize, 0);
 
