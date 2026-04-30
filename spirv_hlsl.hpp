@@ -238,6 +238,8 @@ private:
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
+	void emit_patch_constant_function();
+	void emit_tesc_inner_functions();
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
@@ -380,6 +382,43 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+	uint32_t input_cp_count = 0;
+
+	// Returns tesc execution flags merged with tese flags (domain modes may be on either entry point).
+	Bitset get_tesc_tese_flags() const;
+	// Returns tess factor array sizes based on domain (tri: 3/1, quad: 4/2, isoline: 2/0).
+	void get_tess_factor_counts(uint32_t &outer_count, uint32_t &inner_count) const;
+	// Emits the [domain("...")] attribute line common to both tesc and tese wrappers.
+	void emit_tess_domain_attribute(const Bitset &flags);
+
+	// TCS function splitting, clone-and-prune style.
+	//
+	// The entry point SPIR-V wraps the per-CP work and the patch-constant call
+	// inside a single function with a barrier and `if (gl_InvocationID == 0)` gate.
+	// HLSL needs two distinct functions (`tesc_main` + `tesc_main_patch`). We
+	// produce them by:
+	//   1) Pre-scanning to locate the gate blocks, the OpControlBarrier inside
+	//      the gate header, and the per-CP OpFunctionCall (HSMain).
+	//   2) For each pass, temporarily rewriting the gate header's SPIRBlock
+	//      (truncate `ops`, change `terminator` from Select to Direct, flip
+	//      `next_block` to either the merge block or the then-block) and
+	//      running standard emit_block_chain on the modified IR.
+	//   3) Restoring the original block state afterward.
+	uint32_t tesc_gate_header_block = 0;      // Header block (terminator == Select on ieq(invocation_id, 0))
+	uint32_t tesc_gate_then_block = 0;        // Header.true_block: contains the patch-constant call
+	uint32_t tesc_gate_merge_block = 0;       // Header.merge_block
+	uint32_t tesc_barrier_op_index = 0;       // Index of OpControlBarrier within header->ops
+	uint32_t tesc_per_cp_call_op_index = 0;   // Index of the per-CP OpFunctionCall within header->ops
+	bool tesc_patch_func_needs_output = false;// Patch constant wrapper needs an OutputPatch parameter
+
+	// Fills the fields above; returns true if the shader matches the expected
+	// pattern (single barrier + gate in the entry point, per-CP call before the
+	// barrier, patch-constant call in the then-block).
+	bool detect_tesc_structure(SPIRFunction &entry);
+	// Emit one of the two tesc split functions (tesc_main or tesc_main_patch).
+	// Caller is expected to mutate the gate header block first, then restore after.
+	void emit_tesc_function_body(const std::string &name, SPIRFunction &func);
+
 	SmallVector<HLSLVertexAttributeRemap> remap_vertex_attributes;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
