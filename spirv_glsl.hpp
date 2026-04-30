@@ -306,6 +306,19 @@ public:
 	// Returns the macro name corresponding to constant id
 	std::string constant_value_macro_name(uint32_t id) const;
 
+	// Rather than using layout(descriptor_heap), emit layout(set, binding).
+	// This intended to be compatible with descriptor buffers, legacy descriptor indexing,
+	// or when the heap descriptors require unusual kinds of mapping in the Vulkan API
+	// which is not expressible by GLSL directly.
+	//
+	// ResourceTypeUnknown can be used as a default catch-all mapping.
+	// dim can be used to disambiguate between texel buffers and images since they are both image types,
+	// but use different descriptor types in the Vulkan API.
+	// No distinction is made between 1D/2D/3D/Cube textures.
+	// The default argument of DimMax maps to both texel buffers and images.
+	// dim is ignored for ResourceTypeUnknown.
+	void remap_descriptor_heap(ResourceType type, uint32_t desc_set, uint32_t binding, Dim dim = DimMax);
+
 protected:
 	struct ShaderSubgroupSupportHelper
 	{
@@ -1092,6 +1105,17 @@ protected:
 
 	uint32_t get_fp_fast_math_flags_for_op(uint32_t result_type, uint32_t id) const;
 	bool has_legacy_nocontract(uint32_t result_type, uint32_t id) const;
+
+	struct DescriptorHeapMapping
+	{
+		ResourceType type;
+		uint32_t desc_set;
+		uint32_t binding;
+		Dim dim;
+	};
+	SmallVector<DescriptorHeapMapping> descriptor_heap_mappings;
+	bool is_descriptor_non_uniform(uint32_t id) const;
+	std::string to_descriptor_heap_layout(const SPIRType &type, StorageClass storage = StorageClassUniformConstant) const;
 
 private:
 	void init();

@@ -10,23 +10,16 @@ const int _13 = _56 ? 0 : 0;
 
 layout(location = 0) out vec4 FragColor;
 rayQueryEXT rq;
-// WARNING: HLSL style descriptor heap stride is assumed. Allowing for compatibility with HLSL shaders.
-// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).
-// Application side can convert bindless indices accordingly to compensate or use explicit mapping API.
 layout(descriptor_heap) uniform texture1D spv_23ResourceHeap[];
-// WARNING: HLSL style descriptor heap stride is assumed. Allowing for compatibility with HLSL shaders.
-// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).
-// Application side can convert bindless indices accordingly to compensate or use explicit mapping API.
-
 layout(descriptor_heap, std140) uniform UBO140
 {
     float data[2];
 } spvUBO140ResourceHeap[];
 
-// WARNING: HLSL style descriptor heap stride is assumed. Allowing for compatibility with HLSL shaders.
-// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).
-// Application side can convert bindless indices accordingly to compensate or use explicit mapping API.
 layout(descriptor_heap) uniform accelerationStructureEXT spv_51ResourceHeap[];
+// WARNING: HLSL style descriptor heap stride is assumed for one or more descriptors. Allowing for compatibility with HLSL shaders.
+// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).
+// Application side can convert bindless indices accordingly to compensate or use explicit mapping API to configure strides outside SPIRV-Cross.
 
 void main()
 {

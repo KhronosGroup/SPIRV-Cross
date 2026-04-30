@@ -91,6 +91,28 @@ struct BuiltInResource
 	Resource resource;
 };
 
+// Needs to stay in sync 1:1 with C API.
+enum ResourceType
+{
+	ResourceTypeUnknown = 0,
+	ResourceTypeUniformBuffer = 1,
+	ResourceTypeStorageBuffer = 2,
+	ResourceTypeStageInput = 3,
+	ResourceTypeStageOutput = 4,
+	ResourceTypeSubpassInput = 5,
+	ResourceTypeStorageImage = 6,
+	ResourceTypeSampledImage = 7,
+	ResourceTypeAtomicCounter = 8,
+	ResourceTypePushConstant = 9,
+	ResourceTypeSeparateImage = 10,
+	ResourceTypeSeparateSamplers = 11,
+	ResourceTypeAccelerationStructure = 12,
+	ResourceTypeRayQuery = 13,
+	ResourceTypeShaderRecordBuffer = 14,
+	ResourceTypeGLPlainUniform = 15,
+	ResourceTypeTensor = 16
+};
+
 struct ShaderResources
 {
 	SmallVector<Resource> uniform_buffers;

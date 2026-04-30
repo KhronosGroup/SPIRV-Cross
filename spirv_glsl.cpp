@@ -2704,7 +2704,9 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	else
 	{
 		auto packing_standard = buffer_to_packing_standard(*type, ssbo, true);
-		layout = join("layout(descriptor_heap, ", packing_standard, ") ");
+		layout = join("layout(",
+			to_descriptor_heap_layout(*type, ssbo ? StorageClassStorageBuffer : StorageClassUniform),
+			", ", packing_standard, ") ");
 	}
 
 	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
@@ -4189,15 +4191,14 @@ void CompilerGLSL::emit_resources()
 		}
 	}
 
+	bool needs_hlsl_warning = false;
+
 	for (const auto &heap_type : descriptor_heap_types)
 	{
 		auto &type = get<SPIRType>(heap_type.type);
 
-		const char *comment = heap_type.hlsl_style_stride ?
-			"// WARNING: HLSL style descriptor heap stride is assumed. Allowing for compatibility with HLSL shaders.\n"
-			"// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).\n"
-			"// Application side can convert bindless indices accordingly to compensate or use explicit mapping API.\n"
-			: "";
+		if (heap_type.hlsl_style_stride)
+			needs_hlsl_warning = true;
 
 		if (type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
 		{
@@ -4205,22 +4206,28 @@ void CompilerGLSL::emit_resources()
 
 			// We use NonWritable / NonReadable information. Unsure if this is SPIR-V oversight or glslang issue.
 			if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.format != ImageFormatUnknown)
-				type_layout = join(comment, "layout(descriptor_heap, ", format_to_glsl(type.image.format), ") uniform ");
+				type_layout = join("layout(", to_descriptor_heap_layout(type), ", ", format_to_glsl(type.image.format), ") uniform ");
 			else
-				type_layout = join(comment, "layout(descriptor_heap) uniform ");
+				type_layout = join("layout(", to_descriptor_heap_layout(type), ") uniform ");
 
 			statement(type_layout, variable_decl(type, join("spv", to_name(type.self), "ResourceHeap")), "[];");
 		}
 		else if (type.basetype == SPIRType::Sampler)
 		{
-			statement("layout(descriptor_heap) uniform ", variable_decl(type, join("spv", to_name(type.self), "SamplerHeap")), "[];");
+			statement("layout(", to_descriptor_heap_layout(type), ") uniform ",
+				variable_decl(type, join("spv", to_name(type.self), "SamplerHeap")), "[];");
 		}
 		else
 		{
-			if (*comment != '\0')
-				statement(comment);
 			emit_buffer_block_native(nullptr, &heap_type);
 		}
+	}
+
+	if (needs_hlsl_warning)
+	{
+		statement("// WARNING: HLSL style descriptor heap stride is assumed for one or more descriptors. Allowing for compatibility with HLSL shaders.");
+		statement("// This may be not strictly be compatible with GLSL if sizeof(buffer) != sizeof(image).");
+		statement("// Application side can convert bindless indices accordingly to compensate or use explicit mapping API to configure strides outside SPIRV-Cross.");
 	}
 
 	if (emitted)
@@ -5688,7 +5695,7 @@ string CompilerGLSL::to_non_uniform_aware_expression(uint32_t id)
 {
 	string expr = to_expression(id);
 
-	if (has_decoration(id, DecorationNonUniform))
+	if (is_descriptor_non_uniform(id))
 		convert_non_uniform_expression(expr, id);
 
 	return expr;
@@ -8243,7 +8250,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	auto &result_type = get<SPIRType>(result_type_id);
 
 	inherited_expressions.push_back(coord);
-	if (has_decoration(img, DecorationNonUniform) && !maybe_get_backing_variable(img))
+	if (is_descriptor_non_uniform(img) && !maybe_get_backing_variable(img))
 		nonuniform_expression = true;
 
 	switch (op)
@@ -12468,7 +12475,7 @@ void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_ex
 		if (!unroll_array_to_complex_store(lhs_expression, rhs_expression))
 		{
 			auto lhs = to_dereferenced_expression(lhs_expression);
-			if (has_decoration(lhs_expression, DecorationNonUniform))
+			if (is_descriptor_non_uniform(lhs_expression))
 				convert_non_uniform_expression(lhs, lhs_expression);
 
 			// We might need to cast in order to store to a builtin.
@@ -12930,7 +12937,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Also, loading from gl_SampleMask array needs special unroll.
 		unroll_array_from_complex_load(id, ptr, expr);
 
-		if (!type_is_opaque_value(type) && has_decoration(ptr, DecorationNonUniform))
+		if (!type_is_opaque_value(type) && is_descriptor_non_uniform(ptr))
 		{
 			// If we're loading something non-opaque, we need to handle non-uniform descriptor access.
 			convert_non_uniform_expression(expr, ptr);
@@ -13157,7 +13164,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				e = join(to_buffer_pointer_name_prefix(ptr_expr->self), e);
 		}
 
-		if (has_decoration(ptr_id, DecorationNonUniform))
+		if (is_descriptor_non_uniform(ptr_id))
 			convert_non_uniform_expression(e, ptr_id);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type, true);
 		break;
@@ -14910,7 +14917,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			op = "textureQueryLod";
 
 		auto sampler_expr = to_expression(ops[2]);
-		if (has_decoration(ops[2], DecorationNonUniform))
+		if (is_descriptor_non_uniform(ops[2]))
 		{
 			if (maybe_get_backing_variable(ops[2]))
 				convert_non_uniform_expression(sampler_expr, ops[2]);
@@ -20700,3 +20707,116 @@ bool CompilerGLSL::has_legacy_nocontract(uint32_t result_type, uint32_t id) cons
 	                      FPFastMathModeAllowReassocMask;
 	return (get_fp_fast_math_flags_for_op(result_type, id) & fp_flags) != fp_flags;
 }
+
+void CompilerGLSL::remap_descriptor_heap(ResourceType type, uint32_t desc_set, uint32_t binding, Dim dim)
+{
+	for (auto &mapping : descriptor_heap_mappings)
+	{
+		if (mapping.type == type)
+		{
+			mapping.desc_set = desc_set;
+			mapping.binding = binding;
+			mapping.dim = dim;
+			return;
+		}
+	}
+
+	descriptor_heap_mappings.push_back({ type, desc_set, binding, dim });
+}
+
+bool CompilerGLSL::is_descriptor_non_uniform(uint32_t id) const
+{
+	if (has_decoration(id, DecorationNonUniform))
+		return true;
+
+	if (descriptor_heap_mappings.empty())
+		return false;
+
+	if (has_decoration(id, DecorationUniform))
+		return false;
+
+	if (std::find(ir.declared_capabilities.begin(), ir.declared_capabilities.end(),
+		CapabilityDescriptorHeapEXT) == ir.declared_capabilities.end())
+		return false;
+
+	// Definitely not.
+	if (maybe_get<SPIRConstant>(id) || maybe_get<SPIRConstantOp>(id))
+		return false;
+
+	// DescriptorHeapEXT requires that nonuniformEXT is implied,
+	// but if we're remapping to legacy set/binding model, glslang will not emit the cap in cross compiled source,
+	// so we have to enforce it. We don't have compiler-infra to deduce subgroup uniformity statically,
+	// so just slap it on everything. Compilers generally figure this stuff out.
+	return true;
+}
+
+std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, StorageClass storage) const
+{
+	auto resource = ResourceTypeUnknown;
+	Dim dim = DimMax;
+
+	switch (type.basetype)
+	{
+	case SPIRType::Sampler:
+		resource = ResourceTypeSeparateSamplers;
+		break;
+
+	case SPIRType::Image:
+		dim = type.image.dim == DimBuffer ? DimBuffer : Dim2D;
+		resource = type.image.sampled == 2 ? ResourceTypeStorageImage : ResourceTypeSeparateSamplers;
+		break;
+
+	case SPIRType::SampledImage:
+		resource = ResourceTypeSampledImage;
+		break;
+
+	case SPIRType::AccelerationStructure:
+		resource = ResourceTypeAccelerationStructure;
+		break;
+
+	case SPIRType::AtomicCounter:
+		resource = ResourceTypeAtomicCounter;
+		break;
+
+	case SPIRType::Struct:
+	{
+		bool ssbo = storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock);
+		resource = ssbo ? ResourceTypeStorageBuffer : ResourceTypeUniformBuffer;
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	for (auto &mapping : descriptor_heap_mappings)
+	{
+		if (mapping.type == resource)
+		{
+			bool has_match = false;
+
+			if (type.basetype == SPIRType::Image)
+			{
+				if (dim == DimBuffer && (mapping.dim == DimMax || mapping.dim == DimBuffer))
+					has_match = true;
+				if (dim != DimBuffer && mapping.dim != DimBuffer)
+					has_match = true;
+			}
+			else
+			{
+				has_match = true;
+			}
+
+			if (has_match)
+				return join("set = ", mapping.desc_set, ", binding = ", mapping.binding);
+		}
+	}
+
+	// Fallback to unknown mapping.
+	for (auto &mapping : descriptor_heap_mappings)
+		if (mapping.type == ResourceTypeUnknown)
+			return join("set = ", mapping.desc_set, ", binding = ", mapping.binding);
+
+	return "descriptor_heap";
+}
+
