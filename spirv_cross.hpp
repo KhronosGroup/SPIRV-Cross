@@ -1127,6 +1127,7 @@ protected:
 		bool nonreadable;
 		bool coherent;
 		bool is_volatile;
+		bool is_restrict;
 	};
 	std::vector<DescriptorHeapMeta> descriptor_heap_types;
 	void analyze_descriptor_heap_types();

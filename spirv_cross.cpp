@@ -5493,6 +5493,7 @@ void Compiler::analyze_descriptor_heap_types()
 					meta.nonreadable = compiler.has_decoration(args[1], DecorationNonReadable);
 					meta.nonwritable = compiler.has_decoration(args[1], DecorationNonWritable);
 					meta.coherent = compiler.has_decoration(args[1], DecorationCoherent);
+					meta.is_restrict = compiler.has_decoration(args[1], DecorationRestrict);
 					meta.is_volatile = compiler.has_decoration(args[1], DecorationVolatile);
 					add_unique_type(meta);
 				}
@@ -5517,7 +5518,7 @@ void Compiler::analyze_descriptor_heap_types()
 					if (!compiler.is_runtime_size_array(data_type))
 						SPIRV_CROSS_THROW("Descriptor heap must be accessed as a runtime array.");
 
-					// The only meaningful use of this is ArrayStride equal to sizeof(sampler) right now.
+					// The only meaningful use of this is ArrayStride equal to sizeof(type) right now.
 					uint32_t array_stride_id = compiler.get_decoration(args[2], DecorationArrayStrideIdEXT);
 					if (!array_stride_id)
 						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for resource heap.");
@@ -5564,7 +5565,7 @@ void Compiler::analyze_descriptor_heap_types()
 					else if (data_type.basetype == SPIRType::AccelerationStructure)
 					{
 						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::AccelerationStructure)
-							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeAccelerationStructure) for GLSL.");
+							SPIRV_CROSS_THROW("RTAS descriptors in heap must be ConstantSizeOfEXT(OpTypeAccelerationStructure) for GLSL.");
 					}
 				}
 				else if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInSamplerHeapEXT)
@@ -5621,6 +5622,7 @@ void Compiler::analyze_descriptor_heap_types()
 						meta.nonwritable = compiler.has_decoration(args[3], DecorationNonWritable);
 						meta.coherent = compiler.has_decoration(args[3], DecorationCoherent);
 						meta.is_volatile = compiler.has_decoration(args[3], DecorationVolatile);
+						meta.is_restrict = compiler.has_decoration(args[3], DecorationRestrict);
 						add_unique_type(meta);
 					}
 				}
@@ -5657,6 +5659,7 @@ void Compiler::analyze_descriptor_heap_types()
 				    type.nonreadable == meta.nonreadable &&
 				    type.nonwritable == meta.nonwritable &&
 				    type.coherent == meta.coherent &&
+				    type.is_restrict == meta.is_restrict &&
 				    type.hlsl_style_stride == meta.hlsl_style_stride &&
 				    type.is_volatile == meta.is_volatile)
 				{

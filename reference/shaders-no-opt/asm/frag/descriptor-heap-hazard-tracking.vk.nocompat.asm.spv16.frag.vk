@@ -9,7 +9,7 @@ layout(descriptor_heap, std430) readonly buffer SSBONoWrite
     vec4 data[];
 } spvSSBONoWrite_9ResourceHeap[];
 
-layout(descriptor_heap, std430) buffer SSBO
+layout(descriptor_heap, std430) coherent buffer SSBO
 {
     vec4 data[];
 } spvSSBOCoherent_10ResourceHeap[];

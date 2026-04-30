@@ -2640,6 +2640,12 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 			flags.set(DecorationNonReadable);
 		if (heap_meta->nonwritable)
 			flags.set(DecorationNonWritable);
+		if (heap_meta->coherent)
+			flags.set(DecorationCoherent);
+		if (heap_meta->is_volatile)
+			flags.set(DecorationVolatile);
+		if (heap_meta->is_restrict)
+			flags.set(DecorationRestrict);
 	}
 
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
