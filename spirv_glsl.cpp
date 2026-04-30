@@ -4221,7 +4221,7 @@ void CompilerGLSL::emit_resources()
 		{
 			string type_layout;
 
-			// We use NonWritable / NonReadable information. Unsure if this is SPIR-V oversight or glslang issue.
+			// We lose NonWritable / NonReadable information, glslang issue, no good way to plumb it through either ...
 			if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.format != ImageFormatUnknown)
 				type_layout = join("layout(", to_descriptor_heap_layout(type), ", ", format_to_glsl(type.image.format), ") uniform ");
 			else
