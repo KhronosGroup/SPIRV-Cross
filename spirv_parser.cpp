@@ -164,16 +164,15 @@ void Parser::parse()
 	{
 		if (ir.library_exported_functions.empty())
 			SPIRV_CROSS_THROW("There is no entry point in the SPIR-V module.");
-  
+
 		// No OpEntryPoint, but the module exports functions. Treat as a library
-		// module: designate the first exported function as the default entry 
-		// point so analyses keyed on default_entry_point can run. 
+		// module: designate the first exported function as the default entry
+		// point so analyses keyed on default_entry_point can run.
 		ir.is_library_module = true;
 		ir.default_entry_point = ir.library_exported_functions.front();
 		auto &name = ir.get_name(ir.default_entry_point);
-		ir.entry_points.insert(std::make_pair(
-			ir.default_entry_point,
-			SPIREntryPoint(ir.default_entry_point, ExecutionModelGLCompute, name)));
+		ir.entry_points.insert(std::make_pair(ir.default_entry_point,
+		                                      SPIREntryPoint(ir.default_entry_point, ExecutionModelGLCompute, name)));
 	}
 }
 
@@ -629,7 +628,7 @@ void Parser::parse(const Instruction &instruction)
 		// Track exported functions so we can compile library modules that have no OpEntryPoint.
 		// LinkageAttributes layout: literal-string (variable words) followed by LinkageType.
 		if (decoration == DecorationLinkageAttributes && length >= 4 &&
-			static_cast<LinkageType>(ops[length - 1]) == LinkageTypeExport)
+		    static_cast<LinkageType>(ops[length - 1]) == LinkageTypeExport)
 		{
 			ir.library_exports.push_back(id);
 
