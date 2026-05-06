@@ -152,10 +152,8 @@ void Parser::parse()
 	if (current_block)
 		SPIRV_CROSS_THROW("Block was not terminated.");
 
-	// Now that all definitions are bound to a kind, populate the
-	// per-kind typed views over `library_exports`. LinkageAttributes
-	// applies to both functions and global variables; today only the
-	// function view is consumed by the backends.
+	// Now that all definitions are bound to a kind, we can filter the library
+	// exports and populate the exported functions.
 	for (uint32_t id : ir.library_exports)
 	{
 		if (ir.ids[id].get_type() == TypeFunction)
