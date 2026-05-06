@@ -561,8 +561,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
 
     sm = shader_to_sm(shader)
 
-    # Library SPIR-V modules (e.g. dxc -T lib_6_*) have no OpEntryPoint;
-    # skip the --entry flag for those so spirv-cross does not try to
+    # Library SPIR-V modules have no OpEntryPoint. Skip the --entry flag for those so spirv-cross does not try to
     # select an entry point that does not exist.
     is_library = shader_is_library(shader)
     hlsl_args = [spirv_cross_path]
@@ -630,13 +629,37 @@ def validate_shader(shader, vulkan, paths):
     else:
         subprocess.check_call([paths.glslang, shader])
 
+def validate_library_glsl(library_path, paths):
+    # Library GLSL output has no #version directive and no main(), since it is meant to be #include'd by GLSL 
+    # source. Validate it by writing a minimal wrapper translation unit alongside it that does the include via 
+    # the GL_GOOGLE_include_directive and runs glslang on the wrapper. Note, `-V` is required because glslang 
+    # only processes GL_GOOGLE_include_directive under Vulkan semantics.
+    library_dir = os.path.dirname(library_path)
+    library_name = os.path.basename(library_path)
+    fd, wrapper_path = tempfile.mkstemp(suffix = '.frag', dir = library_dir)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write('#version 450\n')
+            f.write('#extension GL_GOOGLE_include_directive : require\n')
+            f.write('#include "' + library_name + '"\n')
+            f.write('void main() {}\n')
+        subprocess.check_call([paths.glslang, '-V', wrapper_path])
+    finally:
+        remove_file(wrapper_path)
+
 def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, force_es, flatten_ubo, sso, flatten_dim, opt, push_ubo, iterations, paths):
     spirv_path = create_temporary()
     glsl_path = create_temporary(os.path.basename(shader))
 
     spirv_16 = '.spv16.' in shader
     spirv_14 = '.spv14.' in shader
-    if spirv_16:
+    is_library = shader_is_library(shader)
+    if is_library:
+        # Library modules use the Linkage capability, which is rejected by
+        # Vulkan target envs. Use a universal/spv target instead.
+        spirv_env = 'spv1.5'
+        glslang_env = 'spirv1.5'
+    elif spirv_16:
         spirv_env = 'spv1.6'
         glslang_env = 'vulkan1.3'
     elif spirv_14:
@@ -706,18 +729,28 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fo
 
     spirv_cross_path = paths.spirv_cross
 
+    # Library SPIR-V modules have no OpEntryPoint. skip the --entry flag for those so spirv-cross does not try to
+    # select an entry point that does not exist.
+    entry_arg = [] if is_library else ['--entry', 'main']
+
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if (not ('nocompat' in glsl_path)) or (not vulkan):
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + extra_args)
+        subprocess.check_call([spirv_cross_path] + entry_arg + ['--output', glsl_path, spirv_path] + extra_args)
         if not 'nocompat' in glsl_path:
-            validate_shader(glsl_path, False, paths)
+            if is_library:
+                validate_library_glsl(glsl_path, paths)
+            else:
+                validate_shader(glsl_path, False, paths)
     else:
         remove_file(glsl_path)
         glsl_path = None
 
     if (vulkan or spirv) and (not is_legacy):
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '-V', '--output', vulkan_glsl_path, spirv_path] + extra_args)
-        validate_shader(vulkan_glsl_path, True, paths)
+        subprocess.check_call([spirv_cross_path] + entry_arg + ['-V', '--output', vulkan_glsl_path, spirv_path] + extra_args)
+        if is_library:
+            validate_library_glsl(vulkan_glsl_path, paths)
+        else:
+            validate_shader(vulkan_glsl_path, True, paths)
         # SPIR-V shaders might just want to validate Vulkan GLSL output, we don't always care about the output.
         if not vulkan:
             remove_file(vulkan_glsl_path)
