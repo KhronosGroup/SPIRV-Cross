@@ -151,8 +151,32 @@ void Parser::parse()
 		SPIRV_CROSS_THROW("Function was not terminated.");
 	if (current_block)
 		SPIRV_CROSS_THROW("Block was not terminated.");
+
+	// Now that all definitions are bound to a kind, populate the
+	// per-kind typed views over `library_exports`. LinkageAttributes
+	// applies to both functions and global variables; today only the
+	// function view is consumed by the backends.
+	for (uint32_t id : ir.library_exports)
+	{
+		if (ir.ids[id].get_type() == TypeFunction)
+			ir.library_exported_functions.push_back(id);
+	}
+
 	if (ir.default_entry_point == 0)
-		SPIRV_CROSS_THROW("There is no entry point in the SPIR-V module.");
+	{
+		if (ir.library_exported_functions.empty())
+			SPIRV_CROSS_THROW("There is no entry point in the SPIR-V module.");
+  
+		// No OpEntryPoint, but the module exports functions. Treat as a library
+		// module: designate the first exported function as the default entry 
+		// point so analyses keyed on default_entry_point can run. 
+		ir.is_library_module = true;
+		ir.default_entry_point = ir.library_exported_functions.front();
+		auto &name = ir.get_name(ir.default_entry_point);
+		ir.entry_points.insert(std::make_pair(
+			ir.default_entry_point,
+			SPIREntryPoint(ir.default_entry_point, ExecutionModelGLCompute, name)));
+	}
 }
 
 const uint32_t *Parser::stream(const Instruction &instr) const
@@ -603,6 +627,19 @@ void Parser::parse(const Instruction &instruction)
 		}
 		else
 			ir.set_decoration(id, decoration);
+
+		// Track exported functions so we can compile library modules that have no OpEntryPoint.
+		// LinkageAttributes layout: literal-string (variable words) followed by LinkageType.
+		if (decoration == DecorationLinkageAttributes && length >= 4 &&
+			static_cast<LinkageType>(ops[length - 1]) == LinkageTypeExport)
+		{
+			ir.library_exports.push_back(id);
+
+			// If OpName was stripped (e.g. by spirv-opt --strip-debug), fall back
+			// to the linkage name so the emitted function keeps its export name.
+			if (ir.get_name(id).empty())
+				ir.set_name(id, extract_string(ir.spirv, instruction.offset + 2));
+		}
 
 		break;
 	}
