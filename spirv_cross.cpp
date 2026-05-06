@@ -4840,6 +4840,20 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 	CFGBuilder handler(*this);
 	handler.function_cfgs[ir.default_entry_point].reset(new CFG(*this, get<SPIRFunction>(ir.default_entry_point)));
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+	if (ir.is_library_module)
+	{
+		// In library mode, default_entry_point is just the first exported
+		// function. Build a CFG for every other exported function (and its
+		// callees) so per-function analyses below cover all of them.
+		for (auto export_id : ir.library_exported_functions)
+		{
+			if (export_id == ir.default_entry_point)
+				continue;
+			auto &func = get<SPIRFunction>(export_id);
+			handler.function_cfgs[export_id].reset(new CFG(*this, func));
+			traverse_all_reachable_opcodes(func, handler);
+		}
+	}
 	function_cfgs = std::move(handler.function_cfgs);
 	bool single_function = function_cfgs.size() <= 1;
 
