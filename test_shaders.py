@@ -470,6 +470,11 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
         test_glslang = False
     if '.task' in shader or '.mesh' in shader:
         test_glslang = False
+    if shader_is_library(shader):
+        # Library HLSL output has no entry point; glslangValidator's -e main
+        # would fail. Skip the round-trip — the output is meant to be
+        # included by HLSL/GLSL source rather than compiled standalone.
+        test_glslang = False
 
     hlsl_args = [paths.glslang, '--amb', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader]
     if '.sm30.' in shader:
@@ -522,7 +527,12 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     spirv_16 = '.spv16.' in shader
     spirv_14 = '.spv14.' in shader
 
-    if spirv_16:
+    if shader_is_library(shader):
+        # Library modules use the Linkage capability, which is rejected
+        # by Vulkan target envs. Use a universal/spv target instead.
+        spirv_env = 'spv1.5'
+        glslang_env = 'spirv1.5'
+    elif spirv_16:
         spirv_env = 'spv1.6'
         glslang_env = 'vulkan1.3'
     elif spirv_14:
@@ -551,7 +561,14 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
 
     sm = shader_to_sm(shader)
 
-    hlsl_args = [spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm, '--iterations', str(iterations)]
+    # Library SPIR-V modules (e.g. dxc -T lib_6_*) have no OpEntryPoint;
+    # skip the --entry flag for those so spirv-cross does not try to
+    # select an entry point that does not exist.
+    is_library = shader_is_library(shader)
+    hlsl_args = [spirv_cross_path]
+    if not is_library:
+        hlsl_args += ['--entry', 'main']
+    hlsl_args += ['--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm, '--iterations', str(iterations)]
     if '.line.' in shader:
         hlsl_args.append('--emit-line-directives')
     if '.flatten.' in shader:
@@ -844,6 +861,12 @@ def shader_is_eliminate_dead_variables(shader):
 
 def shader_is_spirv(shader):
     return '.asm.' in shader
+
+def shader_is_library(shader):
+    # SPIR-V library module: no OpEntryPoint, exports declared via
+    # OpDecorate ... LinkageAttributes ... Export. Recognised by the
+    # `.lib` filename suffix (e.g. foo.asm.lib).
+    return shader.endswith('.lib')
 
 def shader_is_invalid_spirv(shader):
     return '.invalid.' in shader
