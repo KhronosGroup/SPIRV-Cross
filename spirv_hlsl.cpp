@@ -3117,7 +3117,12 @@ uint32_t CompilerHLSL::input_vertices_from_execution_mode(SPIREntryPoint &execut
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
-	if (func.self != ir.default_entry_point)
+	// In library mode default_entry_point points at the first exported
+	// function; treat every export as a normal function rather than as the
+	// shader's entry point.
+	const bool is_entry_point = !ir.is_library_module && func.self == ir.default_entry_point;
+
+	if (!is_entry_point)
 		add_function_overload(func);
 
 	// Avoid shadow declarations.
@@ -3138,7 +3143,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		decl = "void ";
 	}
 
-	if (func.self == ir.default_entry_point)
+	if (is_entry_point)
 	{
 		decl += get_inner_entry_point_name();
 		processing_entry_point = true;
@@ -7148,14 +7153,27 @@ string CompilerHLSL::compile()
 		emit_header();
 		emit_resources();
 
-		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
-		emit_hlsl_entry_point();
+		if (ir.is_library_module)
+		{
+			// Emit each exported function as a normal free function.
+			// emit_function recursively emits callees, so internal helpers
+			// are picked up too.
+			for (auto export_id : ir.library_exported_functions)
+				emit_function(get<SPIRFunction>(export_id), Bitset());
+		}
+		else
+		{
+			emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
+			emit_hlsl_entry_point();
+		}
 
 		pass_count++;
 	} while (is_forcing_recompilation());
 
 	// Entry point in HLSL is always main() for the time being.
-	get_entry_point().name = "main";
+	// Skip the rename for library modules; their exports keep their declared names.
+	if (!ir.is_library_module)
+		get_entry_point().name = "main";
 
 	return buffer.str();
 }
