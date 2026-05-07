@@ -709,8 +709,10 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	}
 
 	// In SPIR-V 1.4 and up we must also use the active variable interface to disable global variables
-	// which are not part of the entry point.
-	if (ir.get_spirv_version() >= 0x10400 && var.storage != StorageClassGeneric &&
+	// which are not part of the entry point. Library modules have no real entry point so the filter 
+	// would hide every global so skip it in that case.
+	if (ir.get_spirv_version() >= 0x10400 && !ir.is_library_module &&
+	    var.storage != StorageClassGeneric &&
 	    var.storage != StorageClassFunction && !interface_variable_exists_in_entry_point(var.self))
 	{
 		return true;
