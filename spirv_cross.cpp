@@ -4849,11 +4849,9 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 		// callees) so per-function analyses below cover all of them.
 		for (auto export_id : ir.library_exported_functions)
 		{
-			if (export_id == ir.default_entry_point)
-				continue;
 			auto &func = get<SPIRFunction>(export_id);
-			handler.function_cfgs[export_id].reset(new CFG(*this, func));
-			traverse_all_reachable_opcodes(func, handler);
+			if (handler.follow_function_call(func))
+				traverse_all_reachable_opcodes(func, handler);
 		}
 	}
 	function_cfgs = std::move(handler.function_cfgs);
