@@ -820,14 +820,23 @@ string CompilerGLSL::compile()
 		if ((options.es || options.vulkan_semantics) && required_polyfills_relaxed != 0)
 			emit_polyfills(required_polyfills_relaxed, true);
 
-		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
+		if (ir.is_library_module)
+		{
+			// Emit each exported function as a normal free function.
+			// emit_function recursively emits callees, so internal helpers
+			// are picked up too.
+			for (auto export_id : ir.library_exported_functions)
+				emit_function(get<SPIRFunction>(export_id), Bitset());
+		}
+		else
+			emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 
 		pass_count++;
 	} while (is_forcing_recompilation());
 
 	// Implement the interlocked wrapper function at the end.
 	// The body was implemented in lieu of main().
-	if (interlocked_is_complex)
+	if (interlocked_is_complex && !ir.is_library_module)
 	{
 		if (options.use_entry_point_name)
 			statement("void ", get_entry_point().name, "()");
@@ -841,8 +850,9 @@ string CompilerGLSL::compile()
 		end_scope();
 	}
 
-	// Entry point in GLSL is always main().
-	if (!options.use_entry_point_name)
+	// Entry point in GLSL is always main(). Skip the rename for library
+	// modules; their exports keep their declared names.
+	if (!options.use_entry_point_name && !ir.is_library_module)
 		get_entry_point().name = "main";
 
 	return buffer.str();
@@ -915,6 +925,16 @@ void CompilerGLSL::request_subgroup_feature(ShaderSubgroupSupportHelper::Feature
 void CompilerGLSL::emit_header()
 {
 	auto &execution = get_entry_point();
+
+	// Library modules have no entry point. The emitted GLSL is meant to be #include'd or appended
+	// rather than compiled standalone, so the version and extension directives that follow are
+	// wrapped in `#ifdef SPIRV_CROSS_LIBRARY_HEADER ... #endif`. By default they are skipped (the
+	// consuming translation unit provides its own preamble); a caller that wants to compile the
+	// library standalone defines SPIRV_CROSS_LIBRARY_HEADER to opt in. The stage-specific layout
+	// block at the end of this function is skipped entirely in library mode.
+	if (ir.is_library_module)
+		statement("#ifdef SPIRV_CROSS_LIBRARY_HEADER");
+
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
 	if (!options.es && options.version < 420)
@@ -1123,6 +1143,13 @@ void CompilerGLSL::emit_header()
 
 	for (auto &header : header_lines)
 		statement(header);
+
+	if (ir.is_library_module)
+	{
+		statement("#endif");
+		statement("");
+		return;
+	}
 
 	SmallVector<string> inputs;
 	SmallVector<string> outputs;
@@ -17733,7 +17760,12 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 
 void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
-	if (func.self != ir.default_entry_point)
+	// In library mode default_entry_point points at the first exported
+	// function; treat every export as a normal function rather than as the
+	// shader's entry point.
+	const bool is_entry_point = !ir.is_library_module && func.self == ir.default_entry_point;
+
+	if (!is_entry_point)
 		add_function_overload(func);
 
 	// Avoid shadow declarations.
@@ -17747,7 +17779,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	decl += type_to_array_glsl(type, 0);
 	decl += " ";
 
-	if (func.self == ir.default_entry_point)
+	if (is_entry_point)
 	{
 		// If we need complex fallback in GLSL, we just wrap main() in a function
 		// and interlock the entire shader ...
