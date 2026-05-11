@@ -12747,6 +12747,9 @@ static bool opcode_is_precision_sensitive_operation(Op op)
 // Instructions which just load data but don't do any arithmetic operation should just inherit the decoration.
 // SPIR-V doesn't require this, but it's somewhat implied it has to work this way, relaxed precision is only
 // relevant when operating on the IDs, not when shuffling things around.
+// Note, this is not generally safe to do. If the resulting instruction participates in an operation in which 
+// it's the only precision-qualified operand, then that determines the precision of the operation and 
+// that alters the result. See op-copy-object-relaxed-precision for an example.
 static bool opcode_is_precision_forwarding_instruction(Op op, uint32_t &arg_count)
 {
 	switch (op)
@@ -12758,7 +12761,7 @@ static bool opcode_is_precision_forwarding_instruction(Op op, uint32_t &arg_coun
 	case OpVectorExtractDynamic:
 	case OpSampledImage:
 	case OpImage:
-	case OpCopyObject:
+	// OpCopyObject intentionally excluded.
 
 	case OpImageRead:
 	case OpImageFetch:
