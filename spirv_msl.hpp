@@ -317,6 +317,7 @@ public:
 		uint32_t shader_input_buffer_index = 22;
 		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_patch_input_buffer_index = 20;
+        uint32_t draw_id_buffer_index = 19;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -1273,6 +1274,7 @@ protected:
 	bool is_rasterization_disabled = false;
 	bool has_descriptor_side_effects_buffer = false;
 	bool capture_output_to_buffer = false;
+    bool needs_draw_id_buffer_def = false;
 	bool needs_swizzle_buffer_def = false;
 	bool used_swizzle_buffer = false;
 	bool added_builtin_tess_level = false;

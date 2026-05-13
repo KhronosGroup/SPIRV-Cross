@@ -282,6 +282,20 @@ void CompilerMSL::build_implicit_builtins()
 	needs_point_size_output =
 	    msl_options.enable_point_size_builtin && msl_options.enable_point_size_default &&
 	    entry_point_is_vertex();
+    
+    if (needs_draw_id_buffer_def) {
+        uint32_t buffer_index = msl_options.draw_id_buffer_index;
+        uint32_t var_id = build_constant_uint_array_pointer();
+
+        if (!has_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary))
+            set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, buffer_index);
+
+        set_decoration(var_id, spv::DecorationBinding, buffer_index);
+        set_decoration(var_id, spv::DecorationDescriptorSet, 0);
+
+        // Mark it so we know it's a buffer (not stage_in, not texture, etc.)
+        add_resource_name(var_id);
+    }
 
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
 	    need_tese_params || need_multiview || need_dispatch_base || need_vertex_base_params || need_grid_params ||
@@ -13821,7 +13835,9 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			case BuiltInDrawIndex:
-				SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+                if (msl_options.vertex_for_tessellation)
+                    return "";
+                return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			default:
 				return "";
@@ -18120,7 +18136,18 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("BaseInstance requires Metal 1.1 and Mac or Apple A9+ hardware.");
 		}
 	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+            // Not positive on the Metal version or if ios needs it
+            if (msl_options.supports_msl_version(1, 1) &&
+                // (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+                msl_options.is_macos())
+            {
+                needs_draw_id_buffer_def = true;
+                return "*gl_DrawID";
+            }
+            else
+            {
+                SPIRV_CROSS_THROW("DrawIndex requires Metal 1.1 and Mac or Apple A9+ hardware.");
+            }
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
@@ -18232,7 +18259,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInBaseInstance:
 		return "base_instance";
 	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+        return string("buffer(") + std::to_string(msl_options.draw_id_buffer_index) + ")";
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -18456,7 +18483,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInBaseInstance:
 		return "uint";
 	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+        return "constant uint";
 
 	// Vertex function out
 	case BuiltInClipDistance:
