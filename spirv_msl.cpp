@@ -290,8 +290,8 @@ void CompilerMSL::build_implicit_builtins()
         if (!has_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary))
             set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, buffer_index);
 
-        set_decoration(var_id, spv::DecorationBinding, buffer_index);
-        set_decoration(var_id, spv::DecorationDescriptorSet, 0);
+        set_decoration(var_id, DecorationBinding, buffer_index);
+        set_decoration(var_id, DecorationDescriptorSet, 0);
 
         // Mark it so we know it's a buffer (not stage_in, not texture, etc.)
         add_resource_name(var_id);
