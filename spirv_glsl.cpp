@@ -12737,6 +12737,18 @@ static bool opcode_is_precision_sensitive_operation(Op op)
 	case OpConvertUToF:
 	case OpConvertFToU:
 	case OpConvertFToS:
+	case OpShiftLeftLogical:
+	case OpShiftRightLogical:
+	case OpShiftRightArithmetic:
+	case OpBitwiseOr:
+	case OpBitwiseXor:
+	case OpBitwiseAnd:
+	case OpNot:
+	case OpBitFieldInsert:
+	case OpBitFieldSExtract:
+	case OpBitFieldUExtract:
+	case OpBitReverse:
+	case OpBitCount:
 		return true;
 
 	default:
