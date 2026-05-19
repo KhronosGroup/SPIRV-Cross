@@ -13835,8 +13835,6 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			case BuiltInDrawIndex:
-                if (msl_options.vertex_for_tessellation)
-                    return "";
                 return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			default:
@@ -18136,18 +18134,9 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("BaseInstance requires Metal 1.1 and Mac or Apple A9+ hardware.");
 		}
 	case BuiltInDrawIndex:
-            // Not positive on the Metal version or if ios needs it
-            if (msl_options.supports_msl_version(1, 1) &&
-                // (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
-                msl_options.is_macos())
-            {
-                needs_draw_id_buffer_def = true;
-                return "*gl_DrawID";
-            }
-            else
-            {
-                SPIRV_CROSS_THROW("DrawIndex requires Metal 1.1 and Mac or Apple A9+ hardware.");
-            }
+            // since it's fully emulated, no need to do the checks
+            needs_draw_id_buffer_def = true;
+            return "*gl_DrawID";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
