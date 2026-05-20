@@ -1087,6 +1087,18 @@ void CompilerMSL::build_implicit_builtins()
 		dynamic_offsets_buffer_id = var_id;
 	}
 
+	if (active_input_builtins.get(BuiltInDrawIndex))
+	{
+		// This is always emulated.
+		uint32_t var_id = build_constant_uint_array_pointer();
+		set_name(var_id, "spvDrawIndex");
+		// This should never match anything.
+		set_decoration(var_id, DecorationDescriptorSet, ~(6u));
+		set_decoration(var_id, DecorationBinding, msl_options.draw_id_buffer_index);
+		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, msl_options.draw_id_buffer_index);
+		draw_index_buffer_id = var_id;
+	}
+
 	// If we're returning a struct from a vertex-like entry point, we must return a position attribute.
 	bool need_position = (get_execution_model() == ExecutionModelVertex || is_tese_shader()) &&
 	                     !capture_output_to_buffer && !get_is_rasterization_disabled() &&
@@ -1766,6 +1778,8 @@ string CompilerMSL::compile()
 		add_active_interface_variable(view_mask_buffer_id);
 	if (dynamic_offsets_buffer_id)
 		add_active_interface_variable(dynamic_offsets_buffer_id);
+	if (draw_index_buffer_id)
+		add_active_interface_variable(draw_index_buffer_id);
 	if (builtin_layer_id)
 		add_active_interface_variable(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
@@ -13820,9 +13834,6 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 					return "";
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
-			case BuiltInDrawIndex:
-				SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
-
 			default:
 				return "";
 			}
@@ -14671,6 +14682,9 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 		/* fallthrough */
 	case BuiltInSubgroupLocalInvocationId:
 		return !msl_options.emulate_subgroups;
+	case BuiltInDrawIndex:
+		// Emulated
+		return false;
 	default:
 		return true;
 	}
@@ -15967,6 +15981,12 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
 					          to_expression(builtin_dispatch_base_id), ".y;");
+				});
+				break;
+			case BuiltInDrawIndex:
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = *",
+					          to_expression(draw_index_buffer_id), ";");
 				});
 				break;
 			default:
@@ -18119,8 +18139,9 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		{
 			SPIRV_CROSS_THROW("BaseInstance requires Metal 1.1 and Mac or Apple A9+ hardware.");
 		}
+
 	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+		return "gl_DrawID";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
@@ -18231,8 +18252,6 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return "instance_id";
 	case BuiltInBaseInstance:
 		return "base_instance";
-	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -18456,7 +18475,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInBaseInstance:
 		return "uint";
 	case BuiltInDrawIndex:
-		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
+        return "uint";
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -19670,6 +19689,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	case BuiltInSubgroupSize:
 	case BuiltInSubgroupLocalInvocationId:
 	case BuiltInViewIndex:
+	case BuiltInDrawIndex:
 	case BuiltInVertexIndex:
 	case BuiltInInstanceIndex:
 	case BuiltInBaseInstance:
