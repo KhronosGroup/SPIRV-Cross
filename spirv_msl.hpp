@@ -1181,6 +1181,7 @@ protected:
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
+	uint32_t draw_index_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
 	uint32_t uint_type_id = 0;
 	uint32_t shared_uint_type_id = 0;
@@ -1274,7 +1275,6 @@ protected:
 	bool is_rasterization_disabled = false;
 	bool has_descriptor_side_effects_buffer = false;
 	bool capture_output_to_buffer = false;
-    bool needs_draw_id_buffer_def = false;
 	bool needs_swizzle_buffer_def = false;
 	bool used_swizzle_buffer = false;
 	bool added_builtin_tess_level = false;
