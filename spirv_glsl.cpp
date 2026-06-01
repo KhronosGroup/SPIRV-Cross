@@ -18656,7 +18656,11 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 		// There are some rare scenarios where we are asked to declare pointer types as hoisted temporaries.
 		// This should be ignored unless we're doing actual variable pointers and backend supports it.
 		// Access chains cannot normally be lowered to temporaries in GLSL and HLSL.
-		if (type.pointer && !backend.native_pointers)
+		if (type.pointer && (!backend.native_pointers || type_is_opaque_value(get_pointee_type(type))))
+			continue;
+
+		// Anything involving opaque objects cannot be lowered to temporaries ever.
+		if (type_is_opaque_value(type))
 			continue;
 
 		add_local_variable_name(tmp.second);
