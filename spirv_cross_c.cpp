@@ -783,6 +783,14 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_FORCE_FRAGMENT_WITH_SIDE_EFFECTS_EXECUTION:
 		options->msl.force_fragment_with_side_effects_execution = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_EMULATE_REVERSED_DEPTH_VIEWPORT:
+		options->msl.emulate_reversed_depth_viewport = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_REVERSED_DEPTH_VIEWPORT_BUFFER_INDEX:
+		options->msl.reversed_depth_viewport_buffer_index = value;
+		break;
 #endif
 
 	default:
