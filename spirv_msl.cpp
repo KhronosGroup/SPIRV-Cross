@@ -13552,6 +13552,7 @@ void CompilerMSL::emit_fixup()
 			if (msl_options.emulate_reversed_depth_viewport)
 			{
 				if (qual_viewport_idx_var_name.empty())
+					// If ViewportIndex is not written, the primitive uses viewport 0.
 					statement("if ((spvEmulatedReversedDepthViewportMask & 1u) != 0u)");
 				else
 					statement("if (((spvEmulatedReversedDepthViewportMask >> uint(", qual_viewport_idx_var_name,
