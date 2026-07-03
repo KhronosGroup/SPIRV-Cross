@@ -612,6 +612,14 @@ public:
 		return !buffers_requiring_array_length.empty();
 	}
 
+	// Provide feedback to calling API to determine if the vertex shader writes
+	// to PointSize. This allows the API to avoid declaring a point size output
+	// when it is not needed.
+	bool get_writes_to_point_size() const
+	{
+		return writes_to_point_size;
+	}
+
 	bool buffer_requires_array_length(VariableID id) const
 	{
 		return buffers_requiring_array_length.count(id) != 0;
