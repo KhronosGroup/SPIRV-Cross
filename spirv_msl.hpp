@@ -1162,6 +1162,26 @@ protected:
 	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 	                     StorageClass lhs_storage, StorageClass rhs_storage) override;
 	void build_implicit_builtins();
+
+	// Cooperative matrix element-wise operation emulation helpers.
+	// Metal simdgroup matrix types don't support element-wise ops natively, so we
+	// emulate them via store-to-threadgroup / per-thread element op / simdgroup_load.
+	void emit_coop_mat_binary_elem_op(uint32_t result_type, uint32_t result_id,
+	                                  uint32_t a_id, uint32_t b_id, const char *op_symbol);
+	void emit_coop_mat_unary_elem_op(uint32_t result_type, uint32_t result_id,
+	                                 uint32_t a_id, const char *unary_op);
+	void emit_coop_mat_type_convert(uint32_t result_type, uint32_t result_id, uint32_t src_id);
+	void emit_coop_mat_splat(uint32_t result_type, uint32_t result_id, uint32_t scalar_id);
+	void emit_coop_mat_scalar_mul(uint32_t result_type, uint32_t result_id,
+	                              uint32_t mat_id, uint32_t scalar_id);
+	void emit_coop_mat_extract(uint32_t result_type, uint32_t result_id,
+	                           uint32_t mat_id, const std::string &index_expr);
+	void emit_coop_mat_insert(uint32_t result_type, uint32_t result_id,
+	                          uint32_t obj_id, uint32_t mat_id, const std::string &index_expr);
+	uint32_t get_coop_mat_num_simdgroups() const;
+	void emit_coop_mat_select(uint32_t result_type, uint32_t result_id,
+	                          uint32_t cond_id, uint32_t true_id, uint32_t false_id);
+	void validate_cooperative_matrix_types();
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
 	bool uses_explicit_early_fragment_test();
@@ -1179,6 +1199,7 @@ protected:
 	uint32_t builtin_invocation_id_id = 0;
 	uint32_t builtin_primitive_id_id = 0;
 	uint32_t builtin_subgroup_invocation_id_id = 0;
+	uint32_t builtin_subgroup_id_id = 0;
 	uint32_t builtin_subgroup_size_id = 0;
 	uint32_t builtin_dispatch_base_id = 0;
 	uint32_t builtin_stage_input_size_id = 0;
@@ -1290,6 +1311,7 @@ protected:
 	bool added_builtin_tess_level = false;
 	bool needs_local_invocation_index = false;
 	bool needs_subgroup_invocation_id = false;
+	bool needs_subgroup_id = false;
 	bool needs_subgroup_size = false;
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;
@@ -1414,6 +1436,7 @@ protected:
 		bool needs_sample_id = false;
 		bool needs_helper_invocation = false;
 		bool uses_cooperative_matrix = false;
+		bool uses_cooperative_matrix_elementwise = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images
