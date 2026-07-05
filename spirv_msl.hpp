@@ -1178,7 +1178,7 @@ protected:
 	                           uint32_t mat_id, const std::string &index_expr);
 	void emit_coop_mat_insert(uint32_t result_type, uint32_t result_id,
 	                          uint32_t obj_id, uint32_t mat_id, const std::string &index_expr);
-	uint32_t get_coop_mat_num_simdgroups() const;
+	std::string get_coop_mat_num_simdgroups_expr();
 	void emit_coop_mat_select(uint32_t result_type, uint32_t result_id,
 	                          uint32_t cond_id, uint32_t true_id, uint32_t false_id);
 	void validate_cooperative_matrix_types();

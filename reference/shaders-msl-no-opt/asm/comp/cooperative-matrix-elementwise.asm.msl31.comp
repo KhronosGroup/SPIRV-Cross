@@ -53,7 +53,7 @@ kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], ui
     simdgroup_float8x8 _19;
     simdgroup_load(_19, &_14[0u], 8u);
     simdgroup_float8x8 _20;
-    threadgroup float _spv_coop_tmp_20[64];
+    threadgroup float _spv_coop_tmp_20[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
     simdgroup_store(_18, &_spv_coop_tmp_20[gl_SubgroupID * 64u], 8u);
     simdgroup_barrier(mem_flags::mem_threadgroup);
     _spv_coop_tmp_20[gl_SubgroupID * 64u + gl_SubgroupInvocationID * 2u] = -_spv_coop_tmp_20[gl_SubgroupID * 64u + gl_SubgroupInvocationID * 2u];
@@ -61,8 +61,8 @@ kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], ui
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_load(_20, &_spv_coop_tmp_20[gl_SubgroupID * 64u], 8u);
     simdgroup_float8x8 _21;
-    threadgroup float _spv_coop_a_21[64];
-    threadgroup float _spv_coop_b_21[64];
+    threadgroup float _spv_coop_a_21[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
+    threadgroup float _spv_coop_b_21[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
     simdgroup_store(_20, &_spv_coop_a_21[gl_SubgroupID * 64u], 8u);
     simdgroup_store(_19, &_spv_coop_b_21[gl_SubgroupID * 64u], 8u);
     simdgroup_barrier(mem_flags::mem_threadgroup);
@@ -71,8 +71,8 @@ kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], ui
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_load(_21, &_spv_coop_a_21[gl_SubgroupID * 64u], 8u);
     simdgroup_float8x8 _22;
-    threadgroup float _spv_coop_a_22[64];
-    threadgroup float _spv_coop_b_22[64];
+    threadgroup float _spv_coop_a_22[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
+    threadgroup float _spv_coop_b_22[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
     simdgroup_store(_21, &_spv_coop_a_22[gl_SubgroupID * 64u], 8u);
     simdgroup_store(_18, &_spv_coop_b_22[gl_SubgroupID * 64u], 8u);
     simdgroup_barrier(mem_flags::mem_threadgroup);
@@ -81,8 +81,8 @@ kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], ui
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_load(_22, &_spv_coop_a_22[gl_SubgroupID * 64u], 8u);
     simdgroup_float8x8 _23;
-    threadgroup float _spv_coop_a_23[64];
-    threadgroup float _spv_coop_b_23[64];
+    threadgroup float _spv_coop_a_23[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
+    threadgroup float _spv_coop_b_23[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
     simdgroup_store(_22, &_spv_coop_a_23[gl_SubgroupID * 64u], 8u);
     simdgroup_store(_19, &_spv_coop_b_23[gl_SubgroupID * 64u], 8u);
     simdgroup_barrier(mem_flags::mem_threadgroup);
@@ -91,8 +91,8 @@ kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], ui
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_load(_23, &_spv_coop_a_23[gl_SubgroupID * 64u], 8u);
     simdgroup_float8x8 _24;
-    threadgroup float _spv_coop_a_24[64];
-    threadgroup float _spv_coop_b_24[64];
+    threadgroup float _spv_coop_a_24[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
+    threadgroup float _spv_coop_b_24[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
     simdgroup_store(_23, &_spv_coop_a_24[gl_SubgroupID * 64u], 8u);
     simdgroup_store(_18, &_spv_coop_b_24[gl_SubgroupID * 64u], 8u);
     simdgroup_barrier(mem_flags::mem_threadgroup);

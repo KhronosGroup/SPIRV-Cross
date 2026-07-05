@@ -1937,12 +1937,7 @@ void CompilerMSL::preprocess_op_codes()
 	if (preproc.needs_subgroup_invocation_id)
 		needs_subgroup_invocation_id = true;
 	if (preproc.uses_cooperative_matrix_elementwise)
-	{
 		needs_subgroup_id = true;
-		auto &ep = get_entry_point();
-		if (ep.flags.get(ExecutionModeLocalSizeId))
-			SPIRV_CROSS_THROW("MSL cooperative matrix element-wise operations do not support specialization-constant workgroup sizes (LocalSizeId).");
-	}
 	if (preproc.needs_subgroup_size)
 		needs_subgroup_size = true;
 	// build_implicit_builtins() hasn't run yet, and in fact, this needs to execute
@@ -9524,13 +9519,14 @@ void CompilerMSL::validate_cooperative_matrix_types()
 // Emits a binary element-wise operation on two cooperative matrices.
 // The emulation pattern: simdgroup_store → element op per thread → simdgroup_load.
 // op_symbol is an operator like "+", "-", "*", "/" used as a compound-assignment operator.
-uint32_t CompilerMSL::get_coop_mat_num_simdgroups() const
+string CompilerMSL::get_coop_mat_num_simdgroups_expr()
 {
 	auto &ep = get_entry_point();
-	uint32_t total = ep.workgroup_size.x * ep.workgroup_size.y * ep.workgroup_size.z;
-	if (total == 0)
-		total = 32u; // spec-constant LocalSizeId with a zero default; treat as one simdgroup
-	return (total + 31u) / 32u;
+	string wg_x = ep.workgroup_size.id_x ? to_expression(ep.workgroup_size.id_x) : to_string(ep.workgroup_size.x) + "u";
+	string wg_y = ep.workgroup_size.id_y ? to_expression(ep.workgroup_size.id_y) : to_string(ep.workgroup_size.y) + "u";
+	string wg_z = ep.workgroup_size.id_z ? to_expression(ep.workgroup_size.id_z) : to_string(ep.workgroup_size.z) + "u";
+
+	return join("(((", wg_x, " * ", wg_y, " * ", wg_z, ") + 31u) / 32u)");
 }
 
 void CompilerMSL::emit_coop_mat_binary_elem_op(uint32_t result_type, uint32_t result_id,
@@ -9547,10 +9543,10 @@ void CompilerMSL::emit_coop_mat_binary_elem_op(uint32_t result_type, uint32_t re
 	auto tmp_b = join("_spv_coop_b_", result_id);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 
-	statement("threadgroup ", comp_name, " ", tmp_a, "[", arr_size, "];");
-	statement("threadgroup ", comp_name, " ", tmp_b, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp_a, "[", arr_size_expr, "];");
+	statement("threadgroup ", comp_name, " ", tmp_b, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(a_id), ", &", tmp_a, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_store(", to_expression(b_id), ", &", tmp_b, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
@@ -9577,9 +9573,9 @@ void CompilerMSL::emit_coop_mat_unary_elem_op(uint32_t result_type, uint32_t res
 	auto tmp = join("_spv_coop_tmp_", result_id);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 
-	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(a_id), ", &", tmp, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
 	statement(tmp, "[", simd_idx, " * 64u + ", tid, " * 2u] = ", unary_op, tmp, "[", simd_idx, " * 64u + ", tid, " * 2u];");
@@ -9608,10 +9604,10 @@ void CompilerMSL::emit_coop_mat_type_convert(uint32_t result_type, uint32_t resu
 	auto tmp_dst = join("_spv_coop_dst_", result_id);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 
-	statement("threadgroup ", src_comp_name, " ", tmp_src, "[", arr_size, "];");
-	statement("threadgroup ", dst_comp_name, " ", tmp_dst, "[", arr_size, "];");
+	statement("threadgroup ", src_comp_name, " ", tmp_src, "[", arr_size_expr, "];");
+	statement("threadgroup ", dst_comp_name, " ", tmp_dst, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(src_id), ", &", tmp_src, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
 	statement(tmp_dst, "[", simd_idx, " * 64u + ", tid, " * 2u] = ", dst_comp_name, "(", tmp_src, "[", simd_idx, " * 64u + ", tid, " * 2u]);");
@@ -9635,10 +9631,10 @@ void CompilerMSL::emit_coop_mat_splat(uint32_t result_type, uint32_t result_id, 
 	auto tmp = join("_spv_coop_tmp_", result_id);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 	auto scalar = to_expression(scalar_id);
 
-	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size_expr, "];");
 	statement(tmp, "[", simd_idx, " * 64u + ", tid, " * 2u] = ", scalar, ";");
 	statement(tmp, "[", simd_idx, " * 64u + ", tid, " * 2u + 1u] = ", scalar, ";");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
@@ -9660,10 +9656,10 @@ void CompilerMSL::emit_coop_mat_scalar_mul(uint32_t result_type, uint32_t result
 	auto tmp = join("_spv_coop_tmp_", result_id);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 	auto scalar = to_expression(scalar_id);
 
-	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(mat_id), ", &", tmp, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
 	statement(tmp, "[", simd_idx, " * 64u + ", tid, " * 2u] *= ", scalar, ";");
@@ -9685,11 +9681,11 @@ void CompilerMSL::emit_coop_mat_extract(uint32_t result_type, uint32_t result_id
 	auto comp_name = type_to_glsl(comp_type);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 	auto tmp = join("_spv_coop_tmp_", result_id);
 
 	emit_uninitialized_temporary_expression(result_type, result_id);
-	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(mat_id), ", &", tmp, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
 	statement(to_expression(result_id), " = ", tmp, "[", simd_idx, " * 64u + ", tid, " * 2u + ", index_expr, "];");
@@ -9706,11 +9702,11 @@ void CompilerMSL::emit_coop_mat_insert(uint32_t result_type, uint32_t result_id,
 	auto comp_name = type_to_glsl(comp_type);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 	auto tmp = join("_spv_coop_tmp_", result_id);
 
 	emit_uninitialized_temporary_expression(result_type, result_id);
-	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(mat_id), ", &", tmp, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
 	statement(tmp, "[", simd_idx, " * 64u + ", tid, " * 2u + ", index_expr, "] = ", to_expression(obj_id), ";");
@@ -9730,14 +9726,14 @@ void CompilerMSL::emit_coop_mat_select(uint32_t result_type, uint32_t result_id,
 	auto comp_name = type_to_glsl(comp_type);
 	auto tid = to_expression(builtin_subgroup_invocation_id_id);
 	auto simd_idx = to_expression(builtin_subgroup_id_id);
-	uint32_t arr_size = get_coop_mat_num_simdgroups() * 64u;
+	string arr_size_expr = join("(", get_coop_mat_num_simdgroups_expr(), ") * 64u");
 	auto tmp_t = join("_spv_coop_t_", result_id);
 	auto tmp_f = join("_spv_coop_f_", result_id);
 	auto cond = to_expression(cond_id);
 
 	emit_uninitialized_temporary_expression(result_type, result_id);
-	statement("threadgroup ", comp_name, " ", tmp_t, "[", arr_size, "];");
-	statement("threadgroup ", comp_name, " ", tmp_f, "[", arr_size, "];");
+	statement("threadgroup ", comp_name, " ", tmp_t, "[", arr_size_expr, "];");
+	statement("threadgroup ", comp_name, " ", tmp_f, "[", arr_size_expr, "];");
 	statement("simdgroup_store(", to_expression(true_id), ", &", tmp_t, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_store(", to_expression(false_id), ", &", tmp_f, "[", simd_idx, " * 64u], 8u);");
 	statement("simdgroup_barrier(mem_flags::mem_threadgroup);");
