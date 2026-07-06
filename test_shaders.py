@@ -515,6 +515,8 @@ def shader_to_sm(shader):
         return '60'
     elif '.sm68.' in shader:
         return '68'
+    elif '.sm64.' in shader:
+        return '64'
     elif '.sm51.' in shader:
         return '51'
     elif '.sm30.' in shader:
