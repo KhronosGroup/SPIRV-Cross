@@ -751,6 +751,46 @@ void CompilerGLSL::ray_tracing_khr_fixup_locations()
 	});
 }
 
+std::string CompilerGLSL::integer_dot_product_entry_point(const IntegerDotProduct &idot)
+{
+	std::string expr = "spv";
+
+	switch (idot.op)
+	{
+	case OpSDot: expr += "SDot"; break;
+	case OpUDot: expr += "UDot"; break;
+	case OpSUDot: expr += "SUDot"; break;
+	case OpSDotAccSat: expr += "SDotAccSat"; break;
+	case OpUDotAccSat: expr += "UDotAccSat"; break;
+	case OpSUDotAccSat: expr += "SUDotAccSat"; break;
+	default: SPIRV_CROSS_THROW("Invalid integer dot product opcode.");
+	}
+
+	expr += "_" + type_to_glsl(get<SPIRType>(idot.result_type));
+	for (auto &arg : idot.argument_type)
+		expr += "_" + type_to_glsl(get<SPIRType>(arg));
+
+	return expr;
+}
+
+void CompilerGLSL::add_integer_dot_product_polyfill(const IntegerDotProduct &idot)
+{
+	for (auto &impl : integer_dot_products_polyfills)
+	{
+		if (impl.result_type == idot.result_type &&
+		    impl.argument_type[0] == idot.argument_type[0] &&
+		    impl.argument_type[1] == idot.argument_type[1] &&
+		    impl.op == idot.op)
+		{
+			return;
+		}
+	}
+
+	require_extension_internal("GL_EXT_spirv_intrinsics");
+	integer_dot_products_polyfills.push_back(idot);
+	force_recompile();
+}
+
 string CompilerGLSL::compile()
 {
 	ir.fixup_reserved_names();
@@ -819,6 +859,7 @@ string CompilerGLSL::compile()
 			emit_polyfills(required_polyfills, false);
 		if ((options.es || options.vulkan_semantics) && required_polyfills_relaxed != 0)
 			emit_polyfills(required_polyfills_relaxed, true);
+		emit_polyfills_integer_dot_product();
 
 		if (ir.is_library_module)
 		{
@@ -5064,6 +5105,37 @@ void CompilerGLSL::emit_extension_workarounds(ExecutionModel model)
 				statement(type_to_glsl(type), " spvWorkaroundRowMajor(", type_to_glsl(type), " wrap) { return wrap; }");
 			}
 		}
+		statement("");
+	}
+}
+
+void CompilerGLSL::emit_polyfills_integer_dot_product()
+{
+	for (auto &op : integer_dot_products_polyfills)
+	{
+		string caps = join("[", CapabilityDotProduct);
+		auto &arg_type = get<SPIRType>(op.argument_type[0]);
+		if (arg_type.basetype == SPIRType::SByte || arg_type.basetype == SPIRType::UByte)
+			caps += join(", ", CapabilityDotProductInput4x8Bit);
+		else if (arg_type.vecsize == 1)
+			caps += join(", ", CapabilityDotProductInput4x8BitPacked);
+		else
+			caps += join(", ", CapabilityDotProductInputAll);
+		caps += "]";
+
+		auto arg0 = type_to_glsl(get<SPIRType>(op.argument_type[0]));
+		auto arg1 = type_to_glsl(get<SPIRType>(op.argument_type[1]));
+		auto acc_arg =
+				(op.op == OpSDotAccSat || op.op == OpUDotAccSat || op.op == OpSUDotAccSat)
+					? (", " + type_to_glsl(get<SPIRType>(op.result_type))) : "";
+
+		bool packed_vector = get<SPIRType>(op.argument_type[0]).vecsize == 1;
+		const char *packed_argument = packed_vector ? ", spirv_literal uint packedFormat" : "";
+
+		statement("spirv_instruction (extensions = [\"SPV_KHR_integer_dot_product\"], capabilities = ",
+		          caps, ", id = ", op.op, ")");
+		statement(type_to_glsl(get<SPIRType>(op.result_type)), " ", integer_dot_product_entry_point(op), "(",
+		          arg0, " arg0, ", arg1, " arg1", acc_arg, packed_argument, ");");
 		statement("");
 	}
 }
@@ -16530,6 +16602,59 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			rhs = join(type_to_glsl(type), "(", to_expression(ops[2]), ")");
 		}
 		emit_op(result_type, id, rhs, true);
+		break;
+	}
+
+	case OpSDot:
+	case OpUDot:
+	case OpSUDot:
+	case OpSDotAccSat:
+	case OpUDotAccSat:
+	case OpSUDotAccSat:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		bool is_acc_sat = opcode == OpSDotAccSat || opcode == OpUDotAccSat || opcode == OpSUDotAccSat;
+
+		if (length == (is_acc_sat ? 6 : 5))
+		{
+			if (ops[length - 1] != PackedVectorFormatPackedVectorFormat4x8Bit)
+				SPIRV_CROSS_THROW("Only 4x8bit packing is supported.");
+		}
+
+		IntegerDotProduct idot = {};
+		idot.argument_type[0] = expression_type_id(ops[2]);
+		idot.argument_type[1] = expression_type_id(ops[3]);
+		idot.result_type = result_type;
+		idot.op = opcode;
+		add_integer_dot_product_polyfill(idot);
+
+		auto expr = join(integer_dot_product_entry_point(idot), "(", to_expression(ops[2]), ", ", to_expression(ops[3]));
+
+		if (is_acc_sat)
+		{
+			expr += ", ";
+			expr += to_expression(ops[4]);
+		}
+
+		if (expression_type(ops[2]).vecsize == 1)
+		{
+			expr += ", ";
+			expr += to_string(PackedVectorFormatPackedVectorFormat4x8Bit);
+		}
+
+		expr += ")";
+
+		bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+		if (is_acc_sat && forward)
+			forward = should_forward(ops[4]);
+
+		emit_op(result_type, id, expr, forward);
+		inherit_expression_dependencies(id, ops[2]);
+		inherit_expression_dependencies(id, ops[3]);
+		if (is_acc_sat)
+			inherit_expression_dependencies(id, ops[4]);
 		break;
 	}
 
