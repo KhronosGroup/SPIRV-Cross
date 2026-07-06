@@ -4612,6 +4612,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				type.basetype = SPIRType::UShort;
 				type.width = 16;
 				break;
+			case MSL_SHADER_VARIABLE_FORMAT_FLOAT32:
+				type.basetype = SPIRType::Float;
+				type.width = 32;
+				break;
+			case MSL_SHADER_VARIABLE_FORMAT_INT32:
+				type.basetype = SPIRType::Int;
+				type.width = 32;
+				break;
+			case MSL_SHADER_VARIABLE_FORMAT_UINT32:
 			case MSL_SHADER_VARIABLE_FORMAT_ANY32:
 			default:
 				type.basetype = SPIRType::UInt;
@@ -4653,7 +4662,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		}
 	}
 
-	if (capture_output_to_buffer && storage == StorageClassOutput)
+	if (storage == StorageClassOutput && get_entry_point().model != ExecutionModelFragment)
 	{
 		// For captured output, add all inputs from the next stage to ensure
 		// the struct containing them is the correct size and layout. This is
@@ -4680,6 +4689,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				type.basetype = SPIRType::UShort;
 				type.width = 16;
 				break;
+			case MSL_SHADER_VARIABLE_FORMAT_FLOAT32:
+				type.basetype = SPIRType::Float;
+				type.width = 32;
+				break;
+			case MSL_SHADER_VARIABLE_FORMAT_INT32:
+				type.basetype = SPIRType::Int;
+				type.width = 32;
+				break;
+			case MSL_SHADER_VARIABLE_FORMAT_UINT32:
 			case MSL_SHADER_VARIABLE_FORMAT_ANY32:
 			default:
 				type.basetype = SPIRType::UInt;
