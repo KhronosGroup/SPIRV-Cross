@@ -1178,9 +1178,10 @@ protected:
 	                           uint32_t mat_id, const std::string &index_expr);
 	void emit_coop_mat_insert(uint32_t result_type, uint32_t result_id,
 	                          uint32_t obj_id, uint32_t mat_id, const std::string &index_expr);
-	std::string get_coop_mat_num_simdgroups_expr();
 	void emit_coop_mat_select(uint32_t result_type, uint32_t result_id,
 	                          uint32_t cond_id, uint32_t true_id, uint32_t false_id);
+	void ensure_coop_mat_scratch_buffer();
+	bool coop_mat_scratch_declared = false;
 	void validate_cooperative_matrix_types();
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
@@ -1312,6 +1313,7 @@ protected:
 	bool needs_local_invocation_index = false;
 	bool needs_subgroup_invocation_id = false;
 	bool needs_subgroup_id = false;
+	bool needs_coop_mat_scratch_buffer = false;
 	bool needs_subgroup_size = false;
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;

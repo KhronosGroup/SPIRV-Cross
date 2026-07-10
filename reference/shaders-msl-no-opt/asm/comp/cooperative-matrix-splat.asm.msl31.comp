@@ -47,9 +47,10 @@ struct spvUnsafeArray
 
 kernel void main0(uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]], uint gl_SubgroupID [[simdgroup_index_in_threadgroup]])
 {
+    threadgroup uchar _spvCoopMatScratch[16384];
     threadgroup spvUnsafeArray<float, 64> _14;
     simdgroup_float8x8 _17;
-    threadgroup float _spv_coop_tmp_17[((((32u * 1u * 1u) + 31u) / 32u)) * 64u];
+    threadgroup float* _spv_coop_tmp_17 = reinterpret_cast<threadgroup float*>(&_spvCoopMatScratch[0]);
     _spv_coop_tmp_17[gl_SubgroupID * 64u + gl_SubgroupInvocationID * 2u] = 0.0;
     _spv_coop_tmp_17[gl_SubgroupID * 64u + gl_SubgroupInvocationID * 2u + 1u] = 0.0;
     simdgroup_barrier(mem_flags::mem_threadgroup);
