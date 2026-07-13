@@ -873,6 +873,8 @@ protected:
 	virtual bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 	                             StorageClass lhs_storage, StorageClass rhs_storage);
 	virtual void emit_block_hints(const SPIRBlock &block);
+	virtual void emit_ignore_intersection();
+	virtual void emit_terminate_ray();
 	virtual std::string to_initializer_expression(const SPIRVariable &var);
 	virtual std::string to_zero_initialized_expression(uint32_t type_id);
 	bool type_can_zero_initialize(const SPIRType &type) const;

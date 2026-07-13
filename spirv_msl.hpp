@@ -309,6 +309,14 @@ public:
 		uint32_t swizzle_buffer_index = 30;
 		uint32_t indirect_params_buffer_index = 29;
 		uint32_t shader_output_buffer_index = 28;
+		uint32_t ray_tracing_intersection_buffer_index = 27;
+		uint32_t ray_tracing_callable_buffer_index = 26;
+		uint32_t ray_tracing_recursive_function_buffer_index = 25;
+		uint32_t ray_tracing_recursive_intersection_buffer_index = 24;
+		uint32_t ray_tracing_instance_metadata_buffer_index = 23;
+		uint32_t ray_tracing_stage_depth = 0;
+		uint64_t ray_tracing_function_hash = 0;
+		bool ray_tracing_raygen_visible = false;
 		uint32_t shader_patch_output_buffer_index = 27;
 		uint32_t shader_tess_factor_buffer_index = 26;
 		uint32_t buffer_size_buffer_index = 25;
@@ -936,6 +944,8 @@ protected:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_ignore_intersection() override;
+	void emit_terminate_ray() override;
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
 	void emit_mesh_tasks(SPIRBlock &block) override;
@@ -954,6 +964,7 @@ protected:
 	std::string sampler_type(const SPIRType &type, uint32_t id, bool member);
 	std::string builtin_to_glsl(BuiltIn builtin, StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
 	std::string to_function_name(const TextureFunctionNameArguments &args) override;
 	std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward) override;
@@ -1089,6 +1100,15 @@ protected:
 	std::string to_buffer_size_expression(uint32_t id);
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
+	bool is_visible_raygen() const;
+	bool is_indirect_ray_stage() const;
+	bool needs_raygen_state() const;
+	void analyze_ray_tracing_scene_phis();
+	void declare_ray_tracing_metadata_variables();
+	void declare_ray_query_state_variables();
+	bool resolve_ray_tracing_metadata(uint32_t scene_id, std::string &expression);
+	std::string ray_tracing_metadata_fallback() const;
+	std::string ray_query_state_expression(uint32_t query_id, const std::unordered_map<uint32_t, std::string> &states);
 	bool is_direct_input_builtin(BuiltIn builtin);
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
@@ -1188,8 +1208,28 @@ protected:
 	uint32_t builtin_mesh_sizes_id = 0;
 	uint32_t builtin_task_grid_id = 0;
 	uint32_t builtin_frag_depth_id = 0;
+	uint32_t builtin_launch_id_id = 0;
+	uint32_t builtin_launch_size_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
+	bool indirect_push_constants_declared = false;
+	std::unordered_set<uint32_t> indirect_implicit_buffers_declared;
+	std::unordered_set<uint32_t> indirect_argument_buffers_declared;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_metadata_vars;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_metadata_sources;
+	std::unordered_map<uint32_t, std::string> ray_tracing_metadata_expressions;
+	struct RayTracingSceneSelect
+	{
+		uint32_t condition;
+		uint32_t true_value;
+		uint32_t false_value;
+	};
+	std::unordered_map<uint32_t, RayTracingSceneSelect> ray_tracing_scene_selects;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_scene_aliases;
+	std::unordered_map<uint32_t, std::string> ray_query_metadata_addresses;
+	std::unordered_map<uint32_t, std::string> ray_query_flag_variables;
+	std::unordered_set<uint32_t> ray_tracing_scene_arrays_declared;
+	std::unordered_set<uint32_t> ray_tracing_metadata_arrays_declared;
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t draw_index_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
@@ -1199,6 +1239,7 @@ protected:
 	uint32_t argument_buffer_padding_buffer_type_id = 0;
 	uint32_t argument_buffer_padding_image_type_id = 0;
 	uint32_t argument_buffer_padding_sampler_type_id = 0;
+	uint32_t argument_buffer_padding_acceleration_structure_type_id = 0;
 
 	bool does_shader_write_sample_mask = false;
 	bool frag_shader_needs_discard_checks = false;
@@ -1247,6 +1288,7 @@ protected:
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
 	std::unordered_map<StageSetBinding, uint32_t, InternalHasher> resource_arg_buff_idx_to_binding_number;
+	std::unordered_map<StageSetBinding, MSLResourceBinding, InternalHasher> resource_arg_buff_aux_resources;
 
 	uint32_t next_metal_resource_index_buffer = 0;
 	uint32_t next_metal_resource_index_texture = 0;
@@ -1277,6 +1319,11 @@ protected:
 	TriState needs_base_instance_arg = TriState::Neutral;
 
 	bool has_sampled_images = false;
+	bool uses_trace_ray = false;
+	bool uses_execute_callable = false;
+	bool uses_ray_instance_metadata = false;
+	bool uses_ray_query_flags = false;
+	bool uses_shader_record_buffer = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 
 	bool is_using_builtin_array = false; // Force the use of C style array declaration.
@@ -1355,6 +1402,9 @@ protected:
 	void add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
+	void add_argument_buffer_padding_acceleration_structure_type(SPIRType &struct_type, uint32_t &mbr_idx,
+	                                                             uint32_t &arg_buff_index,
+	                                                             MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;

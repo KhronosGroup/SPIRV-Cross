@@ -1,0 +1,137 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvRayHitAttribute
+{
+    ulong4 data;
+};
+struct spvCallableData
+{
+    ulong4 data[8];
+};
+struct spvRayTracingContext
+{
+    uint3 launchId;
+    uint3 launchSize;
+    float3 worldRayOrigin;
+    float3 worldRayDirection;
+    float3 objectRayOrigin;
+    float3 objectRayDirection;
+    float rayTmin;
+    float rayTmax;
+    uint instanceCustomIndex;
+    uint instanceId;
+    float4x3 objectToWorld;
+    float4x3 worldToObject;
+    spvRayHitAttribute hitAttribute;
+    uint hitKind;
+    uint incomingRayFlags;
+    uint geometryIndex;
+    uint primitiveId;
+    uint cullMask;
+    float traceRayTmax;
+    float reportedDistance;
+    spvRayHitAttribute reportedHitAttribute;
+    uint reportedHitKind;
+    bool reportAccepted;
+    bool candidateNonOpaque;
+    uint shaderRecordIndex;
+};
+struct spvRayTracingDispatch
+{
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+};
+struct spvRayTracingState;
+struct spvRayDataStorage
+{
+    ulong instanceMetadataAddress;
+    ulong hitTableAddress;
+    ulong4 payload[128];
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+};
+using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+struct spvRayTracingState
+{
+    spvRayFunctionTable functions;
+    spvRayFunctionTable intersections;
+    spvCallableFunctionTable callables;
+    spvRayFunctionTable recursiveFunctions;
+    spvRayFunctionTable recursiveIntersections;
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+    uint3 launchId;
+    uint3 launchSize;
+};
+
+kernel void main0(texture2d<float, access::write> image [[texture(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]], uint3 gl_LaunchSizeNV [[threads_per_grid]], spvRayFunctionTable spvRayFunctions [[buffer(29)]], constant spvRayTracingDispatch& spvRayTracing [[buffer(28)]], spvRayFunctionTable spvIntersectionFunctions [[buffer(27)]], spvCallableFunctionTable spvCallableFunctions [[buffer(26)]], spvRayFunctionTable spvRecursiveRayFunctions [[buffer(25)]], spvRayFunctionTable spvRecursiveIntersectionFunctions [[buffer(24)]])
+{
+    thread spvRayTracingState spvRayState = { spvRayFunctions, spvIntersectionFunctions, spvCallableFunctions, spvRecursiveRayFunctions, spvRecursiveIntersectionFunctions, spvRayTracing.missAddress, spvRayTracing.missStride, spvRayTracing.hitAddress, spvRayTracing.hitStride, spvRayTracing.callableAddress, spvRayTracing.callableStride, spvRayTracing.hitTableOffset, spvRayTracing.raygenAddress, spvRayTracing.swizzleAddress, spvRayTracing.bufferSizeAddress, spvRayTracing.dynamicOffsetsAddress, spvRayTracing.pushConstantsAddress, spvRayTracing.descriptorSet0, spvRayTracing.descriptorSet1, spvRayTracing.descriptorSet2, spvRayTracing.descriptorSet3, spvRayTracing.descriptorSet4, spvRayTracing.descriptorSet5, spvRayTracing.descriptorSet6, spvRayTracing.descriptorSet7, spvRayTracing.pipelineFlags, gl_LaunchIDNV, gl_LaunchSizeNV };
+    float data = 0.0;
+    {
+        ulong spvCallableRecordAddress = spvRayState.callableAddress + ulong(0u) * spvRayState.callableStride;
+        ulong spvCallableShaderRecordAddress = spvCallableRecordAddress + 32;
+        spvCallableData spvCallableDataValue_8 = {};
+        *reinterpret_cast<thread float*>(&spvCallableDataValue_8) = data;
+        spvRayState.callables[*reinterpret_cast<device const uint*>(spvCallableRecordAddress)](*reinterpret_cast<thread uint*>(&spvCallableDataValue_8), spvCallableShaderRecordAddress, spvRayState);
+        data = *reinterpret_cast<thread float*>(&spvCallableDataValue_8);
+    }
+    image.write(float4(data), uint2(int2(gl_LaunchIDNV.xy)));
+}
+

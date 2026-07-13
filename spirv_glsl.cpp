@@ -19476,11 +19476,11 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	case SPIRBlock::IgnoreIntersection:
-		statement("ignoreIntersectionEXT;");
+		emit_ignore_intersection();
 		break;
 
 	case SPIRBlock::TerminateRay:
-		statement("terminateRayEXT;");
+		emit_terminate_ray();
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
@@ -19578,6 +19578,16 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	return trailing_block_id;
+}
+
+void CompilerGLSL::emit_ignore_intersection()
+{
+	statement("ignoreIntersectionEXT;");
+}
+
+void CompilerGLSL::emit_terminate_ray()
+{
+	statement("terminateRayEXT;");
 }
 
 void CompilerGLSL::emit_block_chain_cleanup(SPIRBlock &block)

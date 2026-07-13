@@ -1,0 +1,25 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+rayPayloadInEXT float payload;
+hitAttributeEXT vec2 hitData;
+
+float evaluateHit()
+{
+    if (payload + hitData.x > 1.0)
+        ignoreIntersectionEXT;
+    return payload;
+}
+
+float adjust(float value)
+{
+    return evaluateHit() + value;
+}
+
+void main()
+{
+    payload = adjust(payload);
+    if (payload > 0.0)
+        terminateRayEXT;
+    ignoreIntersectionEXT;
+}

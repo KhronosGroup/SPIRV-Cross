@@ -1,0 +1,160 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvRayHitAttribute
+{
+    ulong4 data;
+};
+struct spvCallableData
+{
+    ulong4 data[8];
+};
+struct spvRayTracingContext
+{
+    uint3 launchId;
+    uint3 launchSize;
+    float3 worldRayOrigin;
+    float3 worldRayDirection;
+    float3 objectRayOrigin;
+    float3 objectRayDirection;
+    float rayTmin;
+    float rayTmax;
+    uint instanceCustomIndex;
+    uint instanceId;
+    float4x3 objectToWorld;
+    float4x3 worldToObject;
+    spvRayHitAttribute hitAttribute;
+    uint hitKind;
+    uint incomingRayFlags;
+    uint geometryIndex;
+    uint primitiveId;
+    uint cullMask;
+    float traceRayTmax;
+    float reportedDistance;
+    spvRayHitAttribute reportedHitAttribute;
+    uint reportedHitKind;
+    bool reportAccepted;
+    bool candidateNonOpaque;
+    uint shaderRecordIndex;
+};
+struct spvRayTracingDispatch
+{
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+};
+struct spvRayTracingState;
+struct spvRayDataStorage
+{
+    ulong instanceMetadataAddress;
+    ulong hitTableAddress;
+    ulong4 payload[128];
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+};
+using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+struct spvRayTracingState
+{
+    spvRayFunctionTable functions;
+    spvRayFunctionTable intersections;
+    spvCallableFunctionTable callables;
+    spvRayFunctionTable recursiveFunctions;
+    spvRayFunctionTable recursiveIntersections;
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+    uint3 launchId;
+    uint3 launchSize;
+};
+
+static inline __attribute__((always_inline))
+float evaluateHit(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    if (((*reinterpret_cast<thread float*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload)) + (*reinterpret_cast<thread const float2*>(&spvRayContext.hitAttribute)).x) > 1.0)
+    {
+        spvRayAction = 1;
+        return {};
+    }
+    return (*reinterpret_cast<thread float*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload));
+}
+
+static inline __attribute__((always_inline))
+float adjust(thread const float& value, thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    float _36 = evaluateHit(spvRayData, spvRayContext, spvRayAction, spvRayState);
+    if (spvRayAction != 0)
+        return {};
+    return _36 + value;
+}
+
+[[visible]] void main_mvkAnyHit(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    float param = (*reinterpret_cast<thread float*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload));
+    float _43 = adjust(param, spvRayData, spvRayContext, spvRayAction, spvRayState);
+    if (spvRayAction != 0)
+        return;
+    (*reinterpret_cast<thread float*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload)) = _43;
+    if ((*reinterpret_cast<thread float*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload)) > 0.0)
+    {
+        spvRayAction = 2;
+        return;
+    }
+    spvRayAction = 1;
+    return;
+}
+

@@ -33,39 +33,17 @@ intersection_params spvMakeIntersectionParams(uint flags)
     return ip;
 }
 
-struct main0_out
+kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<float, access::write> image [[texture(0)]], raytracing::acceleration_structure<raytracing::instancing> as [[buffer(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]])
 {
-    float4 outColor [[color(0)]];
-};
-
-struct main0_in
-{
-    float4 inPos [[user(locn0)]];
-};
-
-fragment main0_out main0(main0_in in [[stage_in]], raytracing::acceleration_structure<raytracing::instancing> topLevelAS [[buffer(0)]])
-{
-    main0_out out = {};
-    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery;
-    rayQuery.reset(ray(float3((in.inPos.xy * 4.0) - float2(2.0), 1.0), float3(0.0, 0.0, -1.0), 0.001000000047497451305389404296875, 2.0), topLevelAS, (255u & 255u), spvMakeIntersectionParams(4u));
-    for (;;)
-    {
-        bool _88 = rayQuery.next();
-        if (_88)
-        {
-            continue;
-        }
-        else
-        {
-            break;
-        }
-    }
-    uint _92 = uint(rayQuery.get_committed_intersection_type());
-    if (_92 == 0u)
-    {
-        discard_fragment();
-    }
-    out.outColor = in.inPos;
-    return out;
+    ulong spvRayQueryMetadataAddress_34 = {};
+    uint spvRayQueryFlags_34 = {};
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;
+    spvRayQueryFlags_34 = 0u;
+    spvRayQueryMetadataAddress_34 = reinterpret_cast<ulong>(as_mvkMetadata);
+    query.reset(ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), as, (255u & 255u), spvMakeIntersectionParams(0u));
+    bool _83 = query.next();
+    uint _84 = spvRayQueryFlags_34;
+    uint _85 = reinterpret_cast<device const uint2*>(spvRayQueryMetadataAddress_34)[query.get_candidate_instance_id()].y;
+    image.write(float4(float3(gl_LaunchIDNV), 1.0) + float4(float(_84 + _85)), uint2(int2(gl_LaunchIDNV.xy)));
 }
 

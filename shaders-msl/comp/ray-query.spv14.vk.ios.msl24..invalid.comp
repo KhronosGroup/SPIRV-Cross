@@ -47,6 +47,7 @@ void main()
 	fval = rayQueryGetIntersectionTEXT(q2[1], false);
 	ival = rayQueryGetIntersectionInstanceCustomIndexEXT(q, true);
 	ival = rayQueryGetIntersectionInstanceIdEXT(q2[0], false);
+	type = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(q, true);
 	ival = rayQueryGetIntersectionGeometryIndexEXT(q2[1], false);
 	ival = rayQueryGetIntersectionPrimitiveIndexEXT(q, true);
 	fvals.xy = rayQueryGetIntersectionBarycentricsEXT(q2[0], false);

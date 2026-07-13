@@ -1,0 +1,172 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvRayHitAttribute
+{
+    ulong4 data;
+};
+struct spvCallableData
+{
+    ulong4 data[8];
+};
+struct spvRayTracingContext
+{
+    uint3 launchId;
+    uint3 launchSize;
+    float3 worldRayOrigin;
+    float3 worldRayDirection;
+    float3 objectRayOrigin;
+    float3 objectRayDirection;
+    float rayTmin;
+    float rayTmax;
+    uint instanceCustomIndex;
+    uint instanceId;
+    float4x3 objectToWorld;
+    float4x3 worldToObject;
+    spvRayHitAttribute hitAttribute;
+    uint hitKind;
+    uint incomingRayFlags;
+    uint geometryIndex;
+    uint primitiveId;
+    uint cullMask;
+    float traceRayTmax;
+    float reportedDistance;
+    spvRayHitAttribute reportedHitAttribute;
+    uint reportedHitKind;
+    bool reportAccepted;
+    bool candidateNonOpaque;
+    uint shaderRecordIndex;
+};
+struct spvRayTracingDispatch
+{
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+};
+struct spvRayTracingState;
+struct spvRayDataStorage
+{
+    ulong instanceMetadataAddress;
+    ulong hitTableAddress;
+    ulong4 payload[128];
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+};
+using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+struct spvRayTracingState
+{
+    spvRayFunctionTable functions;
+    spvRayFunctionTable intersections;
+    spvCallableFunctionTable callables;
+    spvRayFunctionTable recursiveFunctions;
+    spvRayFunctionTable recursiveIntersections;
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+    uint3 launchId;
+    uint3 launchSize;
+};
+
+static inline __attribute__((always_inline))
+bool report(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    (*reinterpret_cast<thread float2*>(&spvRayContext.hitAttribute)) = float2(0.25, 0.75);
+    spvRayAction = 0;
+    float spvRayTmaxSaved_22 = spvRayContext.rayTmax;
+    bool _22 = (0.5 >= spvRayContext.rayTmin && 0.5 <= spvRayTmaxSaved_22);
+    uint spvAnyHitHandle_22 = reinterpret_cast<device const uint*>(reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->hitTableAddress + ulong(spvRayContext.shaderRecordIndex) * spvRayState.hitStride)[1];
+    if (_22 && spvRayContext.candidateNonOpaque && spvAnyHitHandle_22 != 0)
+    {
+        spvRayContext.rayTmax = 0.5;
+        spvRayContext.hitKind = 10u;
+        spvRayState.functions[spvAnyHitHandle_22](spvRayData, spvRayContext, spvRayAction, spvRayState);
+        spvRayContext.rayTmax = spvRayTmaxSaved_22;
+        _22 = spvRayAction != 1;
+    }
+    if (_22)
+    {
+        spvRayContext.reportAccepted = true;
+        if (0.5 <= spvRayContext.reportedDistance)
+        {
+            spvRayContext.reportedDistance = 0.5;
+            spvRayContext.rayTmax = 0.5;
+            spvRayContext.reportedHitKind = 10u;
+            spvRayContext.reportedHitAttribute = spvRayContext.hitAttribute;
+        }
+    }
+    if (spvRayAction == 2)
+        return {};
+    return _22;
+}
+
+static inline __attribute__((always_inline))
+bool intersect(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    bool _25 = report(spvRayData, spvRayContext, spvRayAction, spvRayState);
+    if (spvRayAction == 2)
+        return {};
+    return _25;
+}
+
+[[visible]] void main_mvkIntersection(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+{
+    bool _28 = intersect(spvRayData, spvRayContext, spvRayAction, spvRayState);
+    if (spvRayAction == 2)
+        return;
+}
+
