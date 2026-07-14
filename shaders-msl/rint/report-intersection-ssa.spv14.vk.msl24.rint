@@ -1,0 +1,19 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(shaderRecordEXT, std430) buffer Record
+{
+    float distance;
+    uint kind;
+} record;
+hitAttributeEXT float hitData;
+
+void main()
+{
+    float distance = record.distance;
+    uint kind = record.kind & 0x7fu;
+    hitData = distance;
+    bool accepted = reportIntersectionEXT(distance, kind);
+    if (!accepted)
+        hitData = -distance;
+}

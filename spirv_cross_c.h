@@ -40,7 +40,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 68
+#define SPVC_C_API_VERSION_MINOR 69
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -755,6 +755,17 @@ typedef enum spvc_compiler_option
 
 	SPVC_COMPILER_OPTION_HLSL_USER_SEMANTIC = 94 | SPVC_COMPILER_OPTION_HLSL_BIT,
 
+	/* The ray tracing pipeline emulation host ABI is documented in spirv_msl.hpp. */
+	SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE_EMULATION = 95 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_INTERSECTION_BUFFER_INDEX = 96 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_CALLABLE_BUFFER_INDEX = 97 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RECURSIVE_FUNCTION_BUFFER_INDEX = 98 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RECURSIVE_INTERSECTION_BUFFER_INDEX = 99 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_INSTANCE_METADATA_BUFFER_INDEX = 100 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_STAGE_DEPTH = 101 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RAYGEN_VISIBLE = 102 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX = 103 | SPVC_COMPILER_OPTION_MSL_BIT,
+
 	SPVC_COMPILER_OPTION_INT_MAX = 0x7fffffff
 } spvc_compiler_option;
 
@@ -855,6 +866,7 @@ SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_rasterization_disabled(spvc_compi
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler);
+SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_acceleration_structure_address_table(spvc_compiler compiler);
 
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_patch_output_buffer(spvc_compiler compiler);

@@ -11,10 +11,6 @@ struct spvRayHitAttribute
 {
     ulong4 data;
 };
-struct spvCallableData
-{
-    ulong4 data[8];
-};
 struct spvRayTracingContext
 {
     uint3 launchId;
@@ -49,6 +45,7 @@ struct spvRayTracingDispatch
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -56,6 +53,7 @@ struct spvRayTracingDispatch
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -72,10 +70,10 @@ struct spvRayDataStorage
 {
     ulong instanceMetadataAddress;
     ulong hitTableAddress;
-    ulong4 payload[128];
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -86,8 +84,14 @@ struct spvRayDataStorage
     ulong descriptorSet6;
     ulong descriptorSet7;
 };
+template<typename T>
+struct spvRayDataWithPayload
+{
+    spvRayDataStorage data;
+    T payload;
+};
 using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
-using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, thread spvRayTracingState&)>;
 struct spvRayTracingState
 {
     spvRayFunctionTable functions;
@@ -99,6 +103,7 @@ struct spvRayTracingState
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -106,6 +111,7 @@ struct spvRayTracingState
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -120,17 +126,19 @@ struct spvRayTracingState
     uint3 launchSize;
 };
 
-[[visible]] void main_mvkIntersection(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+[[visible]] void main0(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
 {
     (*reinterpret_cast<thread float2*>(&spvRayContext.hitAttribute)) = float2(0.25, 0.75);
+    const auto spvHitT_35 = 0.5;
+    const auto spvHitKind_35 = 10u;
     spvRayAction = 0;
     float spvRayTmaxSaved_35 = spvRayContext.rayTmax;
-    bool _35 = (0.5 >= spvRayContext.rayTmin && 0.5 <= spvRayTmaxSaved_35);
+    bool _35 = (spvHitT_35 >= spvRayContext.rayTmin && spvHitT_35 <= spvRayTmaxSaved_35);
     uint spvAnyHitHandle_35 = reinterpret_cast<device const uint*>(reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->hitTableAddress + ulong(spvRayContext.shaderRecordIndex) * spvRayState.hitStride)[1];
     if (_35 && spvRayContext.candidateNonOpaque && spvAnyHitHandle_35 != 0)
     {
-        spvRayContext.rayTmax = 0.5;
-        spvRayContext.hitKind = 10u;
+        spvRayContext.rayTmax = spvHitT_35;
+        spvRayContext.hitKind = spvHitKind_35;
         spvRayState.functions[spvAnyHitHandle_35](spvRayData, spvRayContext, spvRayAction, spvRayState);
         spvRayContext.rayTmax = spvRayTmaxSaved_35;
         _35 = spvRayAction != 1;
@@ -138,11 +146,11 @@ struct spvRayTracingState
     if (_35)
     {
         spvRayContext.reportAccepted = true;
-        if (0.5 <= spvRayContext.reportedDistance)
+        if (spvHitT_35 <= spvRayContext.reportedDistance)
         {
-            spvRayContext.reportedDistance = 0.5;
-            spvRayContext.rayTmax = 0.5;
-            spvRayContext.reportedHitKind = 10u;
+            spvRayContext.reportedDistance = spvHitT_35;
+            spvRayContext.rayTmax = spvHitT_35;
+            spvRayContext.reportedHitKind = spvHitKind_35;
             spvRayContext.reportedHitAttribute = spvRayContext.hitAttribute;
         }
     }

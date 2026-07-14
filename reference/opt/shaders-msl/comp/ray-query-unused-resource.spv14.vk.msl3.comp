@@ -1,0 +1,53 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct Output
+{
+    uint value;
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+kernel void main0(device const uint2* usedScene_spvRayMetadata [[buffer(2)]], device Output& outputData [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> usedScene [[buffer(0)]])
+{
+    device const uint2* spvRayQueryMetadataAddress_8 = {};
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;
+    spvRayQueryMetadataAddress_8 = usedScene_spvRayMetadata;
+    query.reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), usedScene, (255u & 255u), spvMakeIntersectionParams(0u));
+    bool _24 = query.next();
+    uint _31 = spvRayQueryMetadataAddress_8[query.get_candidate_instance_id()].y;
+    outputData.value = _31;
+}
+

@@ -1,0 +1,105 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct Indices
+{
+    uint sceneIndex;
+};
+
+struct Output
+{
+    uint value;
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvDescriptorSetBuffer0
+{
+    raytracing::acceleration_structure<raytracing::instancing> scenes [[id(0)]][2];
+    constant Indices* indices [[id(2)]];
+    device uint2* scenes_spvRayMetadata_1 [[id(3)]][2];
+};
+
+struct spvDescriptorSetBuffer1
+{
+    device Output* outputData [[id(0)]];
+};
+
+template<typename spvRayArray13, typename spvRayMetadataArray13>
+static inline __attribute__((always_inline))
+raytracing::acceleration_structure<raytracing::instancing> selectScene(spvRayArray13 values, spvRayMetadataArray13 spvRayMetadata_13, thread const uint& index, thread device const uint2*& spvRayMetadataReturn)
+{
+    spvRayMetadataReturn = spvRayMetadata_13[index];
+    return values[index];
+}
+
+static inline __attribute__((always_inline))
+raytracing::acceleration_structure<raytracing::instancing> getScene(const device raytracing::acceleration_structure<raytracing::instancing> (&scenes)[2], device const uint2* const device (&spvRayMetadata_83)[2], constant Indices& indices, thread device const uint2*& spvRayMetadataReturn)
+{
+    uint _42 = indices.sceneIndex & 1u;
+    uint param = _42;
+    device const uint2* spvRayMetadata_44;
+    raytracing::acceleration_structure<raytracing::instancing> _44 = selectScene(scenes, spvRayMetadata_83, param, spvRayMetadata_44);
+    spvRayMetadataReturn = spvRayMetadata_44;
+    return _44;
+}
+
+static inline __attribute__((always_inline))
+uint traceScene(const device raytracing::acceleration_structure<raytracing::instancing> (&scenes)[2], device const uint2* const device (&spvRayMetadata_85)[2], constant Indices& indices, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& query, thread device const uint2*& spvRayQueryMetadataAddress_49)
+{
+    device const uint2* spvRayMetadata_50;
+    raytracing::acceleration_structure<raytracing::instancing> _50 = getScene(scenes, spvRayMetadata_85, indices, spvRayMetadata_50);
+    spvRayQueryMetadataAddress_49 = spvRayMetadata_50;
+    query.reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), _50, (255u & 255u), spvMakeIntersectionParams(0u));
+    bool _61 = query.next();
+    uint _63 = spvRayQueryMetadataAddress_49[query.get_candidate_instance_id()].y;
+    return _63;
+}
+
+static inline __attribute__((always_inline))
+uint nestedTrace(const device raytracing::acceleration_structure<raytracing::instancing> (&scenes)[2], device const uint2* const device (&spvRayMetadata_88)[2], constant Indices& indices, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& query, thread device const uint2*& spvRayQueryMetadataAddress_49)
+{
+    uint _66 = traceScene(scenes, spvRayMetadata_88, indices, query, spvRayQueryMetadataAddress_49);
+    return _66;
+}
+
+kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], device spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]])
+{
+    device const uint2* spvRayQueryMetadataAddress_49 = {};
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;
+    uint _72 = nestedTrace(spvDescriptorSet0.scenes, spvDescriptorSet0.scenes_spvRayMetadata_1, (*spvDescriptorSet0.indices), query, spvRayQueryMetadataAddress_49);
+    (*spvDescriptorSet1.outputData).value = _72;
+}
+

@@ -11,10 +11,6 @@ struct spvRayHitAttribute
 {
     ulong4 data;
 };
-struct spvCallableData
-{
-    ulong4 data[8];
-};
 struct spvRayTracingContext
 {
     uint3 launchId;
@@ -49,6 +45,7 @@ struct spvRayTracingDispatch
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -56,6 +53,7 @@ struct spvRayTracingDispatch
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -72,10 +70,10 @@ struct spvRayDataStorage
 {
     ulong instanceMetadataAddress;
     ulong hitTableAddress;
-    ulong4 payload[128];
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -86,8 +84,14 @@ struct spvRayDataStorage
     ulong descriptorSet6;
     ulong descriptorSet7;
 };
+template<typename T>
+struct spvRayDataWithPayload
+{
+    spvRayDataStorage data;
+    T payload;
+};
 using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
-using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, thread spvRayTracingState&)>;
 struct spvRayTracingState
 {
     spvRayFunctionTable functions;
@@ -99,6 +103,7 @@ struct spvRayTracingState
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -106,6 +111,7 @@ struct spvRayTracingState
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -125,10 +131,10 @@ struct Record
     float factor;
 };
 
-[[visible]] void main_mvkClosestHit(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
+[[visible]] void main0(thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, thread spvRayTracingState& spvRayState)
 {
     float builtins = dot(((spvRayContext.worldRayOrigin + spvRayContext.worldRayDirection) + spvRayContext.objectRayOrigin) + spvRayContext.objectRayDirection, float3(1.0));
     builtins += (((((((((((spvRayContext.rayTmin + spvRayContext.rayTmax) + float(spvRayContext.instanceCustomIndex)) + float(spvRayContext.instanceId)) + float(int(spvRayContext.primitiveId))) + float(spvRayContext.geometryIndex)) + float(spvRayContext.hitKind)) + float(spvRayContext.incomingRayFlags)) + float(spvRayContext.cullMask)) + spvRayContext.objectToWorld[0].x) + spvRayContext.worldToObject[0].x) + (*reinterpret_cast<const device Record*>(reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->hitTableAddress + ulong(spvRayContext.shaderRecordIndex) * spvRayState.hitStride + 32)).factor);
-    (*reinterpret_cast<thread float4*>(&reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->payload)) = float4(*reinterpret_cast<thread const float2*>(&spvRayContext.hitAttribute), builtins, 1.0);
+    reinterpret_cast<thread spvRayDataWithPayload<float4>*>(spvRayData)->payload = float4(*reinterpret_cast<thread const float2*>(&spvRayContext.hitAttribute), builtins, 1.0);
 }
 

@@ -13,10 +13,6 @@ struct spvRayHitAttribute
 {
     ulong4 data;
 };
-struct spvCallableData
-{
-    ulong4 data[8];
-};
 struct spvRayTracingContext
 {
     uint3 launchId;
@@ -51,6 +47,7 @@ struct spvRayTracingDispatch
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -58,6 +55,7 @@ struct spvRayTracingDispatch
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -74,10 +72,10 @@ struct spvRayDataStorage
 {
     ulong instanceMetadataAddress;
     ulong hitTableAddress;
-    ulong4 payload[128];
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -88,8 +86,14 @@ struct spvRayDataStorage
     ulong descriptorSet6;
     ulong descriptorSet7;
 };
+template<typename T>
+struct spvRayDataWithPayload
+{
+    spvRayDataStorage data;
+    T payload;
+};
 using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
-using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, thread spvRayTracingState&)>;
 struct spvRayTracingState
 {
     spvRayFunctionTable functions;
@@ -101,6 +105,7 @@ struct spvRayTracingState
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -108,6 +113,7 @@ struct spvRayTracingState
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -128,22 +134,20 @@ struct Record
 };
 
 static inline __attribute__((always_inline))
-float applyRecord(const device Record& record, thread uint& spvCallableDataValue, thread ulong& spvShaderRecordAddress, thread spvRayTracingState& spvRayState)
+float applyRecord(const device Record& record, thread void* spvCallableDataValue, thread ulong& spvShaderRecordAddress, thread spvRayTracingState& spvRayState)
 {
-    return (*reinterpret_cast<thread float*>(&spvCallableDataValue)) * record.factor;
+    return (*reinterpret_cast<thread float*>(spvCallableDataValue)) * record.factor;
 }
 
-[[visible]] void main_mvkCallable(thread uint& spvCallableDataValue, thread ulong& spvShaderRecordAddress, thread spvRayTracingState& spvRayState)
+[[visible]] void main0(thread void* spvCallableDataValue, thread ulong& spvShaderRecordAddress, thread spvRayTracingState& spvRayState)
 {
-    (*reinterpret_cast<thread float*>(&spvCallableDataValue)) = applyRecord((*reinterpret_cast<const device Record*>(spvShaderRecordAddress)), spvCallableDataValue, spvShaderRecordAddress, spvRayState);
+    (*reinterpret_cast<thread float*>(spvCallableDataValue)) = applyRecord((*reinterpret_cast<const device Record*>(spvShaderRecordAddress)), spvCallableDataValue, spvShaderRecordAddress, spvRayState);
     {
         ulong spvCallableRecordAddress = spvRayState.callableAddress + ulong(10u) * spvRayState.callableStride;
         ulong spvCallableShaderRecordAddress = spvCallableRecordAddress + 32;
-        float spvCallableDataSaved = *reinterpret_cast<thread float*>(&spvCallableDataValue);
-        *reinterpret_cast<thread float*>(&spvCallableDataValue) = (*reinterpret_cast<thread float*>(&spvCallableDataValue));
-        spvRayState.callables[*reinterpret_cast<device const uint*>(spvCallableRecordAddress)](spvCallableDataValue, spvCallableShaderRecordAddress, spvRayState);
-        (*reinterpret_cast<thread float*>(&spvCallableDataValue)) = *reinterpret_cast<thread float*>(&spvCallableDataValue);
-        *reinterpret_cast<thread float*>(&spvCallableDataValue) = spvCallableDataSaved;
+        float spvCallableDataValue_11 = (*reinterpret_cast<thread float*>(spvCallableDataValue));
+        spvRayState.callables[*reinterpret_cast<device const uint*>(spvCallableRecordAddress)](reinterpret_cast<thread void*>(&spvCallableDataValue_11), spvCallableShaderRecordAddress, spvRayState);
+        (*reinterpret_cast<thread float*>(spvCallableDataValue)) = spvCallableDataValue_11;
     }
 }
 

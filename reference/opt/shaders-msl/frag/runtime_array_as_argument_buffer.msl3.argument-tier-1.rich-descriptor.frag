@@ -124,7 +124,7 @@ fragment void main0(main0_in in [[stage_in]], device const void* spvDescriptorSe
     {
         discard_fragment();
     }
-    rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId], (255u & 255u), spvMakeIntersectionParams(0u));
+    rayQuery.reset(::metal::raytracing::ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId], (255u & 255u), spvMakeIntersectionParams(0u));
     bool _301 = rayQuery.next();
     if (smp_textures[_231].sample(smp_texturesSmplr[_231], float2(0.0), level(0.0)).w > 0.5)
     {
@@ -138,7 +138,7 @@ fragment void main0(main0_in in [[stage_in]], device const void* spvDescriptorSe
     {
         discard_fragment();
     }
-    rayQuery_1.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId], (255u & 255u), spvMakeIntersectionParams(0u));
+    rayQuery_1.reset(::metal::raytracing::ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId], (255u & 255u), spvMakeIntersectionParams(0u));
     bool _336 = rayQuery_1.next();
 }
 

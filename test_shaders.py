@@ -255,6 +255,13 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     msl_args = [spirv_cross_path, '--output', msl_path, spirv_path, '--msl', '--iterations', str(iterations)]
     msl_args.append('--msl-version')
     msl_args.append(path_to_msl_standard_cli(shader))
+    if any(shader.endswith(ext) for ext in ('.rgen', '.rmiss', '.rchit', '.rahit', '.rint', '.rcall')):
+        msl_args.append('--msl-enable-ray-tracing-pipeline-emulation')
+    if '.raygen-visible.' in shader:
+        msl_args.append('--msl-ray-tracing-raygen-visible')
+    stage_depth = re.search(r'\.stage-depth-([0-9]+)\.', shader)
+    if stage_depth:
+        msl_args += ['--msl-ray-tracing-stage-depth', stage_depth.group(1)]
     if not '.nomain.' in shader:
         msl_args.append('--entry')
         msl_args.append('main')

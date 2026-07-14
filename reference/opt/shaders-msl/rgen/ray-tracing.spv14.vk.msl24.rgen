@@ -13,10 +13,6 @@ struct spvRayHitAttribute
 {
     ulong4 data;
 };
-struct spvCallableData
-{
-    ulong4 data[8];
-};
 struct spvRayTracingContext
 {
     uint3 launchId;
@@ -51,6 +47,7 @@ struct spvRayTracingDispatch
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -58,6 +55,7 @@ struct spvRayTracingDispatch
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -74,10 +72,10 @@ struct spvRayDataStorage
 {
     ulong instanceMetadataAddress;
     ulong hitTableAddress;
-    ulong4 payload[128];
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -88,8 +86,14 @@ struct spvRayDataStorage
     ulong descriptorSet6;
     ulong descriptorSet7;
 };
+template<typename T>
+struct spvRayDataWithPayload
+{
+    spvRayDataStorage data;
+    T payload;
+};
 using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
-using spvCallableFunctionTable = visible_function_table<void(thread uint&, thread ulong&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, thread spvRayTracingState&)>;
 struct spvRayTracingState
 {
     spvRayFunctionTable functions;
@@ -101,6 +105,7 @@ struct spvRayTracingState
     ulong missStride;
     ulong hitAddress;
     ulong hitStride;
+    ulong hitSize;
     ulong callableAddress;
     ulong callableStride;
     ulong hitTableOffset;
@@ -108,6 +113,7 @@ struct spvRayTracingState
     ulong swizzleAddress;
     ulong bufferSizeAddress;
     ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
     ulong pushConstantsAddress;
     ulong descriptorSet0;
     ulong descriptorSet1;
@@ -146,27 +152,37 @@ intersection_params spvMakeIntersectionParams(uint flags)
     return ip;
 }
 
-kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<float, access::write> image [[texture(0)]], raytracing::acceleration_structure<raytracing::instancing> as [[buffer(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]], uint3 gl_LaunchSizeNV [[threads_per_grid]], spvRayFunctionTable spvRayFunctions [[buffer(29)]], constant spvRayTracingDispatch& spvRayTracing [[buffer(28)]], spvRayFunctionTable spvIntersectionFunctions [[buffer(27)]], spvCallableFunctionTable spvCallableFunctions [[buffer(26)]], spvRayFunctionTable spvRecursiveRayFunctions [[buffer(25)]], spvRayFunctionTable spvRecursiveIntersectionFunctions [[buffer(24)]])
+kernel void main0(device const uint2* as_spvRayMetadata [[buffer(1)]], texture2d<float, access::write> image [[texture(0)]], raytracing::acceleration_structure<raytracing::instancing> as [[buffer(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]], uint3 gl_LaunchSizeNV [[threads_per_grid]], spvRayFunctionTable spvRayFunctions [[buffer(29)]], constant spvRayTracingDispatch& spvRayTracing [[buffer(28)]], spvRayFunctionTable spvIntersectionFunctions [[buffer(17)]], spvCallableFunctionTable spvCallableFunctions [[buffer(16)]], spvRayFunctionTable spvRecursiveRayFunctions [[buffer(15)]], spvRayFunctionTable spvRecursiveIntersectionFunctions [[buffer(14)]])
 {
-    thread spvRayTracingState spvRayState = { spvRayFunctions, spvIntersectionFunctions, spvCallableFunctions, spvRecursiveRayFunctions, spvRecursiveIntersectionFunctions, spvRayTracing.missAddress, spvRayTracing.missStride, spvRayTracing.hitAddress, spvRayTracing.hitStride, spvRayTracing.callableAddress, spvRayTracing.callableStride, spvRayTracing.hitTableOffset, spvRayTracing.raygenAddress, spvRayTracing.swizzleAddress, spvRayTracing.bufferSizeAddress, spvRayTracing.dynamicOffsetsAddress, spvRayTracing.pushConstantsAddress, spvRayTracing.descriptorSet0, spvRayTracing.descriptorSet1, spvRayTracing.descriptorSet2, spvRayTracing.descriptorSet3, spvRayTracing.descriptorSet4, spvRayTracing.descriptorSet5, spvRayTracing.descriptorSet6, spvRayTracing.descriptorSet7, spvRayTracing.pipelineFlags, gl_LaunchIDNV, gl_LaunchSizeNV };
+    thread spvRayTracingState spvRayState = { spvRayFunctions, spvIntersectionFunctions, spvCallableFunctions, spvRecursiveRayFunctions, spvRecursiveIntersectionFunctions, spvRayTracing.missAddress, spvRayTracing.missStride, spvRayTracing.hitAddress, spvRayTracing.hitStride, spvRayTracing.hitSize, spvRayTracing.callableAddress, spvRayTracing.callableStride, spvRayTracing.hitTableOffset, spvRayTracing.raygenAddress, spvRayTracing.swizzleAddress, spvRayTracing.bufferSizeAddress, spvRayTracing.dynamicOffsetsAddress, spvRayTracing.accelerationStructureAddressTableAddress, spvRayTracing.pushConstantsAddress, spvRayTracing.descriptorSet0, spvRayTracing.descriptorSet1, spvRayTracing.descriptorSet2, spvRayTracing.descriptorSet3, spvRayTracing.descriptorSet4, spvRayTracing.descriptorSet5, spvRayTracing.descriptorSet6, spvRayTracing.descriptorSet7, spvRayTracing.pipelineFlags, gl_LaunchIDNV, gl_LaunchSizeNV };
     float4 payload = float4(0.0);
     float blend = 0.0;
     {
-        spvRayDataStorage spvTraceData = { reinterpret_cast<ulong>(as_mvkMetadata), spvRayState.hitAddress + spvRayState.hitTableOffset, {}, spvRayState.swizzleAddress, spvRayState.bufferSizeAddress, spvRayState.dynamicOffsetsAddress, spvRayState.pushConstantsAddress, spvRayState.descriptorSet0, spvRayState.descriptorSet1, spvRayState.descriptorSet2, spvRayState.descriptorSet3, spvRayState.descriptorSet4, spvRayState.descriptorSet5, spvRayState.descriptorSet6, spvRayState.descriptorSet7 };
-        *reinterpret_cast<thread float4*>(&spvTraceData.payload) = payload;
+        const auto spvTraceRayFlags = 1u;
+        const auto spvTraceRayCullMask = 255u;
+        const auto spvTraceRaySBTOffset = 0u;
+        const auto spvTraceRaySBTStride = 0u;
+        const auto spvTraceRayMissIndex = 0u;
+        const auto spvTraceRayOrigin = float3(0.0);
+        const auto spvTraceRayTMin = 0.0;
+        const auto spvTraceRayDirection = float3(0.0, 0.0, -1.0);
+        const auto spvTraceRayTMax = 100.0;
+        device const uint2* spvTraceRayInstanceMetadata = as_spvRayMetadata;
+        spvRayDataWithPayload<float4> spvTraceData = { { reinterpret_cast<ulong>(spvTraceRayInstanceMetadata), spvRayState.hitAddress + spvRayState.hitTableOffset, spvRayState.swizzleAddress, spvRayState.bufferSizeAddress, spvRayState.dynamicOffsetsAddress, spvRayState.accelerationStructureAddressTableAddress, spvRayState.pushConstantsAddress, spvRayState.descriptorSet0, spvRayState.descriptorSet1, spvRayState.descriptorSet2, spvRayState.descriptorSet3, spvRayState.descriptorSet4, spvRayState.descriptorSet5, spvRayState.descriptorSet6, spvRayState.descriptorSet7 }, payload };
         spvRayTracingContext spvRayContext = {};
         uint spvRayAction = 0;
         spvRayContext.launchId = spvRayState.launchId;
         spvRayContext.launchSize = spvRayState.launchSize;
-        spvRayContext.worldRayOrigin = float3(0.0);
-        spvRayContext.worldRayDirection = float3(0.0, 0.0, -1.0);
-        spvRayContext.rayTmin = 0.0;
-        spvRayContext.rayTmax = 100.0;
-        spvRayContext.traceRayTmax = 100.0;
-        spvRayContext.incomingRayFlags = 1u;
-        spvRayContext.cullMask = (255u & 255u);
+        spvRayContext.worldRayOrigin = spvTraceRayOrigin;
+        spvRayContext.worldRayDirection = spvTraceRayDirection;
+        spvRayContext.rayTmin = spvTraceRayTMin;
+        spvRayContext.rayTmax = spvTraceRayTMax;
+        spvRayContext.traceRayTmax = spvTraceRayTMax;
+        spvRayContext.incomingRayFlags = spvTraceRayFlags;
+        spvRayContext.cullMask = (spvTraceRayCullMask & 255u);
         intersection_query<instancing, triangle_data> spvRayQuery;
-        spvRayQuery.reset(ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), as, (255u & 255u), spvMakeIntersectionParams((1u | spvRayState.pipelineFlags)));
+        const auto spvTraceRayScene = as;
+        spvRayQuery.reset(::metal::raytracing::ray(spvTraceRayOrigin, spvTraceRayDirection, spvTraceRayTMin, spvTraceRayTMax), spvTraceRayScene, (spvTraceRayCullMask & 255u), spvMakeIntersectionParams((spvTraceRayFlags | spvRayState.pipelineFlags)));
         while (spvRayQuery.next())
         {
             if (spvRayQuery.get_candidate_intersection_type() == intersection_type::triangle)
@@ -175,17 +191,17 @@ kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<fl
                 spvRayContext.objectRayDirection = spvRayQuery.get_candidate_ray_direction();
                 spvRayContext.rayTmax = spvRayQuery.get_candidate_triangle_distance();
                 spvRayContext.instanceId = spvRayQuery.get_candidate_instance_id();
-                spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].x;
+                spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].x;
                 spvRayContext.objectToWorld = spvRayQuery.get_candidate_object_to_world_transform();
                 spvRayContext.worldToObject = spvRayQuery.get_candidate_world_to_object_transform();
                 *reinterpret_cast<thread float2*>(&spvRayContext.hitAttribute) = spvRayQuery.get_candidate_triangle_barycentric_coord();
                 spvRayContext.hitKind = spvRayQuery.is_candidate_triangle_front_facing() ? 0xFEu : 0xFFu;
                 spvRayContext.geometryIndex = spvRayQuery.get_candidate_geometry_id();
                 spvRayContext.primitiveId = spvRayQuery.get_candidate_primitive_id();
-                uint spvCandidateRecordIndex = spvRayQuery.get_candidate_geometry_id() * (0u & 15u) + (0u & 15u) + reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].y;
-                ulong spvCandidateRecordAddress = (&spvTraceData)->hitTableAddress + ulong(spvCandidateRecordIndex) * spvRayState.hitStride;
+                uint spvCandidateRecordIndex = spvRayQuery.get_candidate_geometry_id() * (spvTraceRaySBTStride & 15u) + (spvTraceRaySBTOffset & 15u) + reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].y;
+                ulong spvCandidateRecordAddress = spvTraceData.data.hitTableAddress + ulong(spvCandidateRecordIndex) * spvRayState.hitStride;
                 spvRayContext.shaderRecordIndex = spvCandidateRecordIndex;
-                uint spvCandidateAnyHitHandle = spvRayState.hitStride != 0 ? reinterpret_cast<device const uint*>(spvCandidateRecordAddress)[1] : 0;
+                uint spvCandidateAnyHitHandle = spvRayState.hitSize != 0 ? reinterpret_cast<device const uint*>(spvCandidateRecordAddress)[1] : 0;
                 spvRayAction = 0;
                 if (spvCandidateAnyHitHandle != 0)
                 {
@@ -198,21 +214,21 @@ kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<fl
             }
             else if (spvRayQuery.get_candidate_intersection_type() == intersection_type::bounding_box)
             {
-                if (spvRayState.hitStride != 0)
+                if (spvRayState.hitSize != 0)
                 {
                     spvRayContext.objectRayOrigin = spvRayQuery.get_candidate_ray_origin();
                     spvRayContext.objectRayDirection = spvRayQuery.get_candidate_ray_direction();
                     spvRayContext.rayTmax = spvRayQuery.get_committed_intersection_type() == intersection_type::none ? spvRayContext.traceRayTmax : spvRayQuery.get_committed_distance();
                     spvRayContext.instanceId = spvRayQuery.get_candidate_instance_id();
-                    spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].x;
+                    spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].x;
                     spvRayContext.objectToWorld = spvRayQuery.get_candidate_object_to_world_transform();
                     spvRayContext.worldToObject = spvRayQuery.get_candidate_world_to_object_transform();
                     spvRayContext.geometryIndex = spvRayQuery.get_candidate_geometry_id();
                     spvRayContext.primitiveId = spvRayQuery.get_candidate_primitive_id();
                     spvRayContext.reportAccepted = false;
                     spvRayContext.reportedDistance = spvRayContext.rayTmax;
-                    uint spvCandidateRecordIndex = spvRayQuery.get_candidate_geometry_id() * (0u & 15u) + (0u & 15u) + reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].y;
-                    ulong spvCandidateRecordAddress = (&spvTraceData)->hitTableAddress + ulong(spvCandidateRecordIndex) * spvRayState.hitStride;
+                    uint spvCandidateRecordIndex = spvRayQuery.get_candidate_geometry_id() * (spvTraceRaySBTStride & 15u) + (spvTraceRaySBTOffset & 15u) + reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].y;
+                    ulong spvCandidateRecordAddress = spvTraceData.data.hitTableAddress + ulong(spvCandidateRecordIndex) * spvRayState.hitStride;
                     spvRayContext.shaderRecordIndex = spvCandidateRecordIndex;
                     uint spvCandidateHandle = reinterpret_cast<device const uint*>(spvCandidateRecordAddress)[2];
                     spvRayContext.candidateNonOpaque = spvRayQuery.is_candidate_non_opaque_bounding_box();
@@ -230,20 +246,20 @@ kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<fl
             spvRayContext.rayTmax = spvRayContext.traceRayTmax;
             if (spvRayState.missAddress != 0)
             {
-                ulong spvRecordAddress = spvRayState.missAddress + ulong((0u & 65535u)) * spvRayState.missStride;
-                spvRayContext.shaderRecordIndex = (0u & 65535u);
+                ulong spvRecordAddress = spvRayState.missAddress + ulong((spvTraceRayMissIndex & 65535u)) * spvRayState.missStride;
+                spvRayContext.shaderRecordIndex = (spvTraceRayMissIndex & 65535u);
                 uint spvMissHandle = *reinterpret_cast<device const uint*>(spvRecordAddress);
                 if (spvMissHandle != 0)
                     spvRayState.functions[spvMissHandle](&spvTraceData, spvRayContext, spvRayAction, spvRayState);
             }
         }
-        else if ((1u & 8u) == 0 && spvRayState.hitStride != 0)
+        else if ((spvTraceRayFlags & 8u) == 0 && spvRayState.hitSize != 0)
         {
             spvRayContext.objectRayOrigin = spvRayQuery.get_committed_ray_origin();
             spvRayContext.objectRayDirection = spvRayQuery.get_committed_ray_direction();
             spvRayContext.rayTmax = spvRayQuery.get_committed_distance();
             spvRayContext.instanceId = spvRayQuery.get_committed_instance_id();
-            spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].x;
+            spvRayContext.instanceCustomIndex = reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].x;
             spvRayContext.objectToWorld = spvRayQuery.get_committed_object_to_world_transform();
             spvRayContext.worldToObject = spvRayQuery.get_committed_world_to_object_transform();
             if (spvRayQuery.get_committed_intersection_type() == intersection_type::triangle)
@@ -258,22 +274,21 @@ kernel void main0(device const uint2* as_mvkMetadata [[buffer(1)]], texture2d<fl
             }
             spvRayContext.geometryIndex = spvRayQuery.get_committed_geometry_id();
             spvRayContext.primitiveId = spvRayQuery.get_committed_primitive_id();
-            uint spvRecordIndex = spvRayQuery.get_committed_geometry_id() * (0u & 15u) + (0u & 15u) + reinterpret_cast<device const uint2*>((&spvTraceData)->instanceMetadataAddress)[spvRayContext.instanceId].y;
-            ulong spvRecordAddress = (&spvTraceData)->hitTableAddress + ulong(spvRecordIndex) * spvRayState.hitStride;
+            uint spvRecordIndex = spvRayQuery.get_committed_geometry_id() * (spvTraceRaySBTStride & 15u) + (spvTraceRaySBTOffset & 15u) + reinterpret_cast<device const uint2*>(spvTraceData.data.instanceMetadataAddress)[spvRayContext.instanceId].y;
+            ulong spvRecordAddress = spvTraceData.data.hitTableAddress + ulong(spvRecordIndex) * spvRayState.hitStride;
             spvRayContext.shaderRecordIndex = spvRecordIndex;
             uint spvRecordHandle = *reinterpret_cast<device const uint*>(spvRecordAddress);
             if (spvRecordHandle != 0)
                 spvRayState.functions[spvRecordHandle](&spvTraceData, spvRayContext, spvRayAction, spvRayState);
         }
-        payload = *reinterpret_cast<thread float4*>(&spvTraceData.payload);
+        payload = spvTraceData.payload;
     }
     {
         ulong spvCallableRecordAddress = spvRayState.callableAddress + ulong(0u) * spvRayState.callableStride;
         ulong spvCallableShaderRecordAddress = spvCallableRecordAddress + 32;
-        spvCallableData spvCallableDataValue_13 = {};
-        *reinterpret_cast<thread float*>(&spvCallableDataValue_13) = blend;
-        spvRayState.callables[*reinterpret_cast<device const uint*>(spvCallableRecordAddress)](*reinterpret_cast<thread uint*>(&spvCallableDataValue_13), spvCallableShaderRecordAddress, spvRayState);
-        blend = *reinterpret_cast<thread float*>(&spvCallableDataValue_13);
+        float spvCallableDataValue_13 = blend;
+        spvRayState.callables[*reinterpret_cast<device const uint*>(spvCallableRecordAddress)](reinterpret_cast<thread void*>(&spvCallableDataValue_13), spvCallableShaderRecordAddress, spvRayState);
+        blend = spvCallableDataValue_13;
     }
     image.write(payload + float4(blend), uint2(int2(gl_LaunchIDNV.xy)));
 }

@@ -1,0 +1,74 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpExtension "SPV_KHR_ray_query"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %scene0 %scene1 %query %outputData
+               OpExecutionMode %main LocalSize 1 1 1
+               OpDecorate %scene0 DescriptorSet 0
+               OpDecorate %scene0 Binding 0
+               OpDecorate %scene1 DescriptorSet 0
+               OpDecorate %scene1 Binding 1
+               OpDecorate %Output Block
+               OpMemberDecorate %Output 0 Offset 0
+               OpDecorate %outputData DescriptorSet 1
+               OpDecorate %outputData Binding 0
+
+       %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+         %as = OpTypeAccelerationStructureKHR
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+   %uint_255 = OpConstant %uint 255
+  %choose_fn = OpTypeFunction %as
+ %ptr_uc_as = OpTypePointer UniformConstant %as
+     %scene0 = OpVariable %ptr_uc_as UniformConstant
+     %scene1 = OpVariable %ptr_uc_as UniformConstant
+    %query_t = OpTypeRayQueryKHR
+%ptr_private_query = OpTypePointer Private %query_t
+      %query = OpVariable %ptr_private_query Private
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+    %float_0 = OpConstant %float 0
+   %float_n1 = OpConstant %float -1
+  %float_100 = OpConstant %float 100
+       %zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+        %dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+       %bool = OpTypeBool
+     %Output = OpTypeStruct %uint
+%ptr_ssbo_output = OpTypePointer StorageBuffer %Output
+ %outputData = OpVariable %ptr_ssbo_output StorageBuffer
+%ptr_ssbo_uint = OpTypePointer StorageBuffer %uint
+
+       %main = OpFunction %void None %void_fn
+ %main_entry = OpLabel
+      %scene = OpFunctionCall %as %choose
+               OpRayQueryInitializeKHR %query %scene %uint_0 %uint_255 %zero %float_0 %dir %float_100
+   %proceeded = OpRayQueryProceedKHR %bool %query
+      %value = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %uint %query %uint_0
+    %out_ptr = OpAccessChain %ptr_ssbo_uint %outputData %uint_0
+               OpStore %out_ptr %value
+               OpReturn
+               OpFunctionEnd
+
+     %choose = OpFunction %as None %choose_fn
+%choose_entry = OpLabel
+         %s0 = OpLoad %as %scene0
+         %s1 = OpLoad %as %scene1
+               OpBranch %loop_header
+%loop_header = OpLabel
+          %a = OpPhi %as %s0 %choose_entry %b %continue
+          %b = OpPhi %as %s1 %choose_entry %copy_a %continue
+          %i = OpPhi %uint %uint_0 %choose_entry %next_i %continue
+       %more = OpULessThan %bool %i %uint_1
+               OpLoopMerge %loop_merge %continue None
+               OpBranchConditional %more %body %loop_merge
+       %body = OpLabel
+               OpBranch %continue
+   %continue = OpLabel
+     %copy_a = OpCopyObject %as %a
+     %next_i = OpIAdd %uint %i %uint_1
+               OpBranch %loop_header
+ %loop_merge = OpLabel
+               OpReturnValue %b
+               OpFunctionEnd

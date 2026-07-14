@@ -1,0 +1,34 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT scene;
+layout(set = 0, binding = 1, std430) readonly buffer Params
+{
+    uvec4 control;
+    uint missIndex;
+    vec3 origin;
+    float minimumDistance;
+    vec3 direction;
+    float maximumDistance;
+} params;
+layout(set = 0, binding = 2, std430) buffer Output
+{
+    vec4 value;
+} outputData;
+layout(location = 0) rayPayloadEXT vec4 payload;
+
+void main()
+{
+    uint flags = params.control.x;
+    uint mask = params.control.y;
+    uint offset = params.control.z;
+    uint stride = params.control.w;
+    uint missIndex = params.missIndex;
+    vec3 origin = params.origin;
+    float minimumDistance = params.minimumDistance;
+    vec3 direction = params.direction;
+    float maximumDistance = params.maximumDistance;
+    payload = vec4(0.0);
+    traceRayEXT(scene, flags, mask, offset, stride, missIndex, origin, minimumDistance, direction, maximumDistance, 0);
+    outputData.value = payload;
+}

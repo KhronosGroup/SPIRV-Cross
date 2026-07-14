@@ -1,0 +1,83 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpExtension "SPV_KHR_ray_query"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %scene0 %scene1 %selector %query %outputData
+               OpExecutionMode %main LocalSize 1 1 1
+               OpDecorate %scene0 DescriptorSet 0
+               OpDecorate %scene0 Binding 0
+               OpDecorate %scene1 DescriptorSet 0
+               OpDecorate %scene1 Binding 1
+               OpDecorate %Selector Block
+               OpMemberDecorate %Selector 0 Offset 0
+               OpDecorate %selector DescriptorSet 0
+               OpDecorate %selector Binding 2
+               OpDecorate %Output Block
+               OpMemberDecorate %Output 0 Offset 0
+               OpDecorate %outputData DescriptorSet 1
+               OpDecorate %outputData Binding 0
+
+       %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+         %as = OpTypeAccelerationStructureKHR
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+   %uint_255 = OpConstant %uint 255
+  %choose_fn = OpTypeFunction %as %uint
+ %ptr_uc_as = OpTypePointer UniformConstant %as
+     %scene0 = OpVariable %ptr_uc_as UniformConstant
+     %scene1 = OpVariable %ptr_uc_as UniformConstant
+   %Selector = OpTypeStruct %uint
+%ptr_uniform_selector = OpTypePointer Uniform %Selector
+   %selector = OpVariable %ptr_uniform_selector Uniform
+%ptr_uniform_uint = OpTypePointer Uniform %uint
+    %query_t = OpTypeRayQueryKHR
+%ptr_private_query = OpTypePointer Private %query_t
+      %query = OpVariable %ptr_private_query Private
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+    %float_0 = OpConstant %float 0
+   %float_n1 = OpConstant %float -1
+  %float_100 = OpConstant %float 100
+       %zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+        %dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+       %bool = OpTypeBool
+     %Output = OpTypeStruct %uint
+%ptr_ssbo_output = OpTypePointer StorageBuffer %Output
+ %outputData = OpVariable %ptr_ssbo_output StorageBuffer
+%ptr_ssbo_uint = OpTypePointer StorageBuffer %uint
+
+       %main = OpFunction %void None %void_fn
+ %main_entry = OpLabel
+%selector_ptr = OpAccessChain %ptr_uniform_uint %selector %uint_0
+ %selector_v = OpLoad %uint %selector_ptr
+      %scene = OpFunctionCall %as %choose %selector_v
+               OpRayQueryInitializeKHR %query %scene %uint_0 %uint_255 %zero %float_0 %dir %float_100
+   %proceeded = OpRayQueryProceedKHR %bool %query
+      %value = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %uint %query %uint_0
+    %out_ptr = OpAccessChain %ptr_ssbo_uint %outputData %uint_0
+               OpStore %out_ptr %value
+               OpReturn
+               OpFunctionEnd
+
+     %choose = OpFunction %as None %choose_fn
+      %count = OpFunctionParameter %uint
+%choose_entry = OpLabel
+         %s0 = OpLoad %as %scene0
+         %s1 = OpLoad %as %scene1
+               OpBranch %loop_header
+%loop_header = OpLabel
+     %result = OpPhi %as %s0 %choose_entry %s1 %continue
+          %i = OpPhi %uint %uint_0 %choose_entry %next_i %continue
+       %more = OpULessThan %bool %i %count
+               OpLoopMerge %loop_merge %continue None
+               OpBranchConditional %more %body %loop_merge
+       %body = OpLabel
+               OpBranch %continue
+   %continue = OpLabel
+     %next_i = OpIAdd %uint %i %uint_1
+               OpBranch %loop_header
+ %loop_merge = OpLabel
+               OpReturnValue %result
+               OpFunctionEnd

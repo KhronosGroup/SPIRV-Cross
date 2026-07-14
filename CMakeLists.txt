@@ -255,7 +255,7 @@ set(spirv-cross-util-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_util.hpp)
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 68)
+set(spirv-cross-abi-minor 69)
 set(spirv-cross-abi-patch 0)
 set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
 
@@ -523,6 +523,33 @@ if (SPIRV_CROSS_CLI)
 
 		if (${PYTHONINTERP_FOUND} AND SPIRV_CROSS_ENABLE_TESTS)
 			if (${PYTHON_VERSION_MAJOR} GREATER 2)
+				set(spirv-cross-msl-ray-tracing-test-spirv)
+				foreach(shader resource_array multiway_phi array_return fixed_array multidimensional_array loop_phi
+				               array_loop_phi phi_copy_swap phi_extract_snapshot composite_insert copy_logical
+				               native_array_return_noargs multi_entry multidimensional_resource)
+					set(source ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ray_tracing_${shader}.spvasm)
+					set(output ${CMAKE_CURRENT_BINARY_DIR}/tests-other/msl_ray_tracing_${shader}.spv)
+					if(shader STREQUAL multidimensional_resource)
+						set(target_env spv1.4)
+					else()
+						set(target_env vulkan1.1spv1.4)
+					endif()
+					add_custom_command(OUTPUT ${output}
+							COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/tests-other
+							COMMAND ${spirv-cross-spirv-as} --target-env ${target_env} -o ${output} ${source}
+							COMMAND ${spirv-cross-spirv-val} --target-env ${target_env} ${output}
+							DEPENDS ${source})
+					list(APPEND spirv-cross-msl-ray-tracing-test-spirv ${output})
+				endforeach()
+				add_custom_target(spirv-cross-msl-ray-tracing-test-spirv-target
+						DEPENDS ${spirv-cross-msl-ray-tracing-test-spirv})
+				add_executable(spirv-cross-msl-ray-tracing-resource-array-test
+						tests-other/msl_ray_tracing_resource_array.cpp)
+				add_dependencies(spirv-cross-msl-ray-tracing-resource-array-test
+						spirv-cross-msl-ray-tracing-test-spirv-target)
+				target_link_libraries(spirv-cross-msl-ray-tracing-resource-array-test spirv-cross-c)
+				set_target_properties(spirv-cross-msl-ray-tracing-resource-array-test
+						PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 				add_executable(spirv-cross-c-api-test tests-other/c_api_test.c)
 				target_link_libraries(spirv-cross-c-api-test spirv-cross-c)
 				set_target_properties(spirv-cross-c-api-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
@@ -567,6 +594,9 @@ if (SPIRV_CROSS_CLI)
 						${spirv-cross-abi-major}
 						${spirv-cross-abi-minor}
 						${spirv-cross-abi-patch})
+				add_test(NAME spirv-cross-msl-ray-tracing-resource-array-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-ray-tracing-resource-array-test>
+						${spirv-cross-msl-ray-tracing-test-spirv})
 				add_test(NAME spirv-cross-small-vector-test
 						COMMAND $<TARGET_FILE:spirv-cross-small-vector-test>)
 				add_test(NAME spirv-cross-msl-constexpr-test

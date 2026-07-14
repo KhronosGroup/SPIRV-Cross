@@ -1,0 +1,42 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpExtension "SPV_KHR_ray_query"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %scenes %query
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %scenes "scenes"
+               OpDecorate %scenes DescriptorSet 0
+               OpDecorate %scenes Binding 0
+
+       %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+         %as = OpTypeAccelerationStructureKHR
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_2 = OpConstant %uint 2
+   %uint_255 = OpConstant %uint 255
+     %inner = OpTypeArray %as %uint_2
+     %outer = OpTypeArray %inner %uint_2
+%ptr_uc_outer = OpTypePointer UniformConstant %outer
+  %ptr_uc_as = OpTypePointer UniformConstant %as
+     %scenes = OpVariable %ptr_uc_outer UniformConstant
+    %query_t = OpTypeRayQueryKHR
+%ptr_private_query = OpTypePointer Private %query_t
+      %query = OpVariable %ptr_private_query Private
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+    %float_0 = OpConstant %float 0
+   %float_n1 = OpConstant %float -1
+  %float_100 = OpConstant %float 100
+       %zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+        %dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+
+       %main = OpFunction %void None %void_fn
+ %main_entry = OpLabel
+  %scene_ptr = OpAccessChain %ptr_uc_as %scenes %uint_1 %uint_0
+%scene_value = OpLoad %as %scene_ptr
+               OpRayQueryInitializeKHR %query %scene_value %uint_0 %uint_255 %zero %float_0 %dir %float_100
+     %record = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %uint %query %uint_0
+               OpReturn
+               OpFunctionEnd

@@ -45,16 +45,16 @@ struct Params
     float thit;
 };
 
-kernel void main0(device const uint2* AS0_mvkMetadata [[buffer(3)]], device const uint2* AS1_mvkMetadata [[buffer(4)]], constant Params& _18 [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> AS0 [[buffer(0)]], raytracing::acceleration_structure<raytracing::instancing> AS1 [[buffer(2)]])
+kernel void main0(device const uint2* AS0_spvRayMetadata [[buffer(3)]], device const uint2* AS1_spvRayMetadata [[buffer(4)]], constant Params& _18 [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> AS0 [[buffer(0)]], raytracing::acceleration_structure<raytracing::instancing> AS1 [[buffer(2)]])
 {
-    ulong spvRayQueryMetadataAddress_44[2] = {};
-    ulong spvRayQueryMetadataAddress_8 = {};
+    device const uint2* spvRayQueryMetadataAddress_44[2] = {};
+    device const uint2* spvRayQueryMetadataAddress_8 = {};
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
-    spvRayQueryMetadataAddress_8 = reinterpret_cast<ulong>(AS0_mvkMetadata);
-    q.reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, (_18.cull_mask & 255u), spvMakeIntersectionParams(_18.ray_flags));
+    spvRayQueryMetadataAddress_8 = AS0_spvRayMetadata;
+    q.reset(::metal::raytracing::ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, (_18.cull_mask & 255u), spvMakeIntersectionParams(_18.ray_flags));
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q2[2];
-    spvRayQueryMetadataAddress_44[1] = reinterpret_cast<ulong>(AS1_mvkMetadata);
-    q2[1].reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, (_18.cull_mask & 255u), spvMakeIntersectionParams(_18.ray_flags));
+    spvRayQueryMetadataAddress_44[1] = AS1_spvRayMetadata;
+    q2[1].reset(::metal::raytracing::ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, (_18.cull_mask & 255u), spvMakeIntersectionParams(_18.ray_flags));
     bool _63 = q.next();
     bool res = _63;
     q2[0].abort();
@@ -80,7 +80,7 @@ kernel void main0(device const uint2* AS0_mvkMetadata [[buffer(3)]], device cons
     int ival = _92;
     int _94 = q2[0].get_candidate_instance_id();
     ival = _94;
-    uint _95 = reinterpret_cast<device const uint2*>(spvRayQueryMetadataAddress_8)[q.get_committed_instance_id()].y;
+    uint _95 = spvRayQueryMetadataAddress_8[q.get_committed_instance_id()].y;
     type = _95;
     int _97 = q2[1].get_candidate_geometry_id();
     ival = _97;

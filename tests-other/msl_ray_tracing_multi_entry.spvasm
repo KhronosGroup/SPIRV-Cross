@@ -1,0 +1,129 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpCapability RayQueryPositionFetchKHR
+               OpCapability RayTracingClusterAccelerationStructureNV
+               OpCapability RayTracingSpheresGeometryNV
+               OpCapability RayTracingLinearSweptSpheresGeometryNV
+               OpExtension "SPV_KHR_ray_query"
+               OpExtension "SPV_KHR_ray_tracing_position_fetch"
+               OpExtension "SPV_NV_cluster_acceleration_structure"
+               OpExtension "SPV_NV_linear_swept_spheres"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %plain "plain"
+               OpEntryPoint GLCompute %ray "ray" %scene %query
+               OpEntryPoint GLCompute %triangle_positions "triangle_positions" %query
+               OpEntryPoint GLCompute %cluster_id "cluster_id" %query
+               OpEntryPoint GLCompute %sphere_position "sphere_position" %query
+               OpEntryPoint GLCompute %sphere_radius "sphere_radius" %query
+               OpEntryPoint GLCompute %lss_positions "lss_positions" %query
+               OpEntryPoint GLCompute %lss_radii "lss_radii" %query
+               OpEntryPoint GLCompute %lss_hit_value "lss_hit_value" %query
+               OpEntryPoint GLCompute %is_sphere_hit "is_sphere_hit" %query
+               OpEntryPoint GLCompute %is_lss_hit "is_lss_hit" %query
+               OpExecutionMode %plain LocalSize 1 1 1
+               OpExecutionMode %ray LocalSize 1 1 1
+               OpExecutionMode %triangle_positions LocalSize 1 1 1
+               OpExecutionMode %cluster_id LocalSize 1 1 1
+               OpExecutionMode %sphere_position LocalSize 1 1 1
+               OpExecutionMode %sphere_radius LocalSize 1 1 1
+               OpExecutionMode %lss_positions LocalSize 1 1 1
+               OpExecutionMode %lss_radii LocalSize 1 1 1
+               OpExecutionMode %lss_hit_value LocalSize 1 1 1
+               OpExecutionMode %is_sphere_hit LocalSize 1 1 1
+               OpExecutionMode %is_lss_hit LocalSize 1 1 1
+               OpName %plain "plain"
+               OpName %ray "ray"
+               OpDecorate %scene DescriptorSet 0
+               OpDecorate %scene Binding 0
+
+       %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+         %as = OpTypeAccelerationStructureKHR
+  %ptr_uc_as = OpTypePointer UniformConstant %as
+      %scene = OpVariable %ptr_uc_as UniformConstant
+    %query_t = OpTypeRayQueryKHR
+%ptr_private_query = OpTypePointer Private %query_t
+      %query = OpVariable %ptr_private_query Private
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+   %uint_255 = OpConstant %uint 255
+        %int = OpTypeInt 32 1
+       %bool = OpTypeBool
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+%arr_v3float_2 = OpTypeArray %v3float %uint_2
+%arr_v3float_3 = OpTypeArray %v3float %uint_3
+%arr_float_2 = OpTypeArray %float %uint_2
+    %float_0 = OpConstant %float 0
+   %float_n1 = OpConstant %float -1
+  %float_100 = OpConstant %float 100
+       %zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+        %dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+
+      %plain = OpFunction %void None %void_fn
+%plain_entry = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+        %ray = OpFunction %void None %void_fn
+  %ray_entry = OpLabel
+%scene_value = OpLoad %as %scene
+               OpRayQueryInitializeKHR %query %scene_value %uint_0 %uint_255 %zero %float_0 %dir %float_100
+               OpReturn
+               OpFunctionEnd
+
+%triangle_positions = OpFunction %void None %void_fn
+%triangle_positions_entry = OpLabel
+%triangle_positions_value = OpRayQueryGetIntersectionTriangleVertexPositionsKHR %arr_v3float_3 %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%cluster_id = OpFunction %void None %void_fn
+%cluster_id_entry = OpLabel
+%cluster_id_value = OpRayQueryGetIntersectionClusterIdNV %int %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%sphere_position = OpFunction %void None %void_fn
+%sphere_position_entry = OpLabel
+%sphere_position_value = OpRayQueryGetIntersectionSpherePositionNV %v3float %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%sphere_radius = OpFunction %void None %void_fn
+%sphere_radius_entry = OpLabel
+%sphere_radius_value = OpRayQueryGetIntersectionSphereRadiusNV %float %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%lss_positions = OpFunction %void None %void_fn
+%lss_positions_entry = OpLabel
+%lss_positions_value = OpRayQueryGetIntersectionLSSPositionsNV %arr_v3float_2 %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%lss_radii = OpFunction %void None %void_fn
+%lss_radii_entry = OpLabel
+%lss_radii_value = OpRayQueryGetIntersectionLSSRadiiNV %arr_float_2 %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%lss_hit_value = OpFunction %void None %void_fn
+%lss_hit_value_entry = OpLabel
+%lss_hit_value_result = OpRayQueryGetIntersectionLSSHitValueNV %float %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%is_sphere_hit = OpFunction %void None %void_fn
+%is_sphere_hit_entry = OpLabel
+%is_sphere_hit_value = OpRayQueryIsSphereHitNV %bool %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%is_lss_hit = OpFunction %void None %void_fn
+%is_lss_hit_entry = OpLabel
+%is_lss_hit_value = OpRayQueryIsLSSHitNV %bool %query %uint_0
+               OpReturn
+               OpFunctionEnd

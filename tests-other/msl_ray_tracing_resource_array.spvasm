@@ -1,0 +1,118 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpCapability ShaderNonUniform
+               OpCapability RuntimeDescriptorArray
+               OpExtension "SPV_EXT_descriptor_indexing"
+               OpExtension "SPV_KHR_ray_query"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %2 "main" %3 %4 %5 %6
+               OpExecutionMode %2 LocalSize 1 1 1
+               OpSource GLSL 460
+               OpSourceExtension "GL_EXT_nonuniform_qualifier"
+               OpSourceExtension "GL_EXT_ray_query"
+               OpName %2 "main"
+               OpName %7 "getTlas("
+               OpName %8 "queryTlas("
+               OpName %9 "nestedQuery("
+               OpName %3 "tlasArray"
+               OpName %10 "Params"
+               OpMemberName %10 0 "index"
+               OpName %4 "params"
+               OpName %5 "query"
+               OpName %11 "Output"
+               OpMemberName %11 0 "value"
+               OpName %6 "outputData"
+               OpDecorate %3 Binding 0
+               OpDecorate %3 DescriptorSet 0
+               OpDecorate %10 Block
+               OpMemberDecorate %10 0 Offset 0
+               OpDecorate %4 Binding 0
+               OpDecorate %4 DescriptorSet 1
+               OpDecorate %12 NonUniform
+               OpDecorate %13 NonUniform
+               OpDecorate %14 NonUniform
+               OpDecorate %11 Block
+               OpMemberDecorate %11 0 Offset 0
+               OpDecorate %6 Binding 0
+               OpDecorate %6 DescriptorSet 2
+               OpDecorate %15 BuiltIn WorkgroupSize
+         %16 = OpTypeVoid
+         %17 = OpTypeFunction %16
+         %18 = OpTypeAccelerationStructureKHR
+         %19 = OpTypeFunction %18
+         %20 = OpTypeInt 32 0
+         %21 = OpTypeFunction %20
+         %22 = OpTypeRuntimeArray %18
+         %23 = OpTypePointer UniformConstant %22
+         %24 = OpTypeFunction %20 %23
+          %3 = OpVariable %23 UniformConstant
+         %10 = OpTypeStruct %20
+         %25 = OpTypePointer Uniform %10
+          %4 = OpVariable %25 Uniform
+         %26 = OpTypeInt 32 1
+         %27 = OpConstant %26 0
+         %28 = OpTypePointer Uniform %20
+         %29 = OpTypePointer UniformConstant %18
+         %30 = OpTypeRayQueryKHR
+         %31 = OpTypePointer Private %30
+          %5 = OpVariable %31 Private
+         %32 = OpConstant %20 0
+         %33 = OpConstant %20 255
+         %34 = OpTypeFloat 32
+         %35 = OpTypeVector %34 3
+         %36 = OpConstant %34 0
+         %37 = OpConstantComposite %35 %36 %36 %36
+         %38 = OpConstant %34 -1
+         %39 = OpConstantComposite %35 %36 %36 %38
+         %40 = OpConstant %34 100
+         %41 = OpTypeBool
+         %42 = OpConstantFalse %41
+         %11 = OpTypeStruct %20
+         %43 = OpTypePointer StorageBuffer %11
+          %6 = OpVariable %43 StorageBuffer
+         %44 = OpTypePointer StorageBuffer %20
+         %45 = OpTypeVector %20 3
+         %46 = OpConstant %20 1
+         %15 = OpConstantComposite %45 %46 %46 %46
+          %2 = OpFunction %16 None %17
+         %47 = OpLabel
+         %48 = OpFunctionCall %20 %49 %3
+         %50 = OpAccessChain %44 %6 %27
+               OpStore %50 %48
+               OpReturn
+               OpFunctionEnd
+          %7 = OpFunction %18 None %19
+         %51 = OpLabel
+         %52 = OpAccessChain %28 %4 %27
+         %53 = OpLoad %20 %52
+         %12 = OpCopyObject %20 %53
+         %13 = OpAccessChain %29 %3 %12
+         %14 = OpLoad %18 %13
+               OpReturnValue %14
+               OpFunctionEnd
+          %8 = OpFunction %20 None %21
+         %54 = OpLabel
+         %55 = OpFunctionCall %18 %7
+               OpRayQueryInitializeKHR %5 %55 %32 %33 %37 %36 %39 %40
+         %56 = OpRayQueryProceedKHR %41 %5
+         %57 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %20 %5 %27
+               OpReturnValue %57
+               OpFunctionEnd
+          %9 = OpFunction %20 None %21
+         %58 = OpLabel
+         %59 = OpFunctionCall %20 %8
+               OpReturnValue %59
+               OpFunctionEnd
+         %49 = OpFunction %20 None %24
+         %60 = OpFunctionParameter %23
+         %61 = OpLabel
+         %62 = OpAccessChain %28 %4 %27
+         %63 = OpLoad %20 %62
+         %64 = OpAccessChain %29 %60 %63
+         %65 = OpLoad %18 %64
+               OpRayQueryInitializeKHR %5 %65 %32 %33 %37 %36 %39 %40
+         %66 = OpRayQueryProceedKHR %41 %5
+         %67 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %20 %5 %27
+               OpReturnValue %67
+               OpFunctionEnd

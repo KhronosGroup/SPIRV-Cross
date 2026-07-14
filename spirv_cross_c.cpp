@@ -783,6 +783,42 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_FORCE_FRAGMENT_WITH_SIDE_EFFECTS_EXECUTION:
 		options->msl.force_fragment_with_side_effects_execution = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE_EMULATION:
+		options->msl.enable_ray_tracing_pipeline_emulation = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_INTERSECTION_BUFFER_INDEX:
+		options->msl.ray_tracing_intersection_buffer_index = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_CALLABLE_BUFFER_INDEX:
+		options->msl.ray_tracing_callable_buffer_index = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RECURSIVE_FUNCTION_BUFFER_INDEX:
+		options->msl.ray_tracing_recursive_function_buffer_index = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RECURSIVE_INTERSECTION_BUFFER_INDEX:
+		options->msl.ray_tracing_recursive_intersection_buffer_index = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_INSTANCE_METADATA_BUFFER_INDEX:
+		options->msl.ray_tracing_instance_metadata_buffer_index = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_STAGE_DEPTH:
+		options->msl.ray_tracing_stage_depth = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_RAYGEN_VISIBLE:
+		options->msl.ray_tracing_raygen_visible = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX:
+		options->msl.ray_tracing_acceleration_structure_address_table_buffer_index = value;
+		break;
 #endif
 
 	default:
@@ -1170,6 +1206,23 @@ spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler)
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
 	return msl.needs_buffer_size_buffer() ? SPVC_TRUE : SPVC_FALSE;
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_FALSE;
+#endif
+}
+
+spvc_bool spvc_compiler_msl_needs_acceleration_structure_address_table(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_FALSE;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	return msl.needs_acceleration_structure_address_table() ? SPVC_TRUE : SPVC_FALSE;
 #else
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
 	return SPVC_FALSE;
