@@ -9497,28 +9497,28 @@ void CompilerMSL::validate_cooperative_matrix_types()
 		if (type.op != OpTypeCooperativeMatrixKHR)
 			return;
 
-		auto *comp = maybe_get<SPIRType>(type.parent_type);
+		auto *comp = this->maybe_get<SPIRType>(type.parent_type);
 		if (comp && comp->basetype != SPIRType::Float && comp->basetype != SPIRType::Half &&
 		    comp->basetype != SPIRType::BFloat16)
 			SPIRV_CROSS_THROW("MSL cooperative matrices only support float16, float32, and bfloat16 component types. "
 			                  "Integer component types are not supported.");
 
-		if (auto *scope = maybe_get<SPIRConstant>(type.ext.cooperative.scope_id))
+		if (auto *scope = this->maybe_get<SPIRConstant>(type.ext.cooperative.scope_id))
 		{
-			if (scope->scalar() != ScopeSubgroup)
-				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
 			if (scope->specialization)
 				SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
+			if (scope->scalar() != ScopeSubgroup)
+				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
 		}
 
-		auto *rows_c = maybe_get<SPIRConstant>(type.ext.cooperative.rows_id);
-		auto *cols_c = maybe_get<SPIRConstant>(type.ext.cooperative.columns_id);
+		auto *rows_c = this->maybe_get<SPIRConstant>(type.ext.cooperative.rows_id);
+		auto *cols_c = this->maybe_get<SPIRConstant>(type.ext.cooperative.columns_id);
 		if (rows_c && cols_c)
 		{
-			if (rows_c->scalar() != 8 || cols_c->scalar() != 8)
-				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
 			if (rows_c->specialization || cols_c->specialization)
 				SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
+			if (rows_c->scalar() != 8 || cols_c->scalar() != 8)
+				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
 		}
 	});
 }
