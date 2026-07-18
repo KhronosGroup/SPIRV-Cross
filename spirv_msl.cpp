@@ -2061,11 +2061,18 @@ void CompilerMSL::preprocess_op_codes()
 	ir.for_each_typed_id<SPIRVariable>(
 	    [&](uint32_t, SPIRVariable &var)
 	    { uses_shader_record_buffer = uses_shader_record_buffer || var.storage == StorageClassShaderRecordBufferKHR; });
+	bool uses_hit_triangle_vertex_positions = active_input_builtins.get(BuiltInHitTriangleVertexPositionsKHR);
+	uses_ray_position_fetch = uses_ray_position_fetch || uses_hit_triangle_vertex_positions;
+	if (uses_hit_triangle_vertex_positions && get_execution_model() != ExecutionModelAnyHitKHR &&
+	    get_execution_model() != ExecutionModelClosestHitKHR)
+		SPIRV_CROSS_THROW("HitTriangleVertexPositionsKHR is only supported in any-hit and closest-hit shaders.");
 	bool uses_ray_tracing_pipeline = uses_ray_tracing_pipeline_emulation();
 	if (uses_ray_tracing_pipeline && !msl_options.enable_ray_tracing_pipeline_emulation)
 		SPIRV_CROSS_THROW("Set enable_ray_tracing_pipeline_emulation to true to compile ray tracing pipelines.");
 	if (preproc.uses_ray_query && !msl_options.supports_msl_version(2, 4))
 		SPIRV_CROSS_THROW("Ray queries require MSL 2.4 or later.");
+	if (uses_ray_position_fetch && !msl_options.supports_msl_version(3, 0))
+		SPIRV_CROSS_THROW("Ray tracing position fetch requires MSL 3.0 or later.");
 	if (uses_ray_tracing_pipeline && !msl_options.supports_msl_version(2, 4))
 		SPIRV_CROSS_THROW("Ray tracing pipelines require MSL 2.4 or later.");
 	if (uses_ray_tracing_address_conversion && !msl_options.supports_msl_version(3, 1))
@@ -2074,40 +2081,70 @@ void CompilerMSL::preprocess_op_codes()
 	                            find(get_declared_capabilities().begin(), get_declared_capabilities().end(),
 	                                 CapabilityRayTracingKHR) != get_declared_capabilities().end() &&
 	                            (get_execution_model() != ExecutionModelRayGenerationKHR || needs_raygen_state());
+	if (uses_ray_position_fetch)
+	{
+		add_typedef_line("struct spvRayTrianglePositions\n"
+		                 "{\n"
+		                 "    packed_float3 positions[3];\n"
+		                 "};");
+	}
 	if (declares_ray_tracing)
 	{
 		add_typedef_line("struct spvRayHitAttribute\n"
 		                 "{\n"
 		                 "    ulong4 data;\n"
 		                 "};");
-		add_typedef_line("struct spvRayTracingContext\n"
-		                 "{\n"
-		                 "    uint3 launchId;\n"
-		                 "    uint3 launchSize;\n"
-		                 "    float3 worldRayOrigin;\n"
-		                 "    float3 worldRayDirection;\n"
-		                 "    float3 objectRayOrigin;\n"
-		                 "    float3 objectRayDirection;\n"
-		                 "    float rayTmin;\n"
-		                 "    float rayTmax;\n"
-		                 "    uint instanceCustomIndex;\n"
-		                 "    uint instanceId;\n"
-		                 "    float4x3 objectToWorld;\n"
-		                 "    float4x3 worldToObject;\n"
-		                 "    spvRayHitAttribute hitAttribute;\n"
-		                 "    uint hitKind;\n"
-		                 "    uint incomingRayFlags;\n"
-		                 "    uint geometryIndex;\n"
-		                 "    uint primitiveId;\n"
-		                 "    uint cullMask;\n"
-		                 "    float traceRayTmax;\n"
-		                 "    float reportedDistance;\n"
-		                 "    spvRayHitAttribute reportedHitAttribute;\n"
-		                 "    uint reportedHitKind;\n"
-		                 "    bool reportAccepted;\n"
-		                 "    bool candidateNonOpaque;\n"
-		                 "    uint shaderRecordIndex;\n"
-		                 "};");
+		string ray_context = "struct spvRayTracingContext\n"
+		                     "{\n"
+		                     "    uint3 launchId;\n"
+		                     "    uint3 launchSize;\n"
+		                     "    float3 worldRayOrigin;\n"
+		                     "    float3 worldRayDirection;\n"
+		                     "    float3 objectRayOrigin;\n"
+		                     "    float3 objectRayDirection;\n"
+		                     "    float rayTmin;\n"
+		                     "    float rayTmax;\n"
+		                     "    uint instanceCustomIndex;\n"
+		                     "    uint instanceId;\n"
+		                     "    float4x3 objectToWorld;\n"
+		                     "    float4x3 worldToObject;\n"
+		                     "    spvRayHitAttribute hitAttribute;\n"
+		                     "    uint hitKind;\n"
+		                     "    uint incomingRayFlags;\n"
+		                     "    uint geometryIndex;\n"
+		                     "    uint primitiveId;\n"
+		                     "    uint cullMask;\n"
+		                     "    float traceRayTmax;\n"
+		                     "    float reportedDistance;\n"
+		                     "    spvRayHitAttribute reportedHitAttribute;\n"
+		                     "    uint reportedHitKind;\n"
+		                     "    bool reportAccepted;\n"
+		                     "    bool candidateNonOpaque;\n"
+		                     "    uint shaderRecordIndex;\n";
+		if (uses_ray_position_fetch_abi())
+			ray_context += "    float3 hitTriangleVertexPositions[3];\n";
+		ray_context += "};";
+		add_typedef_line(ray_context);
+		if (uses_hit_triangle_vertex_positions)
+		{
+			const char *getter = get_execution_model() == ExecutionModelAnyHitKHR ?
+			                         "get_candidate_primitive_data" :
+			                         "get_committed_primitive_data";
+			auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+			entry_func.fixup_hooks_in.push_back(
+			    [this, getter]()
+			    {
+				    statement("if (spvRayContext.hitKind == 0xFEu || spvRayContext.hitKind == 0xFFu)");
+				    begin_scope();
+				    statement("const device spvRayTrianglePositions* spvRayPrimitiveData = reinterpret_cast<const "
+				              "device spvRayTrianglePositions*>(spvRayPipelineQuery.",
+				              getter, "());");
+				    for (uint32_t i = 0; i < 3; i++)
+					    statement("spvRayContext.hitTriangleVertexPositions[", i,
+					              "] = float3(spvRayPrimitiveData->positions[", i, "]);");
+				    end_scope();
+			    });
+		}
 		add_typedef_line("struct spvRayTracingDispatch\n"
 		                 "{\n"
 		                 "    ulong missAddress;\n"
@@ -2159,8 +2196,13 @@ void CompilerMSL::preprocess_op_codes()
 		                 "    spvRayDataStorage data;\n"
 		                 "    T payload;\n"
 		                 "};");
-		add_typedef_line("using spvRayFunctionTable = visible_function_table<void(thread void*, thread "
-		                 "spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;");
+		if (uses_ray_position_fetch_abi())
+			add_typedef_line("using spvRayFunctionTable = visible_function_table<void(thread void*, thread "
+			                 "spvRayTracingContext&, thread uint&, thread spvRayTracingState&, thread "
+			                 "intersection_query<instancing, triangle_data>&)>;");
+		else
+			add_typedef_line("using spvRayFunctionTable = visible_function_table<void(thread void*, thread "
+			                 "spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;");
 		add_typedef_line("using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, "
 		                 "thread spvRayTracingState&)>;");
 		add_typedef_line("struct spvRayTracingState\n"
@@ -3311,6 +3353,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpRayQueryGetIntersectionObjectRayOriginKHR:
 			case OpRayQueryGetIntersectionObjectToWorldKHR:
 			case OpRayQueryGetIntersectionWorldToObjectKHR:
+			case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
 			{
 				// Ray query accesses memory directly, need check pass down object if using Private storage class.
 				uint32_t base_id = ops[2];
@@ -3493,7 +3536,14 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					BuiltIn builtin = BuiltInMax;
 					is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
-					if (is_builtin && has_active_builtin(builtin, var.storage))
+					bool is_ray_tracing_context_builtin =
+					    var.storage == StorageClassInput &&
+					    (get_execution_model() == ExecutionModelMissKHR ||
+					     get_execution_model() == ExecutionModelClosestHitKHR ||
+					     get_execution_model() == ExecutionModelAnyHitKHR ||
+					     get_execution_model() == ExecutionModelIntersectionKHR) &&
+					    ray_tracing_context_field(builtin);
+					if (is_builtin && has_active_builtin(builtin, var.storage) && !is_ray_tracing_context_builtin)
 					{
 						// Add a arg variable with the same type and decorations as the member
 						uint32_t next_ids = ir.increase_bound_by(2);
@@ -3859,6 +3909,8 @@ static const char *ray_tracing_context_field(BuiltIn builtin)
 		return "launchId";
 	case BuiltInLaunchSizeKHR:
 		return "launchSize";
+	case BuiltInHitTriangleVertexPositionsKHR:
+		return "hitTriangleVertexPositions";
 	default:
 		return nullptr;
 	}
@@ -11848,6 +11900,20 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 	case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
+	{
+		flush_variable_declaration(ops[2]);
+		emit_uninitialized_temporary_expression(ops[0], ops[1]);
+		string primitive_data = join("spvRayPrimitiveData_", ops[1]);
+		const char *getter = MSL_RAY_QUERY_IS_CANDIDATE ? "get_candidate_primitive_data" :
+		                                                    "get_committed_primitive_data";
+		statement("const device spvRayTrianglePositions* ", primitive_data,
+		          " = reinterpret_cast<const device spvRayTrianglePositions*>(", to_expression(ops[2]), ".", getter,
+		          "());");
+		for (uint32_t i = 0; i < 3; i++)
+			statement(to_expression(ops[1]), "[", i, "] = float3(", primitive_data, "->positions[", i, "]);");
+		inherit_expression_dependencies(ops[1], ops[2]);
+		break;
+	}
 	case OpRayQueryGetClusterIdNV:
 	case OpRayQueryGetIntersectionSpherePositionNV:
 	case OpRayQueryGetIntersectionSphereRadiusNV:
@@ -11933,10 +11999,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement("spvRayContext.hitKind = ", hit_kind, ";");
 		if (msl_options.ray_tracing_stage_depth)
 			statement("spvRayState.recursiveFunctions[", any_hit_handle,
-			          "](spvRayData, spvRayContext, spvRayAction, spvRayState);");
+			          "](spvRayData, spvRayContext, spvRayAction, spvRayState",
+			          uses_ray_position_fetch_abi() ? ", spvRayPipelineQuery);" : ");");
 		else
 			statement("spvRayState.functions[", any_hit_handle,
-			          "](spvRayData, spvRayContext, spvRayAction, spvRayState);");
+			          "](spvRayData, spvRayContext, spvRayAction, spvRayState",
+			          uses_ray_position_fetch_abi() ? ", spvRayPipelineQuery);" : ");");
 		statement("spvRayContext.rayTmax = ", ray_tmax_saved, ";");
 		statement(to_expression(ops[1]), " = spvRayAction != 1;");
 		end_scope();
@@ -12144,7 +12212,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement("if (spvCandidateAnyHitHandle != 0)");
 		begin_scope();
 		statement(trace_functions, "[spvCandidateAnyHitHandle](&spvTraceData",
-		          ", spvRayContext, spvRayAction, spvRayState);");
+		          ", spvRayContext, spvRayAction, spvRayState",
+		          uses_ray_position_fetch_abi() ? ", spvRayQuery);" : ");");
 		end_scope();
 		statement("if (spvRayAction != 1)");
 		statement("    spvRayQuery.commit_triangle_intersection();");
@@ -12176,7 +12245,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement("spvRayContext.candidateNonOpaque = spvRayQuery.is_candidate_non_opaque_bounding_box();");
 		statement("spvRayAction = 0;");
 		statement(trace_intersections, "[spvCandidateHandle](&spvTraceData",
-		          ", spvRayContext, spvRayAction, spvRayState);");
+		          ", spvRayContext, spvRayAction, spvRayState",
+		          uses_ray_position_fetch_abi() ? ", spvRayQuery);" : ");");
 		statement("if (spvRayContext.reportAccepted)");
 		statement("    spvRayQuery.commit_bounding_box_intersection(spvRayContext.reportedDistance);");
 		statement("if (spvRayAction == 2)");
@@ -12195,7 +12265,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement("uint spvMissHandle = *reinterpret_cast<device const uint*>(spvRecordAddress);");
 		statement("if (spvMissHandle != 0)");
 		statement("    ", trace_functions, "[spvMissHandle](&spvTraceData",
-		          ", spvRayContext, spvRayAction, spvRayState);");
+		          ", spvRayContext, spvRayAction, spvRayState",
+		          uses_ray_position_fetch_abi() ? ", spvRayQuery);" : ");");
 		end_scope();
 		end_scope();
 		statement("else if ((", ray_flags, " & 8u) == 0 && spvRayState.hitSize != 0)");
@@ -12227,7 +12298,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement("uint spvRecordHandle = *reinterpret_cast<device const uint*>(spvRecordAddress);");
 		statement("if (spvRecordHandle != 0)");
 		statement("    ", trace_functions, "[spvRecordHandle](&spvTraceData",
-		          ", spvRayContext, spvRayAction, spvRayState);");
+		          ", spvRayContext, spvRayAction, spvRayState",
+		          uses_ray_position_fetch_abi() ? ", spvRayQuery);" : ");");
 		end_scope();
 		if (native_payload_array)
 			emit_native_array_copy(to_expression(ops[10]), "spvTraceData.payload", payload_data_type, join(ops[10]),
@@ -14169,6 +14241,12 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 					decl += "thread ulong& spvShaderRecordAddress, ";
 			}
 			decl += "thread spvRayTracingState& spvRayState";
+			if (uses_ray_position_fetch_abi() &&
+			    (get_execution_model() == ExecutionModelMissKHR ||
+			     get_execution_model() == ExecutionModelClosestHitKHR ||
+			     get_execution_model() == ExecutionModelAnyHitKHR ||
+			     get_execution_model() == ExecutionModelIntersectionKHR))
+				decl += ", thread intersection_query<instancing, triangle_data>& spvRayPipelineQuery";
 		}
 	}
 
@@ -15395,6 +15473,8 @@ void CompilerMSL::append_global_func_args(const SPIRFunction &func, uint32_t ind
 		arglist.push_back("spvRayContext");
 		arglist.push_back("spvRayAction");
 		arglist.push_back("spvRayState");
+		if (uses_ray_position_fetch_abi())
+			arglist.push_back("spvRayPipelineQuery");
 		break;
 	case ExecutionModelRayGenerationKHR:
 		if (needs_raygen_state())
@@ -16777,6 +16857,12 @@ bool CompilerMSL::uses_ray_tracing_pipeline_emulation() const
 	}
 }
 
+bool CompilerMSL::uses_ray_position_fetch_abi() const
+{
+	return active_input_builtins.get(BuiltInHitTriangleVertexPositionsKHR) ||
+	       msl_options.enable_ray_tracing_position_fetch;
+}
+
 bool CompilerMSL::is_visible_raygen() const
 {
 	return get_execution_model() == ExecutionModelRayGenerationKHR && msl_options.ray_tracing_raygen_visible;
@@ -17121,6 +17207,8 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args += ", ";
 		ep_args += "thread void* spvRayData, thread spvRayTracingContext& spvRayContext, thread uint& spvRayAction, "
 		           "thread spvRayTracingState& spvRayState";
+		if (uses_ray_position_fetch_abi())
+			ep_args += ", thread intersection_query<instancing, triangle_data>& spvRayPipelineQuery";
 	}
 	else if (get_execution_model() == ExecutionModelCallableKHR)
 	{
@@ -20452,10 +20540,11 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (builtin == BuiltInLaunchSizeKHR)
 			return "spvRayState.launchSize";
 	}
-	if (storage == StorageClassInput &&
-	    (get_execution_model() == ExecutionModelMissKHR || get_execution_model() == ExecutionModelClosestHitKHR ||
-	     get_execution_model() == ExecutionModelAnyHitKHR || get_execution_model() == ExecutionModelIntersectionKHR))
+	if (get_execution_model() == ExecutionModelMissKHR || get_execution_model() == ExecutionModelClosestHitKHR ||
+	    get_execution_model() == ExecutionModelAnyHitKHR || get_execution_model() == ExecutionModelIntersectionKHR)
 	{
+		// Built-ins declared on interface-block members can reach this path with the struct type's storage class
+		// rather than StorageClassInput.
 		const char *field = ray_tracing_context_field(builtin);
 		if (field)
 			return join("spvRayContext.", field);
@@ -21494,7 +21583,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpRayQueryGetIntersectionObjectRayOriginKHR:
 	case OpRayQueryGetIntersectionObjectToWorldKHR:
 	case OpRayQueryGetIntersectionWorldToObjectKHR:
-	case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
 	case OpRayQueryGetClusterIdNV:
 	case OpRayQueryGetIntersectionSpherePositionNV:
 	case OpRayQueryGetIntersectionSphereRadiusNV:
@@ -21504,6 +21592,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpRayQueryIsSphereHitNV:
 	case OpRayQueryIsLSSHitNV:
 		uses_ray_query = true;
+		break;
+
+	case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
+		uses_ray_query = true;
+		self.uses_ray_position_fetch = true;
 		break;
 
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:

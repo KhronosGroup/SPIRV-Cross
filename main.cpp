@@ -640,6 +640,7 @@ struct CLIArguments
 	bool set_shader_model = false;
 	bool set_msl_version = false;
 	bool msl_enable_ray_tracing_pipeline_emulation = false;
+	bool msl_enable_ray_tracing_position_fetch = false;
 	bool msl_ray_tracing_raygen_visible = false;
 	bool set_es = false;
 	bool dump_resources = false;
@@ -877,6 +878,8 @@ static void print_help_msl()
 	fprintf(stderr, "\nMSL options:\n"
 	                "\t[--msl-version <MMmmpp>]:\n\t\tUses a specific MSL version, e.g. --msl-version 20100 for MSL 2.1.\n"
 	                "\t[--msl-enable-ray-tracing-pipeline-emulation]:\n\t\tEnable Vulkan ray tracing pipeline emulation. Requires MSL 2.4 or later.\n"
+	                "\t[--msl-enable-ray-tracing-position-fetch]:\n"
+	                "\t\tUse the position-fetch ray-function ABI. Enable this consistently for every stage in a pipeline.\n"
 	                "\t[--msl-ray-tracing-intersection-buffer-index <index>]:\n\t\tSet the intersection function table buffer index.\n"
 	                "\t[--msl-ray-tracing-callable-buffer-index <index>]:\n\t\tSet the callable function table buffer index.\n"
 	                "\t[--msl-ray-tracing-recursive-function-buffer-index <index>]:\n\t\tSet the recursive ray function table buffer index.\n"
@@ -1280,6 +1283,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.enable_ray_tracing_pipeline_emulation = args.msl_enable_ray_tracing_pipeline_emulation;
+		msl_opts.enable_ray_tracing_position_fetch = args.msl_enable_ray_tracing_position_fetch;
 		msl_opts.ray_tracing_intersection_buffer_index = args.msl_ray_tracing_intersection_buffer_index;
 		msl_opts.ray_tracing_callable_buffer_index = args.msl_ray_tracing_callable_buffer_index;
 		msl_opts.ray_tracing_recursive_function_buffer_index = args.msl_ray_tracing_recursive_function_buffer_index;
@@ -2022,6 +2026,8 @@ static int main_inner(int argc, char *argv[])
 	});
 	cbs.add("--msl-enable-ray-tracing-pipeline-emulation",
 	        [&args](CLIParser &) { args.msl_enable_ray_tracing_pipeline_emulation = true; });
+	cbs.add("--msl-enable-ray-tracing-position-fetch",
+	        [&args](CLIParser &) { args.msl_enable_ray_tracing_position_fetch = true; });
 	cbs.add("--msl-ray-tracing-intersection-buffer-index",
 	        [&args](CLIParser &parser) { args.msl_ray_tracing_intersection_buffer_index = parser.next_uint(); });
 	cbs.add("--msl-ray-tracing-callable-buffer-index",

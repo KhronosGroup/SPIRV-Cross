@@ -1,0 +1,70 @@
+; SPIR-V
+; Version: 1.4
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 38
+; Schema: 0
+               OpCapability RayTracingKHR
+               OpCapability RayTracingPositionFetchKHR
+               OpExtension "SPV_KHR_ray_tracing"
+               OpExtension "SPV_KHR_ray_tracing_position_fetch"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint AnyHitKHR %main "main" %builtins %hitValue
+               OpSource GLSL 460
+               OpSourceExtension "GL_EXT_ray_tracing"
+               OpSourceExtension "GL_EXT_ray_tracing_position_fetch"
+               OpName %main "main"
+               OpName %readPosition_i1_ "readPosition(i1;"
+               OpName %index "index"
+               OpName %Builtins "Builtins"
+               OpMemberName %Builtins 0 "gl_HitTriangleVertexPositionsEXT"
+               OpName %builtins "builtins"
+               OpName %hitValue "hitValue"
+               OpName %param "param"
+               OpName %param_0 "param"
+               OpName %param_1 "param"
+               OpMemberDecorate %Builtins 0 BuiltIn HitTriangleVertexPositionsKHR
+               OpDecorate %Builtins Block
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+%_ptr_Function_int = OpTypePointer Function %int
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+         %10 = OpTypeFunction %v3float %_ptr_Function_int
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+%_arr_v3float_uint_3 = OpTypeArray %v3float %uint_3
+   %Builtins = OpTypeStruct %_arr_v3float_uint_3
+%_ptr_Input_Builtins = OpTypePointer Input %Builtins
+   %builtins = OpVariable %_ptr_Input_Builtins Input
+%_ptr_Input_v3float = OpTypePointer Input %v3float
+%_ptr_IncomingRayPayloadKHR_v3float = OpTypePointer IncomingRayPayloadKHR %v3float
+   %hitValue = OpVariable %_ptr_IncomingRayPayloadKHR_v3float IncomingRayPayloadKHR
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_2 = OpConstant %int 2
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+      %param = OpVariable %_ptr_Function_int Function
+    %param_0 = OpVariable %_ptr_Function_int Function
+    %param_1 = OpVariable %_ptr_Function_int Function
+               OpStore %param %int_0
+         %29 = OpFunctionCall %v3float %readPosition_i1_ %param
+               OpStore %param_0 %int_1
+         %32 = OpFunctionCall %v3float %readPosition_i1_ %param_0
+         %33 = OpFAdd %v3float %29 %32
+               OpStore %param_1 %int_2
+         %36 = OpFunctionCall %v3float %readPosition_i1_ %param_1
+         %37 = OpFAdd %v3float %33 %36
+               OpStore %hitValue %37
+               OpReturn
+               OpFunctionEnd
+%readPosition_i1_ = OpFunction %v3float None %10
+      %index = OpFunctionParameter %_ptr_Function_int
+         %13 = OpLabel
+         %19 = OpLoad %int %index
+         %21 = OpAccessChain %_ptr_Input_v3float %builtins %int_0 %19
+         %22 = OpLoad %v3float %21
+               OpReturnValue %22
+               OpFunctionEnd

@@ -199,8 +199,11 @@ int main(int argc, char **argv)
 	    compile(multi_entry, false, false, 0, false, false, nullptr, SPVC_MAKE_MSL_VERSION(2, 3, 0), false, "plain");
 	compile(multi_entry, false, false, 0, false, false, "Ray queries require MSL 2.4 or later",
 	        SPVC_MAKE_MSL_VERSION(2, 3, 0), false, "ray");
+	compile(multi_entry, false, false, 0, false, false, "Ray tracing position fetch requires MSL 3.0 or later",
+	        SPVC_MAKE_MSL_VERSION(2, 4, 0), false, "triangle_positions");
+	auto triangle_positions = compile(multi_entry, false, false, 0, false, false, nullptr,
+	                                  SPVC_MAKE_MSL_VERSION(3, 0, 0), false, "triangle_positions");
 	const char *unsupported_ray_queries[][2] = {
-		{ "triangle_positions", "OpRayQueryGetIntersectionTriangleVertexPositionsKHR" },
 		{ "cluster_id", "OpRayQueryGetClusterIdNV" },
 		{ "sphere_position", "OpRayQueryGetIntersectionSpherePositionNV" },
 		{ "sphere_radius", "OpRayQueryGetIntersectionSphereRadiusNV" },
@@ -237,7 +240,10 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Unexpected acceleration-structure array output\n");
 		return EXIT_FAILURE;
 	}
-	if (!contains(plain_entry, "kernel void plain(") || !contains(bound_multidimensional, "scenes [[id(0)]][2][2]"))
+	if (!contains(plain_entry, "kernel void plain(") ||
+	    !contains(triangle_positions, "packed_float3 positions[3]") ||
+	    !contains(triangle_positions, ".get_candidate_primitive_data()") ||
+	    !contains(bound_multidimensional, "scenes [[id(0)]][2][2]"))
 	{
 		fprintf(stderr, "Unexpected multi-entry or multidimensional output\n");
 		return EXIT_FAILURE;

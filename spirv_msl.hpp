@@ -560,7 +560,11 @@ public:
 		// Instance metadata is uint2(custom index, SBT record offset). An acceleration-structure reference
 		// argument-buffer record has [[id(0)]] acceleration structure, [[id(1)]] metadata, and [[id(2)]] resource ID.
 		// Its ulong2 address table starts with { mask, count }, followed by { device address, reference address }
-		// entries using SplitMix64 finalization and linear probing.
+		// entries using SplitMix64 finalization and linear probing. If ray tracing position fetch is used,
+		// ray function table entries also take an intersection_query<instancing, triangle_data>&. The option
+		// must be enabled consistently for every non-callable stage linked into the same function tables.
+		// Triangle acceleration structures built for position fetch must store three packed_float3 values
+		// (36 bytes total) as each triangle's primitive data.
 		bool enable_ray_tracing_pipeline_emulation = false;
 		uint32_t ray_tracing_intersection_buffer_index = 17;
 		uint32_t ray_tracing_callable_buffer_index = 16;
@@ -570,6 +574,7 @@ public:
 		uint32_t ray_tracing_acceleration_structure_address_table_buffer_index = 12;
 		uint32_t ray_tracing_stage_depth = 0;
 		bool ray_tracing_raygen_visible = false;
+		bool enable_ray_tracing_position_fetch = false;
 
 		bool is_ios() const
 		{
@@ -1124,6 +1129,7 @@ protected:
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
 	bool uses_ray_tracing_pipeline_emulation() const;
+	bool uses_ray_position_fetch_abi() const;
 	bool is_visible_raygen() const;
 	bool is_indirect_ray_stage() const;
 	bool needs_raygen_state() const;
@@ -1360,6 +1366,7 @@ protected:
 	bool uses_execute_callable = false;
 	bool uses_ray_instance_metadata = false;
 	bool uses_ray_tracing_address_conversion = false;
+	bool uses_ray_position_fetch = false;
 	bool uses_ray_query_flags = false;
 	bool uses_shader_record_buffer = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.

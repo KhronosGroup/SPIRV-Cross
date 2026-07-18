@@ -788,6 +788,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		options->msl.enable_ray_tracing_pipeline_emulation = value != 0;
 		break;
 
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_POSITION_FETCH:
+		options->msl.enable_ray_tracing_position_fetch = value != 0;
+		break;
+
 	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_INTERSECTION_BUFFER_INDEX:
 		options->msl.ray_tracing_intersection_buffer_index = value;
 		break;
