@@ -25,6 +25,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
+#include <stdint.h>
 #include <map>
 #include <set>
 #include <stddef.h>
@@ -82,6 +83,94 @@ struct MSLShaderInterfaceVariable
 	BuiltIn builtin = BuiltInMax;
 	uint32_t vecsize = 0;
 	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+};
+
+// Describes one flattened mesh-shader output which is carried through the
+// device capture buffer instead of the native Metal mesh interface.
+struct MSLMeshOutputSpillKey
+{
+	uint32_t location = UINT32_MAX;
+	uint32_t component = UINT32_MAX;
+	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+
+	bool operator==(const MSLMeshOutputSpillKey &other) const
+	{
+		return location == other.location && component == other.component && rate == other.rate;
+	}
+};
+
+enum MSLMeshOutputSpillBaseType
+{
+	MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT = 0,
+	MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT = 1,
+	MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT = 2,
+
+	MSL_MESH_OUTPUT_SPILL_BASE_TYPE_INT_MAX = 0x7fffffff
+};
+
+struct MSLMeshOutputSpillField
+{
+	MSLMeshOutputSpillKey key;
+	MSLMeshOutputSpillBaseType base_type = MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT;
+	uint32_t bit_width = 0;
+	uint32_t vecsize = 0;
+	uint32_t columns = 0;
+	uint32_t capture_word_offset = UINT32_MAX;
+	uint32_t capture_word_stride = 0;
+
+	bool operator==(const MSLMeshOutputSpillField &other) const
+	{
+		return key == other.key && base_type == other.base_type && bit_width == other.bit_width &&
+		       vecsize == other.vecsize && columns == other.columns &&
+		       capture_word_offset == other.capture_word_offset &&
+		       capture_word_stride == other.capture_word_stride;
+	}
+};
+
+enum MSLMeshOutputSpillTopology
+{
+	MSL_MESH_OUTPUT_SPILL_TOPOLOGY_POINT = 0,
+	MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE = 1,
+	MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE = 2,
+
+	MSL_MESH_OUTPUT_SPILL_TOPOLOGY_INT_MAX = 0x7fffffff
+};
+
+// All offsets are uint-word offsets from the start of one capture record.
+// Version 2 carries the provoking-vertex mode in the replay primitive token;
+// version 1 remains accepted as a legacy first-provoking-vertex layout.
+// The fragment compiler deliberately chooses its own Metal buffer index.
+struct MSLMeshOutputSpillLayout
+{
+	uint32_t version = 2;
+	uint32_t capture_record_stride = 0;
+	uint32_t max_vertices = 0;
+	uint32_t max_primitives = 0;
+	MSLMeshOutputSpillTopology topology = MSL_MESH_OUTPUT_SPILL_TOPOLOGY_POINT;
+	uint32_t primitive_index_word_offset = UINT32_MAX;
+	uint32_t primitive_index_word_stride = 0;
+	uint32_t logical_primitive_id_word_offset = UINT32_MAX;
+	uint32_t perspective_basis_location = UINT32_MAX;
+	uint32_t perspective_basis_component = UINT32_MAX;
+	uint32_t perspective_basis_components = 0;
+	uint32_t no_perspective_basis_location = UINT32_MAX;
+	uint32_t no_perspective_basis_component = UINT32_MAX;
+	uint32_t no_perspective_basis_components = 0;
+
+	bool operator==(const MSLMeshOutputSpillLayout &other) const
+	{
+		return version == other.version && capture_record_stride == other.capture_record_stride &&
+		       max_vertices == other.max_vertices && max_primitives == other.max_primitives &&
+		       topology == other.topology && primitive_index_word_offset == other.primitive_index_word_offset &&
+		       primitive_index_word_stride == other.primitive_index_word_stride &&
+		       logical_primitive_id_word_offset == other.logical_primitive_id_word_offset &&
+		       perspective_basis_location == other.perspective_basis_location &&
+		       perspective_basis_component == other.perspective_basis_component &&
+		       perspective_basis_components == other.perspective_basis_components &&
+		       no_perspective_basis_location == other.no_perspective_basis_location &&
+		       no_perspective_basis_component == other.no_perspective_basis_component &&
+		       no_perspective_basis_components == other.no_perspective_basis_components;
+	}
 };
 
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
@@ -333,11 +422,15 @@ public:
 		bool enable_frag_stencil_ref_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
+		bool mesh_shader_emulation = false;
 		bool swizzle_texture_samples = false;
 		bool tess_domain_origin_lower_left = false;
 		bool multiview = false;
 		bool multiview_layered_rendering = true;
 		bool view_index_from_device_index = false;
+		// For compute, apply a logical dispatch base. For MeshEXT, accept a
+		// spvMeshDispatch record so a backend can preserve Vulkan's logical 3D grid
+		// while issuing bounded native Metal mesh-grid batches.
 		bool dispatch_base = false;
 		bool texture_1D_as_2D = false;
 		bool emulate_reversed_depth_viewport = false;
@@ -634,19 +727,58 @@ public:
 		return msl_options.multiview && !msl_options.view_index_from_device_index;
 	}
 
-	// Provide feedback to calling API to allow it to pass a buffer
-	// containing the dispatch base workgroup ID.
+	// Provide feedback to calling API to allow it to pass a buffer containing
+	// compute's dispatch base or MeshEXT's logical grid and flattened batch base.
 	bool needs_dispatch_base_buffer() const
 	{
-		return msl_options.dispatch_base && !msl_options.supports_msl_version(1, 2);
+		return msl_options.dispatch_base &&
+		       (is_mesh_shader() || !msl_options.supports_msl_version(1, 2));
 	}
 
 	// Provide feedback to calling API to allow it to pass an output
 	// buffer if the shader needs it.
 	bool needs_output_buffer() const
 	{
-		return capture_output_to_buffer && stage_out_var_id != ID(0);
+		return (msl_options.mesh_shader_emulation && is_mesh_shader()) ||
+		       has_mesh_output_spill_input_layout ||
+		       (capture_output_to_buffer && stage_out_var_id != ID(0));
 	}
+
+	uint32_t get_mesh_output_buffer_size() const
+	{
+		return mesh_output_buffer_size;
+	}
+
+	uint32_t get_mesh_output_buffer_alignment() const
+	{
+		return mesh_output_buffer_alignment;
+	}
+
+	uint32_t get_mesh_output_threadgroup_size() const
+	{
+		return mesh_output_threadgroup_size;
+	}
+
+	uint32_t get_mesh_output_buffer_offset(VariableID id) const;
+
+	// Selects one whole flattened mesh output for device-buffer spill. This is
+	// supported only by taskless mesh-shader emulation.
+	void add_msl_mesh_output_spill(const MSLMeshOutputSpillKey &key);
+
+	const MSLMeshOutputSpillLayout &get_msl_mesh_output_spill_layout() const
+	{
+		return mesh_output_spill_layout;
+	}
+
+	const SmallVector<MSLMeshOutputSpillField> &get_msl_mesh_output_spill_fields() const
+	{
+		return mesh_output_spill_fields;
+	}
+
+	// Configures fragment-stage fetch from a mesh capture buffer. The fragment
+	// compiler derives interpolation semantics from its own SPIR-V decorations.
+	void set_msl_mesh_output_spill_layout(const MSLMeshOutputSpillLayout &layout,
+	                                      const SmallVector<MSLMeshOutputSpillField> &fields);
 
 	// Provide feedback to calling API to allow it to pass a patch output
 	// buffer if the shader needs it.
@@ -933,11 +1065,35 @@ protected:
 	                             const std::string &qualifier = "");
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
+	bool current_function_returns_value() const;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
 	void emit_mesh_entry_point();
-	void emit_mesh_outputs();
+	void emit_mesh_replay_entry_point();
+	void build_mesh_output_buffer_type();
+	void finalize_mesh_output_spill_interface();
+	void emit_mesh_output_spill_capture();
+	void emit_mesh_output_spill_fragment_setup();
+	std::string mesh_output_spill_reconstruction_expression(uint32_t member_index,
+	                                                        const std::string &basis_method,
+	                                                        const std::string &dynamic_element = "",
+	                                                        uint32_t dynamic_base_index = 0);
+	bool emit_mesh_output_spill_interpolation(uint32_t result_type, uint32_t result_id,
+	                                          uint32_t input_id, const std::string &basis_method,
+	                                          bool forward);
+	void emit_mesh_output_capture_wrappers();
+	VariableID get_mesh_output_capture_variable(uint32_t id) const;
+	std::string mesh_output_capture_type(const SPIRType &type, VariableID variable_id);
+	void emit_mesh_output_initializers();
+	void emit_mesh_output_initializer(const SPIRType &type, const std::string &destination,
+	                                  const std::string &source, uint32_t &loop_index,
+	                                  bool cooperative);
+	void emit_mesh_outputs(bool replay = false);
+	void emit_mesh_output_assignment(const SPIRType &interface_type, uint32_t member_index,
+	                                 const SPIRVariable &orig_var, const std::string &destination,
+	                                 const std::string &source, bool replay = false,
+	                                 const std::string &element_index = "");
 	void emit_mesh_tasks(SPIRBlock &block) override;
 	void emit_workgroup_initialization(const SPIRVariable &var) override;
 
@@ -946,6 +1102,7 @@ protected:
 	std::string constant_op_expression(const SPIRConstantOp &cop) override;
 
 	bool variable_decl_is_remapped_storage(const SPIRVariable &variable, StorageClass storage) const override;
+	std::string variable_decl(const SPIRVariable &variable) override;
 
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
@@ -1007,6 +1164,8 @@ protected:
 	uint32_t add_interface_block(StorageClass storage, bool patch = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, StorageClass storage);
 	uint32_t add_meshlet_block(bool per_primitive);
+	void filter_mesh_output_spill_members(SPIRType &type, bool per_primitive);
+	void filter_fragment_input_spill_members(SPIRType &type);
 
 	struct InterfaceBlockMeta
 	{
@@ -1022,6 +1181,7 @@ protected:
 		std::unordered_map<uint32_t, LocationMeta> location_meta;
 		bool strip_array = false;
 		bool allow_local_declaration = false;
+		int mesh_per_primitive = -1;
 	};
 
 	std::string to_tesc_invocation_id();
@@ -1032,6 +1192,21 @@ protected:
 	                                               SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_plain_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
 	                                           SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
+	bool add_packed_64_bit_integer_variable_to_interface_block(StorageClass storage,
+	                                                          const std::string &ib_var_ref,
+	                                                          SPIRType &ib_type, SPIRVariable &var,
+	                                                          InterfaceBlockMeta &meta);
+	bool add_packed_64_bit_integer_leaf_to_interface_block(StorageClass storage,
+	                                                      const std::string &ib_var_ref,
+	                                                      SPIRType &ib_type, SPIRVariable &var,
+	                                                      const SPIRType &logical_type,
+	                                                      uint32_t location, uint32_t component,
+	                                                      const std::string &member_name_prefix,
+	                                                      const std::string &source_suffix,
+	                                                      uint32_t variable_member_index,
+	                                                      uint32_t variable_element_index,
+	                                                      bool flat, bool no_perspective,
+	                                                      bool centroid, bool sample);
 	bool add_component_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
 	                                               SPIRVariable &var, const SPIRType &type,
 	                                               InterfaceBlockMeta &meta);
@@ -1041,7 +1216,8 @@ protected:
 	                                                  uint32_t mbr_idx, InterfaceBlockMeta &meta,
 	                                                  const std::string &mbr_name_qual,
 	                                                  const std::string &var_chain_qual,
-	                                                  uint32_t &location, uint32_t &var_mbr_idx);
+	                                                  uint32_t &location, uint32_t &var_mbr_idx,
+	                                                  const SmallVector<uint32_t> &variable_access_indices);
 	void add_composite_member_variable_to_interface_block(StorageClass storage,
 	                                                      const std::string &ib_var_ref, SPIRType &ib_type,
 	                                                      SPIRVariable &var, SPIRType &var_type,
@@ -1049,7 +1225,8 @@ protected:
 	                                                      const std::string &mbr_name_qual,
 	                                                      const std::string &var_chain_qual,
 	                                                      uint32_t &location, uint32_t &var_mbr_idx,
-	                                                      const Bitset &interpolation_qual);
+	                                                      const Bitset &interpolation_qual,
+	                                                      const SmallVector<uint32_t> &variable_access_indices);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 	void add_tess_level_input(const std::string &base_ref, const std::string &mbr_name, SPIRVariable &var);
 
@@ -1057,7 +1234,9 @@ protected:
 	void fix_up_interface_member_indices(StorageClass storage, uint32_t ib_type_id);
 
 	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
-	                                     StorageClass storage, bool fallback = false);
+	                                    StorageClass storage, bool fallback = false);
+	uint32_t get_msl_interface_location_count(const SPIRType &type) const;
+	SmallVector<SmallVector<uint32_t>> get_msl_flattened_io_access_paths(const SPIRType &type) const;
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, BuiltIn builtin);
 	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component,
 	                                   uint32_t num_components, bool strip_array);
@@ -1187,6 +1366,7 @@ protected:
 	uint32_t builtin_mesh_primitive_indices_id = 0;
 	uint32_t builtin_mesh_sizes_id = 0;
 	uint32_t builtin_task_grid_id = 0;
+	uint32_t builtin_task_terminated_id = 0;
 	uint32_t builtin_frag_depth_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
@@ -1264,6 +1444,67 @@ protected:
 	VariableID tess_level_outer_var_id = 0;
 	VariableID mesh_out_per_vertex = 0;
 	VariableID mesh_out_per_primitive = 0;
+	uint32_t mesh_default_position_member = ~0u;
+	uint32_t mesh_default_point_size_member = ~0u;
+	uint32_t mesh_default_layer_member = ~0u;
+	uint32_t mesh_default_viewport_index_member = ~0u;
+	SmallVector<VariableID> mesh_output_variables;
+	std::unordered_map<uint32_t, uint32_t> mesh_output_buffer_members;
+	struct MeshOutputPacked64
+	{
+		uint32_t interface_type_id = 0;
+		uint32_t interface_member_index = 0;
+		VariableID variable_id = 0;
+	};
+	SmallVector<MeshOutputPacked64> mesh_output_packed_64;
+	struct MeshOutputInterfacePacked64
+	{
+		VariableID variable_id = 0;
+		uint32_t logical_vecsize = 0;
+		uint32_t source_lane = 0;
+		uint32_t logical_location = 0;
+		uint32_t logical_component = 0;
+		MSLMeshOutputSpillBaseType base_type = MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT;
+		std::string source_suffix;
+	};
+	std::unordered_map<uint64_t, MeshOutputInterfacePacked64> mesh_output_interface_packed_64;
+	SmallVector<VariableID> mesh_output_composite_packed_64_variables;
+	struct MeshOutputSpillMember
+	{
+		MSLMeshOutputSpillField field;
+		VariableID variable_id = 0;
+		uint32_t variable_element_index = UINT32_MAX;
+		uint32_t variable_member_index = UINT32_MAX;
+		SmallVector<uint32_t> variable_access_indices;
+		std::string source_suffix;
+		uint32_t source_word_offset = 0;
+		bool flat = false;
+		bool no_perspective = false;
+		bool centroid = false;
+		bool sample = false;
+	};
+	SmallVector<MSLMeshOutputSpillKey> mesh_output_spill_keys;
+	SmallVector<MSLMeshOutputSpillField> mesh_output_spill_fields;
+	SmallVector<MeshOutputSpillMember> mesh_output_spill_members;
+	std::unordered_map<uint64_t, std::string> mesh_output_interface_source_suffixes;
+	MSLMeshOutputSpillLayout mesh_output_spill_layout;
+	bool has_mesh_output_spill_input_layout = false;
+	uint32_t mesh_spill_perspective_member = UINT32_MAX;
+	uint32_t mesh_spill_no_perspective_member = UINT32_MAX;
+	uint32_t mesh_spill_token_member = UINT32_MAX;
+	VariableID mesh_spill_logical_primitive_id = 0;
+	std::string mesh_spill_logical_primitive_id_suffix;
+	SmallVector<MeshOutputSpillMember> fragment_spill_members;
+	VariableID fragment_spill_logical_primitive_id = 0;
+	struct FragmentSpillAccessChain
+	{
+		VariableID variable_id = 0;
+		SmallVector<uint32_t> indices;
+	};
+	std::unordered_map<uint32_t, FragmentSpillAccessChain> fragment_spill_access_chains;
+	uint32_t mesh_output_buffer_size = 0;
+	uint32_t mesh_output_buffer_alignment = 0;
+	uint32_t mesh_output_threadgroup_size = 0;
 	VariableID stage_out_masked_builtin_type_id = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.

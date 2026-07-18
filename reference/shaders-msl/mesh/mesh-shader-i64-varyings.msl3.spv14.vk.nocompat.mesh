@@ -1,0 +1,144 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+    
+    object_data T& operator [] (size_t pos) object_data
+    {
+        return elements[pos];
+    }
+    constexpr const object_data T& operator [] (size_t pos) const object_data
+    {
+        return elements[pos];
+    }
+};
+
+void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spvMeshSizes.x = vertexCount;
+        spvMeshSizes.y = primitiveCount;
+    }
+}
+
+struct gl_MeshPerVertexEXT
+{
+    float4 gl_Position [[position]];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+    uint2 scalar_i64_spv_i64_0 [[user(locn0)]];
+    uint2 scalar_u64_spv_i64_0 [[user(locn0_2)]];
+    uint4 vector_i64_2_spv_i64_0 [[user(locn1)]];
+    uint4 vector_u64_3_spv_i64_0 [[user(locn2)]];
+    uint2 vector_u64_3_spv_i64_2 [[user(locn3)]];
+};
+
+struct spvPerPrimitive
+{
+    uint4 primitive_i64_4_spv_i64_0 [[user(locn4)]];
+    uint4 primitive_i64_4_spv_i64_2 [[user(locn5)]];
+};
+
+using spvMesh_t = mesh<spvPerVertex, spvPerPrimitive, 1, 1, topology::point>;
+
+static inline __attribute__((always_inline))
+void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 1>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<uint, 1>& gl_PrimitivePointIndicesEXT, threadgroup spvUnsafeArray<long, 1>& scalar_i64, threadgroup spvUnsafeArray<ulong, 1>& scalar_u64, threadgroup spvUnsafeArray<long2, 1>& vector_i64_2, threadgroup spvUnsafeArray<ulong3, 1>& vector_u64_3, threadgroup spvUnsafeArray<long4, 1>& primitive_i64_4, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
+{
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 1u, 1u);
+    gl_MeshVerticesEXT[0].gl_Position = float4(0.0, 0.0, 0.0, 1.0);
+    gl_PrimitivePointIndicesEXT[0] = 0u;
+    scalar_i64[0] = -1l;
+    scalar_u64[0] = 2ul;
+    vector_i64_2[0] = long2(-3l, 4l);
+    vector_u64_3[0] = ulong3(5ul, 6ul, 7ul);
+    primitive_i64_4[0] = long4(-8l, 9l, -10l, 11l);
+}
+
+[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+{
+    threadgroup uint2 spvMeshSizes;
+    threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 1> gl_MeshVerticesEXT;
+    threadgroup spvUnsafeArray<uint, 1> gl_PrimitivePointIndicesEXT;
+    threadgroup spvUnsafeArray<long, 1> scalar_i64;
+    threadgroup spvUnsafeArray<ulong, 1> scalar_u64;
+    threadgroup spvUnsafeArray<long2, 1> vector_i64_2;
+    threadgroup spvUnsafeArray<ulong3, 1> vector_u64_3;
+    threadgroup spvUnsafeArray<long4, 1> primitive_i64_4;
+    if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
+    _4(gl_MeshVerticesEXT, gl_PrimitivePointIndicesEXT, scalar_i64, scalar_u64, vector_i64_2, vector_u64_3, primitive_i64_4, gl_LocalInvocationIndex, spvMeshSizes);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (spvMeshSizes.y == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spvMeshSizes.y);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    const uint spvVI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.x)
+    {
+        spvPerVertex spvV = {};
+        spvV.gl_Position = gl_MeshVerticesEXT[spvVI].gl_Position;
+        spvV.scalar_i64_spv_i64_0 = as_type<uint2>(scalar_i64[spvVI]);
+        spvV.scalar_u64_spv_i64_0 = as_type<uint2>(scalar_u64[spvVI]);
+        spvV.vector_i64_2_spv_i64_0 = as_type<uint4>(vector_i64_2[spvVI].xy);
+        spvV.vector_u64_3_spv_i64_0 = as_type<uint4>(vector_u64_3[spvVI].xy);
+        spvV.vector_u64_3_spv_i64_2 = as_type<uint2>(vector_u64_3[spvVI].z);
+        spvMesh.set_vertex(spvVI, spvV);
+    }
+    const uint spvPI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.y)
+    {
+        spvMesh.set_index(spvPI, gl_PrimitivePointIndicesEXT[spvPI]);
+        spvPerPrimitive spvP = {};
+        spvP.primitive_i64_4_spv_i64_0 = as_type<uint4>(primitive_i64_4[spvPI].xy);
+        spvP.primitive_i64_4_spv_i64_2 = as_type<uint4>(primitive_i64_4[spvPI].zw);
+        spvMesh.set_primitive(spvPI, spvP);
+    }
+}
+

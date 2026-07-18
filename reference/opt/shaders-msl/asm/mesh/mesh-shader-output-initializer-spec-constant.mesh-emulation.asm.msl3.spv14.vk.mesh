@@ -1,0 +1,173 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+    
+    object_data T& operator [] (size_t pos) object_data
+    {
+        return elements[pos];
+    }
+    constexpr const object_data T& operator [] (size_t pos) const object_data
+    {
+        return elements[pos];
+    }
+};
+
+void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, device uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spvMeshSizes.x = vertexCount;
+        spvMeshSizes.y = primitiveCount;
+    }
+}
+
+constant float _6_tmp [[function_constant(0)]];
+constant float _6 = is_function_constant_defined(_6_tmp) ? _6_tmp : 0.25;
+constant float _7_tmp [[function_constant(1)]];
+constant float _7 = is_function_constant_defined(_7_tmp) ? _7_tmp : 0.75;
+constant float2 _20 = float2(_6, _7);
+constant float2 _21 = float2(_7, _6);
+constant spvUnsafeArray<float, 2> _28 = spvUnsafeArray<float, 2>({ _6, _7 });
+constant spvUnsafeArray<float2, 2> _29 = spvUnsafeArray<float2, 2>({ _20, _21 });
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+    float weights [[user(locn0)]];
+};
+
+struct spvPerPrimitive
+{
+    float2 primitive_values [[user(locn1)]];
+};
+
+struct spvMeshOutput
+{
+    uint2 counts;
+    spvUnsafeArray<float4, 2> spv3;
+    spvUnsafeArray<float, 2> spv4;
+    spvUnsafeArray<uint, 2> spv2;
+    spvUnsafeArray<float2, 2> spv5;
+};
+static_assert(__builtin_offsetof(spvMeshOutput, counts) == 0, "invalid mesh output counts offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv3) == 16, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv4) == 48, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv2) == 56, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv5) == 64, "invalid mesh output variable offset");
+static_assert(sizeof(spvMeshOutput) == 80, "invalid mesh output size");
+static_assert(alignof(spvMeshOutput) == 16, "invalid mesh output alignment");
+
+struct spvMeshDispatch
+{
+    uint4 grid;
+};
+
+using spvMesh_t = mesh<spvPerVertex, spvPerPrimitive, 2, 2, topology::point>;
+
+static inline __attribute__((always_inline))
+void _1(device spvUnsafeArray<uint, 2>& gl_PrimitivePointIndicesEXT, device spvUnsafeArray<float4, 2>& gl_Position, thread uint& gl_LocalInvocationIndex, device uint2& spvMeshSizes)
+{
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 2u, 2u);
+    gl_PrimitivePointIndicesEXT[0u] = 0u;
+    gl_PrimitivePointIndicesEXT[1u] = 1u;
+    gl_Position[0u] = float4(-1.0, 0.0, 0.0, 1.0);
+    gl_Position[1u] = float4(1.0, 0.0, 0.0, 1.0);
+}
+
+kernel void main0(device spvMeshOutput* spvMeshOutputs [[buffer(28)]], constant spvMeshDispatch& spvMeshDispatch [[buffer(29)]], uint3 spvMeshBatchWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshBatchGrid [[threadgroups_per_grid]], uint3 spvMeshLocalInvocationID [[thread_position_in_threadgroup]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
+{
+    const uint spvMeshOutputIndex = spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;
+    device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    device uint2& spvMeshSizes = spvMeshOutput.counts;
+    device spvUnsafeArray<float, 2> &weights = spvMeshOutput.spv4;
+    device spvUnsafeArray<float2, 2> &primitive_values = spvMeshOutput.spv5;
+    if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
+    const uint spvMeshInitThreadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;
+    for (uint spvMeshInitIndex0 = gl_LocalInvocationIndex; spvMeshInitIndex0 < 2; spvMeshInitIndex0 += spvMeshInitThreadCount)
+    {
+        weights[spvMeshInitIndex0] = _28[spvMeshInitIndex0];
+    }
+    for (uint spvMeshInitIndex1 = gl_LocalInvocationIndex; spvMeshInitIndex1 < 2; spvMeshInitIndex1 += spvMeshInitThreadCount)
+    {
+        primitive_values[spvMeshInitIndex1] = _29[spvMeshInitIndex1];
+    }
+    threadgroup_barrier(mem_flags::mem_device);
+    device spvUnsafeArray<uint, 2> &gl_PrimitivePointIndicesEXT = spvMeshOutput.spv2;
+    device spvUnsafeArray<float4, 2> &gl_Position = spvMeshOutput.spv3;
+    _1(gl_PrimitivePointIndicesEXT, gl_Position, gl_LocalInvocationIndex, spvMeshSizes);
+}
+
+
+[[mesh]] void main0_replay(device const spvMeshOutput* spvMeshOutputs [[buffer(28)]], uint3 spvMeshReplayWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshReplayGrid [[threadgroups_per_grid]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+{
+    const uint spvMeshOutputIndex = spvMeshReplayWorkgroupID.x + spvMeshReplayWorkgroupID.y * spvMeshReplayGrid.x + spvMeshReplayWorkgroupID.z * spvMeshReplayGrid.x * spvMeshReplayGrid.y;
+    const device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    const uint2 spvMeshSizes = uint2(spvMeshOutput.counts.x, spvMeshOutput.counts.y & 0x7fffffffu);
+    const uint spvMeshProvokingVertexLast [[maybe_unused]] = spvMeshOutput.counts.y >> 31u;
+    const device spvUnsafeArray<float4, 2> &gl_Position = spvMeshOutput.spv3;
+    const device spvUnsafeArray<float, 2> &weights = spvMeshOutput.spv4;
+    const device spvUnsafeArray<uint, 2> &gl_PrimitivePointIndicesEXT = spvMeshOutput.spv2;
+    const device spvUnsafeArray<float2, 2> &primitive_values = spvMeshOutput.spv5;
+    if (spvMeshSizes.y == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spvMeshSizes.y);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
+    {
+        spvPerVertex spvV = {};
+        spvV.gl_Position = gl_Position[spvVI];
+        spvV.weights = weights[spvVI];
+        spvMesh.set_vertex(spvVI, spvV);
+    }
+    for (uint spvPI = gl_LocalInvocationIndex; spvPI < spvMeshSizes.y; spvPI += spvThreadCount)
+    {
+        spvMesh.set_index(spvPI, gl_PrimitivePointIndicesEXT[spvPI]);
+        spvPerPrimitive spvP = {};
+        spvP.primitive_values = primitive_values[spvPI];
+        spvMesh.set_primitive(spvPI, spvP);
+    }
+}

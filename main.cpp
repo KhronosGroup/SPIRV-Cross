@@ -641,6 +641,7 @@ struct CLIArguments
 	bool sso = false;
 	bool support_nonzero_baseinstance = true;
 	bool msl_capture_output_to_buffer = false;
+	bool msl_mesh_shader_emulation = false;
 	bool msl_swizzle_texture_samples = false;
 	bool msl_ios = false;
 	bool msl_pad_fragment_output = false;
@@ -868,6 +869,7 @@ static void print_help_msl()
 	fprintf(stderr, "\nMSL options:\n"
 	                "\t[--msl-version <MMmmpp>]:\n\t\tUses a specific MSL version, e.g. --msl-version 20100 for MSL 2.1.\n"
 	                "\t[--msl-capture-output]:\n\t\tWrites geometry varyings to a buffer instead of as stage-outputs.\n"
+	                "\t[--msl-mesh-shader-emulation]:\n\t\tEmits a mesh shader as a compute kernel with caller-owned output slots.\n"
 	                "\t[--msl-swizzle-texture-samples]:\n\t\tWorks around lack of support for VkImageView component swizzles.\n"
 	                "\t\tThis has a massive impact on performance and bloat. Do not use this unless you are absolutely forced to.\n"
 	                "\t\tTo use this feature, the API side must pass down swizzle buffers.\n"
@@ -1261,6 +1263,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.capture_output_to_buffer = args.msl_capture_output_to_buffer;
+		msl_opts.mesh_shader_emulation = args.msl_mesh_shader_emulation;
 		msl_opts.swizzle_texture_samples = args.msl_swizzle_texture_samples;
 		msl_opts.invariant_float_math = args.msl_invariant_float_math;
 		if (args.msl_ios)
@@ -1752,6 +1755,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
 	cbs.add("--msl-capture-output", [&args](CLIParser &) { args.msl_capture_output_to_buffer = true; });
+	cbs.add("--msl-mesh-shader-emulation", [&args](CLIParser &) { args.msl_mesh_shader_emulation = true; });
 	cbs.add("--msl-swizzle-texture-samples", [&args](CLIParser &) { args.msl_swizzle_texture_samples = true; });
 	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });

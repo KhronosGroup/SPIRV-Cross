@@ -1,0 +1,39 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+
+struct TaskPayload
+{
+  uint before;
+  uint after;
+};
+
+taskPayloadSharedEXT TaskPayload payload;
+
+uint launch(uint count)
+{
+  for (uint i = 0; i < count; i++)
+  {
+    if (i == 1)
+      EmitMeshTasksEXT(2, 1, 1);
+  }
+  return 3;
+}
+
+uint nested(uint count)
+{
+  uint value = launch(count);
+  payload.after = 99;
+  return value + 1;
+}
+
+void main()
+{
+  payload.before = gl_WorkGroupID.x;
+  payload.after = 0;
+  barrier();
+  payload.after = nested((gl_WorkGroupID.x & 1) + 1);
+  barrier();
+  EmitMeshTasksEXT(1, 1, 1);
+}

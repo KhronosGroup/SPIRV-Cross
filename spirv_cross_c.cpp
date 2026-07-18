@@ -783,6 +783,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_FORCE_FRAGMENT_WITH_SIDE_EFFECTS_EXECUTION:
 		options->msl.force_fragment_with_side_effects_execution = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_MESH_SHADER_EMULATION:
+		options->msl.mesh_shader_emulation = value != 0;
+		break;
 #endif
 
 	default:
@@ -1181,6 +1185,23 @@ spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler)
 	return spvc_compiler_msl_needs_swizzle_buffer(compiler);
 }
 
+spvc_bool spvc_compiler_msl_needs_dispatch_base_buffer(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_FALSE;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	return msl.needs_dispatch_base_buffer() ? SPVC_TRUE : SPVC_FALSE;
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_FALSE;
+#endif
+}
+
 spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler)
 {
 #if SPIRV_CROSS_C_API_MSL
@@ -1229,6 +1250,262 @@ spvc_bool spvc_compiler_msl_needs_input_threadgroup_mem(spvc_compiler compiler)
 #else
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
 	return SPVC_FALSE;
+#endif
+}
+
+unsigned spvc_compiler_msl_get_mesh_output_buffer_size(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return 0;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->get_mesh_output_buffer_size();
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return 0;
+#endif
+}
+
+unsigned spvc_compiler_msl_get_mesh_output_buffer_alignment(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return 0;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->get_mesh_output_buffer_alignment();
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return 0;
+#endif
+}
+
+unsigned spvc_compiler_msl_get_mesh_output_threadgroup_size(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return 0;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->get_mesh_output_threadgroup_size();
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return 0;
+#endif
+}
+
+unsigned spvc_compiler_msl_get_mesh_output_buffer_offset(spvc_compiler compiler, spvc_variable_id id)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return ~0u;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->get_mesh_output_buffer_offset(id);
+#else
+	(void)id;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return ~0u;
+#endif
+}
+
+#if SPIRV_CROSS_C_API_MSL
+static MSLMeshOutputSpillKey mesh_output_spill_key_from_c(const spvc_msl_mesh_output_spill_key &key)
+{
+	MSLMeshOutputSpillKey result;
+	result.location = key.location;
+	result.component = key.component;
+	result.rate = static_cast<MSLShaderVariableRate>(key.rate);
+	return result;
+}
+
+static MSLMeshOutputSpillField mesh_output_spill_field_from_c(const spvc_msl_mesh_output_spill_field &field)
+{
+	MSLMeshOutputSpillField result;
+	result.key = mesh_output_spill_key_from_c(field.key);
+	result.base_type = static_cast<MSLMeshOutputSpillBaseType>(field.base_type);
+	result.bit_width = field.bit_width;
+	result.vecsize = field.vecsize;
+	result.columns = field.columns;
+	result.capture_word_offset = field.capture_word_offset;
+	result.capture_word_stride = field.capture_word_stride;
+	return result;
+}
+
+static MSLMeshOutputSpillLayout mesh_output_spill_layout_from_c(const spvc_msl_mesh_output_spill_layout &layout)
+{
+	MSLMeshOutputSpillLayout result;
+	result.version = layout.version;
+	result.capture_record_stride = layout.capture_record_stride;
+	result.max_vertices = layout.max_vertices;
+	result.max_primitives = layout.max_primitives;
+	result.topology = static_cast<MSLMeshOutputSpillTopology>(layout.topology);
+	result.primitive_index_word_offset = layout.primitive_index_word_offset;
+	result.primitive_index_word_stride = layout.primitive_index_word_stride;
+	result.logical_primitive_id_word_offset = layout.logical_primitive_id_word_offset;
+	result.perspective_basis_location = layout.perspective_basis_location;
+	result.perspective_basis_component = layout.perspective_basis_component;
+	result.perspective_basis_components = layout.perspective_basis_components;
+	result.no_perspective_basis_location = layout.no_perspective_basis_location;
+	result.no_perspective_basis_component = layout.no_perspective_basis_component;
+	result.no_perspective_basis_components = layout.no_perspective_basis_components;
+	return result;
+}
+
+static void mesh_output_spill_key_to_c(const MSLMeshOutputSpillKey &key, spvc_msl_mesh_output_spill_key &result)
+{
+	result.location = key.location;
+	result.component = key.component;
+	result.rate = static_cast<spvc_msl_shader_variable_rate>(key.rate);
+}
+
+static void mesh_output_spill_field_to_c(const MSLMeshOutputSpillField &field,
+                                         spvc_msl_mesh_output_spill_field &result)
+{
+	mesh_output_spill_key_to_c(field.key, result.key);
+	result.base_type = static_cast<spvc_msl_mesh_output_spill_base_type>(field.base_type);
+	result.bit_width = field.bit_width;
+	result.vecsize = field.vecsize;
+	result.columns = field.columns;
+	result.capture_word_offset = field.capture_word_offset;
+	result.capture_word_stride = field.capture_word_stride;
+}
+
+static void mesh_output_spill_layout_to_c(const MSLMeshOutputSpillLayout &layout,
+                                          spvc_msl_mesh_output_spill_layout &result)
+{
+	result.version = layout.version;
+	result.capture_record_stride = layout.capture_record_stride;
+	result.max_vertices = layout.max_vertices;
+	result.max_primitives = layout.max_primitives;
+	result.topology = static_cast<spvc_msl_mesh_output_spill_topology>(layout.topology);
+	result.primitive_index_word_offset = layout.primitive_index_word_offset;
+	result.primitive_index_word_stride = layout.primitive_index_word_stride;
+	result.logical_primitive_id_word_offset = layout.logical_primitive_id_word_offset;
+	result.perspective_basis_location = layout.perspective_basis_location;
+	result.perspective_basis_component = layout.perspective_basis_component;
+	result.perspective_basis_components = layout.perspective_basis_components;
+	result.no_perspective_basis_location = layout.no_perspective_basis_location;
+	result.no_perspective_basis_component = layout.no_perspective_basis_component;
+	result.no_perspective_basis_components = layout.no_perspective_basis_components;
+}
+#endif
+
+spvc_result spvc_compiler_msl_add_mesh_output_spill(spvc_compiler compiler,
+                                                     const spvc_msl_mesh_output_spill_key *key)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL || !key)
+	{
+		compiler->context->report_error("Invalid MSL mesh output spill request.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+	SPVC_BEGIN_SAFE_SCOPE
+	{
+		static_cast<CompilerMSL *>(compiler->compiler.get())->add_msl_mesh_output_spill(
+		    mesh_output_spill_key_from_c(*key));
+	}
+	SPVC_END_SAFE_SCOPE(compiler->context, SPVC_ERROR_INVALID_ARGUMENT)
+	return SPVC_SUCCESS;
+#else
+	(void)key;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+spvc_result spvc_compiler_msl_get_mesh_output_spill_layout(spvc_compiler compiler,
+                                                            spvc_msl_mesh_output_spill_layout *layout)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL || !layout)
+	{
+		compiler->context->report_error("Invalid MSL mesh output spill layout query.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+	mesh_output_spill_layout_to_c(
+	    static_cast<CompilerMSL *>(compiler->compiler.get())->get_msl_mesh_output_spill_layout(), *layout);
+	return SPVC_SUCCESS;
+#else
+	(void)layout;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+size_t spvc_compiler_msl_get_mesh_output_spill_field_count(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return 0;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->get_msl_mesh_output_spill_fields().size();
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return 0;
+#endif
+}
+
+spvc_result spvc_compiler_msl_get_mesh_output_spill_field(spvc_compiler compiler, size_t index,
+                                                           spvc_msl_mesh_output_spill_field *field)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL || !field)
+	{
+		compiler->context->report_error("Invalid MSL mesh output spill field query.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+	const auto &fields =
+	    static_cast<CompilerMSL *>(compiler->compiler.get())->get_msl_mesh_output_spill_fields();
+	if (index >= fields.size())
+	{
+		compiler->context->report_error("MSL mesh output spill field index is out of range.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+	mesh_output_spill_field_to_c(fields[index], *field);
+	return SPVC_SUCCESS;
+#else
+	(void)index;
+	(void)field;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+spvc_result spvc_compiler_msl_set_mesh_output_spill_layout(
+    spvc_compiler compiler, const spvc_msl_mesh_output_spill_layout *layout,
+    const spvc_msl_mesh_output_spill_field *fields, size_t field_count)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL || !layout || (field_count && !fields))
+	{
+		compiler->context->report_error("Invalid MSL mesh output spill layout.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+	SPVC_BEGIN_SAFE_SCOPE
+	{
+		SmallVector<MSLMeshOutputSpillField> converted_fields;
+		converted_fields.reserve(field_count);
+		for (size_t i = 0; i < field_count; i++)
+			converted_fields.push_back(mesh_output_spill_field_from_c(fields[i]));
+		static_cast<CompilerMSL *>(compiler->compiler.get())->set_msl_mesh_output_spill_layout(
+		    mesh_output_spill_layout_from_c(*layout), converted_fields);
+	}
+	SPVC_END_SAFE_SCOPE(compiler->context, SPVC_ERROR_INVALID_ARGUMENT)
+	return SPVC_SUCCESS;
+#else
+	(void)layout;
+	(void)fields;
+	(void)field_count;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
 #endif
 }
 
@@ -2862,6 +3139,36 @@ void spvc_msl_shader_interface_var_init_2(spvc_msl_shader_interface_var_2 *var)
 	var->rate = static_cast<spvc_msl_shader_variable_rate>(var_default.rate);
 #else
 	memset(var, 0, sizeof(*var));
+#endif
+}
+
+void spvc_msl_mesh_output_spill_key_init(spvc_msl_mesh_output_spill_key *key)
+{
+#if SPIRV_CROSS_C_API_MSL
+	MSLMeshOutputSpillKey key_default;
+	mesh_output_spill_key_to_c(key_default, *key);
+#else
+	memset(key, 0, sizeof(*key));
+#endif
+}
+
+void spvc_msl_mesh_output_spill_field_init(spvc_msl_mesh_output_spill_field *field)
+{
+#if SPIRV_CROSS_C_API_MSL
+	MSLMeshOutputSpillField field_default;
+	mesh_output_spill_field_to_c(field_default, *field);
+#else
+	memset(field, 0, sizeof(*field));
+#endif
+}
+
+void spvc_msl_mesh_output_spill_layout_init(spvc_msl_mesh_output_spill_layout *layout)
+{
+#if SPIRV_CROSS_C_API_MSL
+	MSLMeshOutputSpillLayout layout_default;
+	mesh_output_spill_layout_to_c(layout_default, *layout);
+#else
+	memset(layout, 0, sizeof(*layout));
 #endif
 }
 
