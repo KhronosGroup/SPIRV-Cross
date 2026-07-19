@@ -9505,9 +9505,11 @@ void CompilerMSL::validate_cooperative_matrix_types()
 
 		if (auto *scope = this->maybe_get<SPIRConstant>(type.ext.cooperative.scope_id))
 		{
-			if (scope->specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
-			if (scope->scalar() != ScopeSubgroup)
+			if (scope->specialization) {
+				fprintf(stderr, "MSL does not support spec-constant scope for cooperative matrices. Defaulting to Subgroup scope.\n");
+				scope = &set<SPIRConstant>(type.ext.cooperative.scope_id, get_uint_type_id(), uint32_t(ScopeSubgroup), false);
+			}
+			else if (scope->scalar() != ScopeSubgroup)
 				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
 		}
 
@@ -9515,9 +9517,12 @@ void CompilerMSL::validate_cooperative_matrix_types()
 		auto *cols_c = this->maybe_get<SPIRConstant>(type.ext.cooperative.columns_id);
 		if (rows_c && cols_c)
 		{
-			if (rows_c->specialization || cols_c->specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
-			if (rows_c->scalar() != 8 || cols_c->scalar() != 8)
+			if (rows_c->specialization || cols_c->specialization) {
+				fprintf(stderr, "MSL does not support spec-constant dimensions for cooperative matrices. Defaulting to 8x8 size.\n");
+				rows_c = &set<SPIRConstant>(type.ext.cooperative.rows_id, get_uint_type_id(), 8u, false);
+				cols_c = &set<SPIRConstant>(type.ext.cooperative.columns_id, get_uint_type_id(), 8u, false);
+			}
+			else if (rows_c->scalar() != 8 || cols_c->scalar() != 8)
 				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
 		}
 	});
@@ -17464,17 +17469,22 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 
 			// Only Subgroup scope
 			auto &scope_c = get<SPIRConstant>(coop_type->ext.cooperative.scope_id);
-			if (scope_c.specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
-			if (scope_c.scalar() != ScopeSubgroup)
+			if (scope_c.specialization) {
+				fprintf(stderr, "MSL does not support spec-constant scope for cooperative matrices. Defaulting to Subgroup scope.\n");
+				scope_c = set<SPIRConstant>(coop_type->ext.cooperative.scope_id, get_uint_type_id(), uint32_t(ScopeSubgroup), false);
+			}
+			else if (scope_c.scalar() != ScopeSubgroup)
 				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
 
 			// Only 8x8
 			auto &rows_c = get<SPIRConstant>(coop_type->ext.cooperative.rows_id);
 			auto &cols_c = get<SPIRConstant>(coop_type->ext.cooperative.columns_id);
-			if (rows_c.specialization || cols_c.specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
-			if (rows_c.scalar() != 8 || cols_c.scalar() != 8)
+			if (rows_c.specialization || cols_c.specialization) {
+				fprintf(stderr, "MSL does not support spec-constant dimensions for cooperative matrices. Defaulting to 8x8 size.\n");
+				rows_c = set<SPIRConstant>(coop_type->ext.cooperative.rows_id, get_uint_type_id(), 8u, false);
+				cols_c = set<SPIRConstant>(coop_type->ext.cooperative.columns_id, get_uint_type_id(), 8u, false);
+			}
+			else if (rows_c.scalar() != 8 || cols_c.scalar() != 8)
 				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
 
 			// Map component type to simdgroup_*8x8
