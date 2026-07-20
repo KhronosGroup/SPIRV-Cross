@@ -88,14 +88,18 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool buffer_reference = type.storage == StorageClassPhysicalStorageBuffer;
+	bool shared_block = type.storage == spv::StorageClassWorkgroup && uses_workgroup_memory_explicit_layout;
 
 	bool is_restrict;
 	if (ssbo)
 		is_restrict = ir.get_buffer_block_flags(v).get(DecorationRestrict);
+	else if (shared_block)
+		// When more than one shared block is present, all shared blocks must be decorated Aliased
+		is_restrict = !has_decoration(v.self, DecorationAliased);
 	else
 		is_restrict = has_decoration(v.self, DecorationRestrict);
 
-	return !is_restrict && (ssbo || image || counter || buffer_reference);
+	return !is_restrict && (ssbo || image || counter || buffer_reference || shared_block);
 }
 
 bool Compiler::block_is_control_dependent(const SPIRBlock &block)
@@ -1285,7 +1289,9 @@ void Compiler::parse_fixup()
 		else if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
+
+			if (var.storage == StorageClassPrivate ||
+				(var.storage == StorageClassWorkgroup && !check_is_shared_memory_block(var)) ||
 			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
 			    var.storage == StorageClassOutput)
 			{
@@ -5264,6 +5270,19 @@ bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
 	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor);
+}
+
+bool Compiler::check_is_shared_memory_block(const SPIRVariable &var)
+{
+	if (var.storage != StorageClassWorkgroup)
+		return false;
+	auto &type = get<SPIRType>(var.basetype);
+	auto *type_meta = ir.find_meta(type.self);
+	if (type_meta && type_meta->decoration.decoration_flags.get(DecorationBlock)) {
+		uses_workgroup_memory_explicit_layout = true;
+		return true;
+	}
+	return false;
 }
 
 // Make these member functions so we can easily break on any force_recompile events.
