@@ -228,8 +228,7 @@ uint32_t CompilerMSL::get_resource_array_size(const SPIRType &type, uint32_t id)
 	if (!descriptor_set_is_argument_buffer(desc_set) && array_size)
 		return array_size;
 
-	StageSetBinding tuple = { get_entry_point().model, desc_set,
-		                      get_decoration(id, DecorationBinding) };
+	StageSetBinding tuple = { get_entry_point().model, desc_set, get_decoration(id, DecorationBinding) };
 	auto itr = resource_bindings.find(tuple);
 	uint32_t resource_count = itr != end(resource_bindings) ? itr->second.first.count : 0;
 	if (!resource_count || type.array.size() < 2)
@@ -343,235 +342,236 @@ void CompilerMSL::build_implicit_builtins()
 		bool has_point_size = false;
 		uint32_t workgroup_id_type = 0;
 
-		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
-				return;
-			if (!interface_variable_exists_in_entry_point(var.self))
-				return;
+		ir.for_each_typed_id<SPIRVariable>(
+		    [&](uint32_t, SPIRVariable &var)
+		    {
+			    if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+				    return;
+			    if (!interface_variable_exists_in_entry_point(var.self))
+				    return;
 
-			auto &type = this->get<SPIRType>(var.basetype);
-			if (needs_point_size_output && has_decoration(type.self, DecorationBlock))
-			{
-				const auto member_count = static_cast<uint32_t>(type.member_types.size());
-				for (uint32_t i = 0; i < member_count; i++)
-				{
-					if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInPointSize)
-					{
-						has_point_size = true;
-						active_output_builtins.set(BuiltInPointSize);
-						break;
-					}
-				}
-			}
+			    auto &type = this->get<SPIRType>(var.basetype);
+			    if (needs_point_size_output && has_decoration(type.self, DecorationBlock))
+			    {
+				    const auto member_count = static_cast<uint32_t>(type.member_types.size());
+				    for (uint32_t i = 0; i < member_count; i++)
+				    {
+					    if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInPointSize)
+					    {
+						    has_point_size = true;
+						    active_output_builtins.set(BuiltInPointSize);
+						    break;
+					    }
+				    }
+			    }
 
-			if (!has_decoration(var.self, DecorationBuiltIn))
-				return;
+			    if (!has_decoration(var.self, DecorationBuiltIn))
+				    return;
 
-			BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
+			    BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
 
-			if (var.storage == StorageClassOutput)
-			{
-				if (has_additional_fixed_sample_mask() && builtin == BuiltInSampleMask)
-				{
-					builtin_sample_mask_id = var.self;
-					mark_implicit_builtin(StorageClassOutput, BuiltInSampleMask, var.self);
-					does_shader_write_sample_mask = true;
-				}
+			    if (var.storage == StorageClassOutput)
+			    {
+				    if (has_additional_fixed_sample_mask() && builtin == BuiltInSampleMask)
+				    {
+					    builtin_sample_mask_id = var.self;
+					    mark_implicit_builtin(StorageClassOutput, BuiltInSampleMask, var.self);
+					    does_shader_write_sample_mask = true;
+				    }
 
-				if (force_frag_depth_passthrough && builtin == BuiltInFragDepth)
-				{
-					builtin_frag_depth_id = var.self;
-					mark_implicit_builtin(StorageClassOutput, BuiltInFragDepth, var.self);
-					has_frag_depth = true;
-				}
-			}
+				    if (force_frag_depth_passthrough && builtin == BuiltInFragDepth)
+				    {
+					    builtin_frag_depth_id = var.self;
+					    mark_implicit_builtin(StorageClassOutput, BuiltInFragDepth, var.self);
+					    has_frag_depth = true;
+				    }
+			    }
 
-			if (builtin == BuiltInPointSize)
-			{
-				has_point_size = true;
-				active_output_builtins.set(BuiltInPointSize);
-			}
+			    if (builtin == BuiltInPointSize)
+			    {
+				    has_point_size = true;
+				    active_output_builtins.set(BuiltInPointSize);
+			    }
 
-			if (builtin == BuiltInPrimitivePointIndicesEXT ||
-			    builtin == BuiltInPrimitiveLineIndicesEXT ||
-			    builtin == BuiltInPrimitiveTriangleIndicesEXT)
-			{
-				builtin_mesh_primitive_indices_id = var.self;
-			}
+			    if (builtin == BuiltInPrimitivePointIndicesEXT || builtin == BuiltInPrimitiveLineIndicesEXT ||
+			        builtin == BuiltInPrimitiveTriangleIndicesEXT)
+			    {
+				    builtin_mesh_primitive_indices_id = var.self;
+			    }
 
-			if (var.storage != StorageClassInput)
-				return;
+			    if (var.storage != StorageClassInput)
+				    return;
 
-			if (need_ray_launch && builtin == BuiltInLaunchIdKHR)
-			{
-				builtin_launch_id_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInLaunchIdKHR, var.self);
-				has_launch_id = true;
-			}
-			else if (need_ray_launch && builtin == BuiltInLaunchSizeKHR)
-			{
-				builtin_launch_size_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInLaunchSizeKHR, var.self);
-				has_launch_size = true;
-			}
+			    if (need_ray_launch && builtin == BuiltInLaunchIdKHR)
+			    {
+				    builtin_launch_id_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInLaunchIdKHR, var.self);
+				    has_launch_id = true;
+			    }
+			    else if (need_ray_launch && builtin == BuiltInLaunchSizeKHR)
+			    {
+				    builtin_launch_size_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInLaunchSizeKHR, var.self);
+				    has_launch_size = true;
+			    }
 
-			// Use Metal's native frame-buffer fetch API for subpass inputs.
-			if (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses))
-			{
-				switch (builtin)
-				{
-				case BuiltInFragCoord:
-					mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var.self);
-					builtin_frag_coord_id = var.self;
-					has_frag_coord = true;
-					break;
-				case BuiltInLayer:
-					if (!msl_options.arrayed_subpass_input || msl_options.multiview)
-						break;
-					mark_implicit_builtin(StorageClassInput, BuiltInLayer, var.self);
-					builtin_layer_id = var.self;
-					has_layer = true;
-					break;
-				case BuiltInViewIndex:
-					if (!msl_options.multiview)
-						break;
-					mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
-					builtin_view_idx_id = var.self;
-					has_view_idx = true;
-					break;
-				default:
-					break;
-				}
-			}
+			    // Use Metal's native frame-buffer fetch API for subpass inputs.
+			    if (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses))
+			    {
+				    switch (builtin)
+				    {
+				    case BuiltInFragCoord:
+					    mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var.self);
+					    builtin_frag_coord_id = var.self;
+					    has_frag_coord = true;
+					    break;
+				    case BuiltInLayer:
+					    if (!msl_options.arrayed_subpass_input || msl_options.multiview)
+						    break;
+					    mark_implicit_builtin(StorageClassInput, BuiltInLayer, var.self);
+					    builtin_layer_id = var.self;
+					    has_layer = true;
+					    break;
+				    case BuiltInViewIndex:
+					    if (!msl_options.multiview)
+						    break;
+					    mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
+					    builtin_view_idx_id = var.self;
+					    has_view_idx = true;
+					    break;
+				    default:
+					    break;
+				    }
+			    }
 
-			if ((need_sample_pos || needs_sample_id) && builtin == BuiltInSampleId)
-			{
-				builtin_sample_id_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInSampleId, var.self);
-				has_sample_id = true;
-			}
+			    if ((need_sample_pos || needs_sample_id) && builtin == BuiltInSampleId)
+			    {
+				    builtin_sample_id_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInSampleId, var.self);
+				    has_sample_id = true;
+			    }
 
-			if (need_vertex_params)
-			{
-				switch (builtin)
-				{
-				case BuiltInVertexIndex:
-					builtin_vertex_idx_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInVertexIndex, var.self);
-					has_vertex_idx = true;
-					break;
-				case BuiltInBaseVertex:
-					builtin_base_vertex_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInBaseVertex, var.self);
-					has_base_vertex = true;
-					break;
-				case BuiltInInstanceIndex:
-					builtin_instance_idx_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
-					has_instance_idx = true;
-					break;
-				case BuiltInBaseInstance:
-					builtin_base_instance_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
-					has_base_instance = true;
-					break;
-				default:
-					break;
-				}
-			}
+			    if (need_vertex_params)
+			    {
+				    switch (builtin)
+				    {
+				    case BuiltInVertexIndex:
+					    builtin_vertex_idx_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInVertexIndex, var.self);
+					    has_vertex_idx = true;
+					    break;
+				    case BuiltInBaseVertex:
+					    builtin_base_vertex_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInBaseVertex, var.self);
+					    has_base_vertex = true;
+					    break;
+				    case BuiltInInstanceIndex:
+					    builtin_instance_idx_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
+					    has_instance_idx = true;
+					    break;
+				    case BuiltInBaseInstance:
+					    builtin_base_instance_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
+					    has_base_instance = true;
+					    break;
+				    default:
+					    break;
+				    }
+			    }
 
-			if (need_tesc_params && builtin == BuiltInInvocationId)
-			{
-				builtin_invocation_id_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInInvocationId, var.self);
-				has_invocation_id = true;
-			}
+			    if (need_tesc_params && builtin == BuiltInInvocationId)
+			    {
+				    builtin_invocation_id_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInInvocationId, var.self);
+				    has_invocation_id = true;
+			    }
 
-			if ((need_tesc_params || need_tese_params) && builtin == BuiltInPrimitiveId)
-			{
-				builtin_primitive_id_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInPrimitiveId, var.self);
-				has_primitive_id = true;
-			}
+			    if ((need_tesc_params || need_tese_params) && builtin == BuiltInPrimitiveId)
+			    {
+				    builtin_primitive_id_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInPrimitiveId, var.self);
+				    has_primitive_id = true;
+			    }
 
-			if (need_tese_params && builtin == BuiltInTessLevelOuter)
-			{
-				tess_level_outer_var_id = var.self;
-			}
+			    if (need_tese_params && builtin == BuiltInTessLevelOuter)
+			    {
+				    tess_level_outer_var_id = var.self;
+			    }
 
-			if (need_tese_params && builtin == BuiltInTessLevelInner)
-			{
-				tess_level_inner_var_id = var.self;
-			}
+			    if (need_tese_params && builtin == BuiltInTessLevelInner)
+			    {
+				    tess_level_inner_var_id = var.self;
+			    }
 
-			if ((need_subgroup_mask || needs_subgroup_invocation_id) && builtin == BuiltInSubgroupLocalInvocationId)
-			{
-				builtin_subgroup_invocation_id_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInSubgroupLocalInvocationId, var.self);
-				has_subgroup_invocation_id = true;
-			}
+			    if ((need_subgroup_mask || needs_subgroup_invocation_id) && builtin == BuiltInSubgroupLocalInvocationId)
+			    {
+				    builtin_subgroup_invocation_id_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInSubgroupLocalInvocationId, var.self);
+				    has_subgroup_invocation_id = true;
+			    }
 
-			if ((need_subgroup_ge_mask || needs_subgroup_size) && builtin == BuiltInSubgroupSize)
-			{
-				builtin_subgroup_size_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInSubgroupSize, var.self);
-				has_subgroup_size = true;
-			}
+			    if ((need_subgroup_ge_mask || needs_subgroup_size) && builtin == BuiltInSubgroupSize)
+			    {
+				    builtin_subgroup_size_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInSubgroupSize, var.self);
+				    has_subgroup_size = true;
+			    }
 
-			if (need_multiview)
-			{
-				switch (builtin)
-				{
-				case BuiltInInstanceIndex:
-					// The view index here is derived from the instance index.
-					builtin_instance_idx_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
-					has_instance_idx = true;
-					break;
-				case BuiltInBaseInstance:
-					// If a non-zero base instance is used, we need to adjust for it when calculating the view index.
-					builtin_base_instance_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
-					has_base_instance = true;
-					break;
-				case BuiltInViewIndex:
-					builtin_view_idx_id = var.self;
-					mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
-					has_view_idx = true;
-					break;
-				default:
-					break;
-				}
-			}
+			    if (need_multiview)
+			    {
+				    switch (builtin)
+				    {
+				    case BuiltInInstanceIndex:
+					    // The view index here is derived from the instance index.
+					    builtin_instance_idx_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
+					    has_instance_idx = true;
+					    break;
+				    case BuiltInBaseInstance:
+					    // If a non-zero base instance is used, we need to adjust for it when calculating the view index.
+					    builtin_base_instance_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
+					    has_base_instance = true;
+					    break;
+				    case BuiltInViewIndex:
+					    builtin_view_idx_id = var.self;
+					    mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
+					    has_view_idx = true;
+					    break;
+				    default:
+					    break;
+				    }
+			    }
 
-			if (needs_helper_invocation && builtin == BuiltInHelperInvocation)
-			{
-				builtin_helper_invocation_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInHelperInvocation, var.self);
-				has_helper_invocation = true;
-			}
+			    if (needs_helper_invocation && builtin == BuiltInHelperInvocation)
+			    {
+				    builtin_helper_invocation_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInHelperInvocation, var.self);
+				    has_helper_invocation = true;
+			    }
 
-			if (need_local_invocation_index && builtin == BuiltInLocalInvocationIndex)
-			{
-				builtin_local_invocation_index_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInLocalInvocationIndex, var.self);
-				has_local_invocation_index = true;
-			}
+			    if (need_local_invocation_index && builtin == BuiltInLocalInvocationIndex)
+			    {
+				    builtin_local_invocation_index_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInLocalInvocationIndex, var.self);
+				    has_local_invocation_index = true;
+			    }
 
-			if (need_workgroup_size && builtin == BuiltInWorkgroupSize)
-			{
-				builtin_workgroup_size_id = var.self;
-				mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var.self);
-				has_workgroup_size = true;
-			}
+			    if (need_workgroup_size && builtin == BuiltInWorkgroupSize)
+			    {
+				    builtin_workgroup_size_id = var.self;
+				    mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var.self);
+				    has_workgroup_size = true;
+			    }
 
-			// The base workgroup needs to have the same type and vector size
-			// as the workgroup or invocation ID, so keep track of the type that
-			// was used.
-			if (need_dispatch_base && workgroup_id_type == 0 &&
-			    (builtin == BuiltInWorkgroupId || builtin == BuiltInGlobalInvocationId))
-				workgroup_id_type = var.basetype;
-		});
+			    // The base workgroup needs to have the same type and vector size
+			    // as the workgroup or invocation ID, so keep track of the type that
+			    // was used.
+			    if (need_dispatch_base && workgroup_id_type == 0 &&
+			        (builtin == BuiltInWorkgroupId || builtin == BuiltInGlobalInvocationId))
+				    workgroup_id_type = var.basetype;
+		    });
 
 		if (need_ray_launch && (!has_launch_id || !has_launch_size))
 		{
@@ -1423,7 +1423,7 @@ uint32_t CompilerMSL::build_device_ulong2_array_pointer()
 	uint32_t type_ptr_ptr_id = offset + 3;
 	uint32_t var_id = offset + 4;
 
-	SPIRType ulong_type { OpTypeInt };
+	SPIRType ulong_type{ OpTypeInt };
 	ulong_type.basetype = SPIRType::UInt64;
 	ulong_type.width = 64;
 	set<SPIRType>(ulong_type_id, ulong_type);
@@ -2127,9 +2127,8 @@ void CompilerMSL::preprocess_op_codes()
 		add_typedef_line(ray_context);
 		if (uses_hit_triangle_vertex_positions)
 		{
-			const char *getter = get_execution_model() == ExecutionModelAnyHitKHR ?
-			                         "get_candidate_primitive_data" :
-			                         "get_committed_primitive_data";
+			const char *getter = get_execution_model() == ExecutionModelAnyHitKHR ? "get_candidate_primitive_data" :
+			                                                                        "get_committed_primitive_data";
 			auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 			entry_func.fixup_hooks_in.push_back(
 			    [this, getter]()
@@ -3536,13 +3535,12 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					BuiltIn builtin = BuiltInMax;
 					is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
-					bool is_ray_tracing_context_builtin =
-					    var.storage == StorageClassInput &&
-					    (get_execution_model() == ExecutionModelMissKHR ||
-					     get_execution_model() == ExecutionModelClosestHitKHR ||
-					     get_execution_model() == ExecutionModelAnyHitKHR ||
-					     get_execution_model() == ExecutionModelIntersectionKHR) &&
-					    ray_tracing_context_field(builtin);
+					bool is_ray_tracing_context_builtin = var.storage == StorageClassInput &&
+					                                      (get_execution_model() == ExecutionModelMissKHR ||
+					                                       get_execution_model() == ExecutionModelClosestHitKHR ||
+					                                       get_execution_model() == ExecutionModelAnyHitKHR ||
+					                                       get_execution_model() == ExecutionModelIntersectionKHR) &&
+					                                      ray_tracing_context_field(builtin);
 					if (is_builtin && has_active_builtin(builtin, var.storage) && !is_ray_tracing_context_builtin)
 					{
 						// Add a arg variable with the same type and decorations as the member
@@ -9790,7 +9788,8 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 		statement("");
 }
 
-void CompilerMSL::emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
+void CompilerMSL::emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                     const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
 	emit_op(result_type, result_id, join(to_ptr_expression(op0), " ", op, " ", to_ptr_expression(op1)), forward);
@@ -10747,8 +10746,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				if (element_type.array.empty())
 					statement(dst, " = ", metadata, ";");
 				else
-					emit_native_array_copy(dst, metadata, element_type,
-					                       join("Composite_", ops[1], "_", i - 2));
+					emit_native_array_copy(dst, metadata, element_type, join("Composite_", ops[1], "_", i - 2));
 			}
 			ray_tracing_metadata_expressions[ops[1]] = name;
 		}
@@ -11904,8 +11902,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		flush_variable_declaration(ops[2]);
 		emit_uninitialized_temporary_expression(ops[0], ops[1]);
 		string primitive_data = join("spvRayPrimitiveData_", ops[1]);
-		const char *getter = MSL_RAY_QUERY_IS_CANDIDATE ? "get_candidate_primitive_data" :
-		                                                    "get_committed_primitive_data";
+		const char *getter =
+		    MSL_RAY_QUERY_IS_CANDIDATE ? "get_candidate_primitive_data" : "get_committed_primitive_data";
 		statement("const device spvRayTrianglePositions* ", primitive_data,
 		          " = reinterpret_cast<const device spvRayTrianglePositions*>(", to_expression(ops[2]), ".", getter,
 		          "());");
@@ -12809,8 +12807,7 @@ void CompilerMSL::emit_additional_phi_assignments(BlockID from, BlockID to)
 		if (type.array.empty())
 			statement(destination, " = ", source, ";");
 		else
-			emit_native_array_copy(destination, source, type,
-			                       join("Phi_", from, "_", to, "_", assignment.variable));
+			emit_native_array_copy(destination, source, type, join("Phi_", from, "_", to, "_", assignment.variable));
 	}
 }
 
@@ -14241,11 +14238,10 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 					decl += "thread ulong& spvShaderRecordAddress, ";
 			}
 			decl += "thread spvRayTracingState& spvRayState";
-			if (uses_ray_position_fetch_abi() &&
-			    (get_execution_model() == ExecutionModelMissKHR ||
-			     get_execution_model() == ExecutionModelClosestHitKHR ||
-			     get_execution_model() == ExecutionModelAnyHitKHR ||
-			     get_execution_model() == ExecutionModelIntersectionKHR))
+			if (uses_ray_position_fetch_abi() && (get_execution_model() == ExecutionModelMissKHR ||
+			                                      get_execution_model() == ExecutionModelClosestHitKHR ||
+			                                      get_execution_model() == ExecutionModelAnyHitKHR ||
+			                                      get_execution_model() == ExecutionModelIntersectionKHR))
 				decl += ", thread intersection_query<instancing, triangle_data>& spvRayPipelineQuery";
 		}
 	}
@@ -16905,94 +16901,96 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 	// Builtin variables
 	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
-		if (var.storage != StorageClassInput)
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t var_id, SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassInput)
+			    return;
 
-		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
-		if (is_visible_raygen() && (bi_type == BuiltInLaunchIdKHR || bi_type == BuiltInLaunchSizeKHR))
-			return;
-		if ((get_execution_model() == ExecutionModelMissKHR || get_execution_model() == ExecutionModelClosestHitKHR ||
-		     get_execution_model() == ExecutionModelAnyHitKHR ||
-		     get_execution_model() == ExecutionModelIntersectionKHR) &&
-		    ray_tracing_context_field(bi_type))
-		{
-			set_qualified_name(var_id, join("spvRayContext.", ray_tracing_context_field(bi_type)));
-			return;
-		}
-		if (get_execution_model() == ExecutionModelCallableKHR &&
-		    (bi_type == BuiltInLaunchIdKHR || bi_type == BuiltInLaunchSizeKHR))
-		{
-			set_qualified_name(var_id, join("spvRayState.", ray_tracing_context_field(bi_type)));
-			return;
-		}
+		    auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+		    if (is_visible_raygen() && (bi_type == BuiltInLaunchIdKHR || bi_type == BuiltInLaunchSizeKHR))
+			    return;
+		    if ((get_execution_model() == ExecutionModelMissKHR ||
+		         get_execution_model() == ExecutionModelClosestHitKHR ||
+		         get_execution_model() == ExecutionModelAnyHitKHR ||
+		         get_execution_model() == ExecutionModelIntersectionKHR) &&
+		        ray_tracing_context_field(bi_type))
+		    {
+			    set_qualified_name(var_id, join("spvRayContext.", ray_tracing_context_field(bi_type)));
+			    return;
+		    }
+		    if (get_execution_model() == ExecutionModelCallableKHR &&
+		        (bi_type == BuiltInLaunchIdKHR || bi_type == BuiltInLaunchSizeKHR))
+		    {
+			    set_qualified_name(var_id, join("spvRayState.", ray_tracing_context_field(bi_type)));
+			    return;
+		    }
 
-		// Don't emit SamplePosition as a separate parameter. In the entry
-		// point, we get that by calling get_sample_position() on the sample ID.
-		if (is_builtin_variable(var) &&
-		    get_variable_data_type(var).basetype != SPIRType::Struct &&
-		    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
-		{
-			// If the builtin is not part of the active input builtin set, don't emit it.
-			// Relevant for multiple entry-point modules which might declare unused builtins.
-			if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
-				return;
+		    // Don't emit SamplePosition as a separate parameter. In the entry
+		    // point, we get that by calling get_sample_position() on the sample ID.
+		    if (is_builtin_variable(var) && get_variable_data_type(var).basetype != SPIRType::Struct &&
+		        get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
+		    {
+			    // If the builtin is not part of the active input builtin set, don't emit it.
+			    // Relevant for multiple entry-point modules which might declare unused builtins.
+			    if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
+				    return;
 
-			// Remember this variable. We may need to correct its type.
-			active_builtins.push_back(make_pair(&var, bi_type));
+			    // Remember this variable. We may need to correct its type.
+			    active_builtins.push_back(make_pair(&var, bi_type));
 
-			if (is_direct_input_builtin(bi_type))
-			{
-				if (!ep_args.empty())
-					ep_args += ", ";
+			    if (is_direct_input_builtin(bi_type))
+			    {
+				    if (!ep_args.empty())
+					    ep_args += ", ";
 
-				// Handle HLSL-style 0-based vertex/instance index.
-				builtin_declaration = true;
+				    // Handle HLSL-style 0-based vertex/instance index.
+				    builtin_declaration = true;
 
-				// Handle different MSL gl_TessCoord types. (float2, float3)
-				if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
-					ep_args += "float2 " + to_expression(var_id) + "In";
-				else
-					ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
+				    // Handle different MSL gl_TessCoord types. (float2, float3)
+				    if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
+					    ep_args += "float2 " + to_expression(var_id) + "In";
+				    else
+					    ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 
-				ep_args += string(" [[") + builtin_qualifier(bi_type);
-				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
-				{
-					if (!msl_options.supports_msl_version(2))
-						SPIRV_CROSS_THROW("Post-depth coverage requires MSL 2.0.");
-					if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
-						SPIRV_CROSS_THROW("Post-depth coverage on Mac requires MSL 2.3.");
-					ep_args += ", post_depth_coverage";
-				}
-				ep_args += "]]";
-				builtin_declaration = false;
-			}
-		}
+				    ep_args += string(" [[") + builtin_qualifier(bi_type);
+				    if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
+				    {
+					    if (!msl_options.supports_msl_version(2))
+						    SPIRV_CROSS_THROW("Post-depth coverage requires MSL 2.0.");
+					    if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
+						    SPIRV_CROSS_THROW("Post-depth coverage on Mac requires MSL 2.3.");
+					    ep_args += ", post_depth_coverage";
+				    }
+				    ep_args += "]]";
+				    builtin_declaration = false;
+			    }
+		    }
 
-		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
-		{
-			// This is a special implicit builtin, not corresponding to any SPIR-V builtin,
-			// which holds the base that was passed to vkCmdDispatchBase() or vkCmdDrawIndexed(). If it's present,
-			// assume we emitted it for a good reason.
-			assert(msl_options.supports_msl_version(1, 2));
-			if (!ep_args.empty())
-				ep_args += ", ";
+		    if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
+		    {
+			    // This is a special implicit builtin, not corresponding to any SPIR-V builtin,
+			    // which holds the base that was passed to vkCmdDispatchBase() or vkCmdDrawIndexed(). If it's present,
+			    // assume we emitted it for a good reason.
+			    assert(msl_options.supports_msl_version(1, 2));
+			    if (!ep_args.empty())
+				    ep_args += ", ";
 
-			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
-		}
+			    ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
+		    }
 
-		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
-		{
-			// This is another special implicit builtin, not corresponding to any SPIR-V builtin,
-			// which holds the number of vertices and instances to draw. If it's present,
-			// assume we emitted it for a good reason.
-			assert(msl_options.supports_msl_version(1, 2));
-			if (!ep_args.empty())
-				ep_args += ", ";
+		    if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
+		    {
+			    // This is another special implicit builtin, not corresponding to any SPIR-V builtin,
+			    // which holds the number of vertices and instances to draw. If it's present,
+			    // assume we emitted it for a good reason.
+			    assert(msl_options.supports_msl_version(1, 2));
+			    if (!ep_args.empty())
+				    ep_args += ", ";
 
-			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_size]]";
-		}
-	});
+			    ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_size]]";
+		    }
+	    });
 
 	// Correct the types of all encountered active builtins. We couldn't do this before
 	// because ensure_correct_builtin_type() may increase the bound, which isn't allowed
@@ -17385,8 +17383,8 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 	declare_implicit_buffer(swizzle_buffer_id, "swizzleAddress", "constant uint*");
 	declare_implicit_buffer(buffer_size_buffer_id, "bufferSizeAddress", "constant uint*");
 	declare_implicit_buffer(dynamic_offsets_buffer_id, "dynamicOffsetsAddress", "constant uint*");
-	declare_implicit_buffer(acceleration_structure_address_table_buffer_id,
-	                        "accelerationStructureAddressTableAddress", "device const ulong2*");
+	declare_implicit_buffer(acceleration_structure_address_table_buffer_id, "accelerationStructureAddressTableAddress",
+	                        "device const ulong2*");
 
 	// Output resources, sorted by resource index & type
 	// We need to sort to work around a bug on macOS 10.13 with NVidia drivers where switching between shaders
@@ -17405,160 +17403,166 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 	SmallVector<Resource> resources;
 
 	entry_point_bindings.clear();
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
-		if ((var_id == swizzle_buffer_id || var_id == buffer_size_buffer_id || var_id == dynamic_offsets_buffer_id ||
-		     var_id == acceleration_structure_address_table_buffer_id) &&
-		    indirect_ray_arguments)
-			return;
-		if (var.storage == StorageClassPushConstant && indirect_ray_arguments)
-		{
-			if (!indirect_push_constants_declared)
-			{
-				indirect_push_constants_declared = true;
-				auto address_space = get_variable_address_space(var);
-				auto type_name = type_to_glsl(get_variable_data_type(var));
-				auto variable_name = to_name(var_id);
-				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-				entry_func.fixup_hooks_in.insert(
-				    entry_func.fixup_hooks_in.begin(),
-				    [this, address_space, type_name, variable_name]()
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t var_id, SPIRVariable &var)
+	    {
+		    if ((var_id == swizzle_buffer_id || var_id == buffer_size_buffer_id ||
+		         var_id == dynamic_offsets_buffer_id || var_id == acceleration_structure_address_table_buffer_id) &&
+		        indirect_ray_arguments)
+			    return;
+		    if (var.storage == StorageClassPushConstant && indirect_ray_arguments)
+		    {
+			    if (!indirect_push_constants_declared)
+			    {
+				    indirect_push_constants_declared = true;
+				    auto address_space = get_variable_address_space(var);
+				    auto type_name = type_to_glsl(get_variable_data_type(var));
+				    auto variable_name = to_name(var_id);
+				    auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				    entry_func.fixup_hooks_in.insert(
+				        entry_func.fixup_hooks_in.begin(),
+				        [this, address_space, type_name, variable_name]()
+				        {
+					        string address =
+					            get_execution_model() == ExecutionModelCallableKHR || is_visible_raygen() ?
+					                "spvRayState.pushConstantsAddress" :
+					                "reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->pushConstantsAddress";
+					        statement(address_space, " auto& ", variable_name, " = *reinterpret_cast<", address_space,
+					                  " ", type_name, "*>(", address, ");");
+				        });
+			    }
+			    return;
+		    }
+		    if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
+		         var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
+		        !is_hidden_variable(var))
+		    {
+			    auto &type = get_variable_data_type(var);
+			    uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+
+			    if (is_supported_argument_buffer_type(type) && var.storage != StorageClassPushConstant)
+			    {
+				    if (descriptor_set_is_argument_buffer(desc_set))
 				    {
-					    string address = get_execution_model() == ExecutionModelCallableKHR || is_visible_raygen() ?
-					                         "spvRayState.pushConstantsAddress" :
-					                         "reinterpret_cast<thread spvRayDataStorage*>(spvRayData)->pushConstantsAddress";
-					    statement(address_space, " auto& ", variable_name, " = *reinterpret_cast<", address_space, " ",
-					              type_name, "*>(", address, ");");
-				    });
-			}
-			return;
-		}
-		if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
-		    !is_hidden_variable(var))
-		{
-			auto &type = get_variable_data_type(var);
-			uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+					    if (is_var_runtime_size_array(var))
+					    {
+						    // Runtime arrays need to be wrapped in spvDescriptorArray from argument buffer payload.
+						    entry_point_bindings.push_back(&var);
+						    // We'll wrap this, so to_name() will always use non-qualified name.
+						    // We'll need the qualified name to create temporary variable instead.
+						    ir.meta[var_id].decoration.qualified_alias_explicit_override = true;
+					    }
+					    return;
+				    }
+			    }
 
-			if (is_supported_argument_buffer_type(type) && var.storage != StorageClassPushConstant)
-			{
-				if (descriptor_set_is_argument_buffer(desc_set))
-				{
-					if (is_var_runtime_size_array(var))
-					{
-						// Runtime arrays need to be wrapped in spvDescriptorArray from argument buffer payload.
-						entry_point_bindings.push_back(&var);
-						// We'll wrap this, so to_name() will always use non-qualified name.
-						// We'll need the qualified name to create temporary variable instead.
-						ir.meta[var_id].decoration.qualified_alias_explicit_override = true;
-					}
-					return;
-				}
-			}
+			    // Handle descriptor aliasing of simple discrete cases.
+			    // We can handle aliasing of buffers by casting pointers.
+			    // The amount of aliasing we can perform for discrete descriptors is very limited.
+			    // For fully mutable-style aliasing, we need argument buffers where we can exploit the fact
+			    // that descriptors are all 8 bytes.
+			    SPIRVariable *discrete_descriptor_alias = nullptr;
 
-			// Handle descriptor aliasing of simple discrete cases.
-			// We can handle aliasing of buffers by casting pointers.
-			// The amount of aliasing we can perform for discrete descriptors is very limited.
-			// For fully mutable-style aliasing, we need argument buffers where we can exploit the fact
-			// that descriptors are all 8 bytes.
-			SPIRVariable *discrete_descriptor_alias = nullptr;
+			    const auto resource_is_aliasing_candidate = [this](const SPIRVariable &var_)
+			    {
+				    return ray_tracing_metadata_sources.count(var_.self) == 0 &&
+				           (is_var_runtime_size_array(var_) || var_.storage == StorageClassUniform ||
+				            var_.storage == StorageClassStorageBuffer);
+			    };
 
-			const auto resource_is_aliasing_candidate = [this](const SPIRVariable &var_)
-			{
-				return ray_tracing_metadata_sources.count(var_.self) == 0 &&
-				       (is_var_runtime_size_array(var_) || var_.storage == StorageClassUniform ||
-				        var_.storage == StorageClassStorageBuffer);
-			};
+			    if (resource_is_aliasing_candidate(var))
+			    {
+				    for (auto &resource : resources)
+				    {
+					    if (resource_is_aliasing_candidate(*resource.var) &&
+					        get_decoration(resource.var->self, DecorationDescriptorSet) ==
+					            get_decoration(var_id, DecorationDescriptorSet) &&
+					        get_decoration(resource.var->self, DecorationBinding) ==
+					            get_decoration(var_id, DecorationBinding))
+					    {
+						    discrete_descriptor_alias = resource.var;
+						    // Self-reference marks that we should declare the resource,
+						    // and it's being used as an alias (so we can emit void* instead).
+						    resource.discrete_descriptor_alias = resource.var;
+						    // Need to promote interlocked usage so that the primary declaration is correct.
+						    if (interlocked_resources.count(var_id))
+							    interlocked_resources.insert(resource.var->self);
 
-			if (resource_is_aliasing_candidate(var))
-			{
-				for (auto &resource : resources)
-				{
-					if (resource_is_aliasing_candidate(*resource.var) &&
-					    get_decoration(resource.var->self, DecorationDescriptorSet) ==
-					    get_decoration(var_id, DecorationDescriptorSet) &&
-					    get_decoration(resource.var->self, DecorationBinding) ==
-					    get_decoration(var_id, DecorationBinding))
-					{
-						discrete_descriptor_alias = resource.var;
-						// Self-reference marks that we should declare the resource,
-						// and it's being used as an alias (so we can emit void* instead).
-						resource.discrete_descriptor_alias = resource.var;
-						// Need to promote interlocked usage so that the primary declaration is correct.
-						if (interlocked_resources.count(var_id))
-							interlocked_resources.insert(resource.var->self);
+						    // Aliasing with unroll just gets too messy to deal with. I sure hope this never comes up ...
+						    if ((is_array(get_variable_data_type(*resource.var)) &&
+						         !is_var_runtime_size_array(*resource.var)) ||
+						        (is_array(get_variable_data_type(var)) && !is_var_runtime_size_array(var)))
+						    {
+							    SPIRV_CROSS_THROW("Attempting to alias same binding with a descriptor array which is "
+							                      "not implemented through argument buffers. This is unsupported.");
+						    }
+						    break;
+					    }
+				    }
+			    }
 
-						// Aliasing with unroll just gets too messy to deal with. I sure hope this never comes up ...
-						if ((is_array(get_variable_data_type(*resource.var)) && !is_var_runtime_size_array(*resource.var)) ||
-						    (is_array(get_variable_data_type(var)) && !is_var_runtime_size_array(var)))
-						{
-							SPIRV_CROSS_THROW("Attempting to alias same binding with a descriptor array which is not implemented through argument buffers. This is unsupported.");
-						}
-						break;
-					}
-				}
-			}
+			    const MSLConstexprSampler *constexpr_sampler = nullptr;
+			    if (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Sampler)
+			    {
+				    constexpr_sampler = find_constexpr_sampler(var_id);
+				    if (constexpr_sampler)
+				    {
+					    // Mark this ID as a constexpr sampler for later in case it came from set/bindings.
+					    constexpr_samplers_by_id[var_id] = *constexpr_sampler;
+				    }
+			    }
 
-			const MSLConstexprSampler *constexpr_sampler = nullptr;
-			if (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Sampler)
-			{
-				constexpr_sampler = find_constexpr_sampler(var_id);
-				if (constexpr_sampler)
-				{
-					// Mark this ID as a constexpr sampler for later in case it came from set/bindings.
-					constexpr_samplers_by_id[var_id] = *constexpr_sampler;
-				}
-			}
+			    // Emulate texture2D atomic operations
+			    uint32_t secondary_index = 0;
+			    if (atomic_image_vars_emulated.count(var.self))
+			    {
+				    secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
+			    }
 
-			// Emulate texture2D atomic operations
-			uint32_t secondary_index = 0;
-			if (atomic_image_vars_emulated.count(var.self))
-			{
-				secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
-			}
+			    if (type.basetype == SPIRType::SampledImage)
+			    {
+				    add_resource_name(var_id);
 
-			if (type.basetype == SPIRType::SampledImage)
-			{
-				add_resource_name(var_id);
+				    uint32_t plane_count = 1;
+				    if (constexpr_sampler && constexpr_sampler->ycbcr_conversion_enable)
+					    plane_count = constexpr_sampler->planes;
 
-				uint32_t plane_count = 1;
-				if (constexpr_sampler && constexpr_sampler->ycbcr_conversion_enable)
-					plane_count = constexpr_sampler->planes;
+				    entry_point_bindings.push_back(&var);
+				    for (uint32_t i = 0; i < plane_count; i++)
+					    resources.push_back({ &var, discrete_descriptor_alias, to_name(var_id), SPIRType::Image,
+					                          get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
 
-				entry_point_bindings.push_back(&var);
-				for (uint32_t i = 0; i < plane_count; i++)
-					resources.push_back({&var, discrete_descriptor_alias, to_name(var_id), SPIRType::Image,
-					                     get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
+				    if (type.image.dim != DimBuffer && !constexpr_sampler)
+				    {
+					    resources.push_back({ &var, discrete_descriptor_alias, to_sampler_expression(var_id),
+					                          SPIRType::Sampler, get_metal_resource_index(var, SPIRType::Sampler), 0,
+					                          0 });
+				    }
+			    }
+			    else if (!constexpr_sampler)
+			    {
+				    // constexpr samplers are not declared as resources.
+				    add_resource_name(var_id);
 
-				if (type.image.dim != DimBuffer && !constexpr_sampler)
-				{
-					resources.push_back({&var, discrete_descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler,
-					                     get_metal_resource_index(var, SPIRType::Sampler), 0, 0 });
-				}
-			}
-			else if (!constexpr_sampler)
-			{
-				// constexpr samplers are not declared as resources.
-				add_resource_name(var_id);
+				    // Don't allocate resource indices for aliases.
+				    uint32_t resource_index = ~0u;
+				    if (!discrete_descriptor_alias)
+				    {
+					    auto metadata_source = ray_tracing_metadata_sources.find(var_id);
+					    resource_index =
+					        metadata_source == ray_tracing_metadata_sources.end() ?
+					            get_metal_resource_index(var, type.basetype) :
+					            get_metal_resource_index(get<SPIRVariable>(metadata_source->second), SPIRType::UInt);
+				    }
 
-				// Don't allocate resource indices for aliases.
-				uint32_t resource_index = ~0u;
-				if (!discrete_descriptor_alias)
-				{
-					auto metadata_source = ray_tracing_metadata_sources.find(var_id);
-					resource_index = metadata_source == ray_tracing_metadata_sources.end() ?
-					                     get_metal_resource_index(var, type.basetype) :
-					                     get_metal_resource_index(get<SPIRVariable>(metadata_source->second), SPIRType::UInt);
-				}
+				    entry_point_bindings.push_back(&var);
+				    resources.push_back({ &var, discrete_descriptor_alias, to_name(var_id), type.basetype,
+				                          resource_index, 0, secondary_index });
+			    }
+		    }
+	    });
 
-				entry_point_bindings.push_back(&var);
-				resources.push_back({&var, discrete_descriptor_alias, to_name(var_id), type.basetype,
-				                     resource_index, 0, secondary_index });
-			}
-		}
-	});
-
-	stable_sort(resources.begin(), resources.end(),
-	            [](const Resource &lhs, const Resource &rhs)
+	stable_sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs)
 	            { return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index); });
 
 	for (auto &r : resources)
@@ -20543,8 +20547,6 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	if (get_execution_model() == ExecutionModelMissKHR || get_execution_model() == ExecutionModelClosestHitKHR ||
 	    get_execution_model() == ExecutionModelAnyHitKHR || get_execution_model() == ExecutionModelIntersectionKHR)
 	{
-		// Built-ins declared on interface-block members can reach this path with the struct type's storage class
-		// rather than StorageClassInput.
 		const char *field = ray_tracing_context_field(builtin);
 		if (field)
 			return join("spvRayContext.", field);
@@ -22881,9 +22883,11 @@ void CompilerMSL::analyze_argument_buffers()
 						break;
 					case SPIRType::SampledImage:
 						if (next_arg_buff_index == rez_bind.msl_sampler)
-							add_argument_buffer_padding_sampler_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+							add_argument_buffer_padding_sampler_type(buffer_type, member_index, next_arg_buff_index,
+							                                         rez_bind);
 						else
-							add_argument_buffer_padding_image_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+							add_argument_buffer_padding_image_type(buffer_type, member_index, next_arg_buff_index,
+							                                       rez_bind);
 						break;
 					case SPIRType::AccelerationStructure:
 						add_argument_buffer_padding_acceleration_structure_type(buffer_type, member_index,
@@ -23164,7 +23168,8 @@ void CompilerMSL::add_argument_buffer_padding_sampler_type(SPIRType &struct_type
 		argument_buffer_padding_sampler_type_id = samp_type_id;
 	}
 
-	add_argument_buffer_padding_type(argument_buffer_padding_sampler_type_id, struct_type, mbr_idx, arg_buff_index, rez_bind.count);
+	add_argument_buffer_padding_type(argument_buffer_padding_sampler_type_id, struct_type, mbr_idx, arg_buff_index,
+	                                 rez_bind.count);
 }
 
 void CompilerMSL::add_argument_buffer_padding_acceleration_structure_type(SPIRType &struct_type, uint32_t &mbr_idx,

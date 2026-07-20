@@ -214,8 +214,7 @@ int main(int argc, char **argv)
 		{ "is_lss_hit", "OpRayQueryIsLSSHitNV" },
 	};
 	for (auto &test : unsupported_ray_queries)
-		compile(multi_entry, false, false, 0, false, false, test[1], SPVC_MAKE_MSL_VERSION(3, 1, 0), false,
-		        test[0]);
+		compile(multi_entry, false, false, 0, false, false, test[1], SPVC_MAKE_MSL_VERSION(3, 1, 0), false, test[0]);
 	auto bound_multidimensional = compile(multidimensional_resource, false, false, 4);
 	compile(multidimensional_resource, false, false, 3, false, false,
 	        "MSL resource binding count does not match the declared multidimensional array size");
@@ -240,8 +239,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Unexpected acceleration-structure array output\n");
 		return EXIT_FAILURE;
 	}
-	if (!contains(plain_entry, "kernel void plain(") ||
-	    !contains(triangle_positions, "packed_float3 positions[3]") ||
+	if (!contains(plain_entry, "kernel void plain(") || !contains(triangle_positions, "packed_float3 positions[3]") ||
 	    !contains(triangle_positions, ".get_candidate_primitive_data()") ||
 	    !contains(bound_multidimensional, "scenes [[id(0)]][2][2]"))
 	{
@@ -272,19 +270,16 @@ int main(int argc, char **argv)
 	}
 	if (!contains(array_loop, "for (;;)") || !contains(array_loop, "spvRayMetadataIndex_Phi_") ||
 	    !contains(array_loop, "= spvRayMetadata_") || contains(array_loop, ", for (") || contains(array_loop, "{,") ||
-	    !contains(phi_swap, "_copy = spvRayMetadataPhi_") ||
-	    !contains(phi_swap, " = spvRayMetadataPhi_") ||
-	    !contains(phi_extract, "= spvRayMetadata_") ||
-	    !contains(phi_extract, "_copy = spvRayMetadataPhi_") || !contains(phi_extract, "[0];") ||
-	    !contains(phi_extract, " = spvRayMetadataPhi_") || !contains(phi_extract, "_copy;") ||
-	    contains(phi_extract, ", for (") || contains(phi_extract, "{,"))
+	    !contains(phi_swap, "_copy = spvRayMetadataPhi_") || !contains(phi_swap, " = spvRayMetadataPhi_") ||
+	    !contains(phi_extract, "= spvRayMetadata_") || !contains(phi_extract, "_copy = spvRayMetadataPhi_") ||
+	    !contains(phi_extract, "[0];") || !contains(phi_extract, " = spvRayMetadataPhi_") ||
+	    !contains(phi_extract, "_copy;") || contains(phi_extract, ", for (") || contains(phi_extract, "{,"))
 	{
 		fprintf(stderr, "Invalid phi metadata propagation\n");
 		return EXIT_FAILURE;
 	}
 	if (!contains(inserted, "spvRayMetadataIndex_CompositeInsertBase_") ||
-	    !contains(inserted, "[1] = spvRayMetadata_") ||
-	    !contains(copied, "spvRayMetadataIndex_CopyLogical_"))
+	    !contains(inserted, "[1] = spvRayMetadata_") || !contains(copied, "spvRayMetadataIndex_CopyLogical_"))
 	{
 		fprintf(stderr, "Missing composite metadata propagation\n");
 		return EXIT_FAILURE;
