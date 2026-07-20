@@ -23,23 +23,16 @@ void foo(object_data TaskPayload& payload)
 }
 
 static inline __attribute__((always_inline))
-void boo(thread uint& gl_LocalInvocationIndex, thread mesh_grid_properties& spvMgp, thread bool& spvMeshTasksTerminated)
+void boo(thread mesh_grid_properties& spvMgp)
 {
-    if (gl_LocalInvocationIndex == 0)
-        spvMgp.set_threadgroups_per_grid(uint3(1u, 2u, 3u));
-    spvMeshTasksTerminated = true;
+    spvMgp.set_threadgroups_per_grid(uint3(1u, 2u, 3u));
     return;
 }
 
-[[object]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], mesh_grid_properties spvMgp, object_data TaskPayload& payload [[payload]])
+[[object]] void main0(mesh_grid_properties spvMgp, object_data TaskPayload& payload [[payload]])
 {
-    bool spvMeshTasksTerminated = {};
     foo(payload);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    boo(gl_LocalInvocationIndex, spvMgp, spvMeshTasksTerminated);
-    if (spvMeshTasksTerminated)
-        return;
-    payload.c = 4;
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    boo(spvMgp);
 }
 

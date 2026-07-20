@@ -40,7 +40,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 69
+#define SPVC_C_API_VERSION_MINOR 70
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -815,7 +815,7 @@ typedef enum spvc_compiler_option
 	SPVC_COMPILER_OPTION_MSL_ENABLE_POINT_SIZE_DEFAULT = 93 | SPVC_COMPILER_OPTION_MSL_BIT,
 
 	SPVC_COMPILER_OPTION_HLSL_USER_SEMANTIC = 94 | SPVC_COMPILER_OPTION_HLSL_BIT,
-	SPVC_COMPILER_OPTION_MSL_MESH_SHADER_EMULATION = 95 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_MESH_SHADER_EMULATION = 105 | SPVC_COMPILER_OPTION_MSL_BIT,
 
 	SPVC_COMPILER_OPTION_INT_MAX = 0x7fffffff
 } spvc_compiler_option;
@@ -925,37 +925,38 @@ SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_input_threadgroup_mem(spvc_com
 SPVC_PUBLIC_API unsigned spvc_compiler_msl_get_mesh_output_buffer_size(spvc_compiler compiler);
 SPVC_PUBLIC_API unsigned spvc_compiler_msl_get_mesh_output_buffer_alignment(spvc_compiler compiler);
 SPVC_PUBLIC_API unsigned spvc_compiler_msl_get_mesh_output_threadgroup_size(spvc_compiler compiler);
-SPVC_PUBLIC_API unsigned spvc_compiler_msl_get_mesh_output_buffer_offset(spvc_compiler compiler,
-                                                                         spvc_variable_id id);
-SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_mesh_output_spill(
-    spvc_compiler compiler, const spvc_msl_mesh_output_spill_key *key);
-SPVC_PUBLIC_API spvc_result spvc_compiler_msl_get_mesh_output_spill_layout(
-    spvc_compiler compiler, spvc_msl_mesh_output_spill_layout *layout);
+SPVC_PUBLIC_API unsigned spvc_compiler_msl_get_mesh_output_buffer_offset(spvc_compiler compiler, spvc_variable_id id);
+SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_mesh_output_spill(spvc_compiler compiler,
+	                                                                const spvc_msl_mesh_output_spill_key *key);
+SPVC_PUBLIC_API spvc_result spvc_compiler_msl_get_mesh_output_spill_layout(spvc_compiler compiler,
+	                                                                       spvc_msl_mesh_output_spill_layout *layout);
 SPVC_PUBLIC_API size_t spvc_compiler_msl_get_mesh_output_spill_field_count(spvc_compiler compiler);
-SPVC_PUBLIC_API spvc_result spvc_compiler_msl_get_mesh_output_spill_field(
-    spvc_compiler compiler, size_t index, spvc_msl_mesh_output_spill_field *field);
-SPVC_PUBLIC_API spvc_result spvc_compiler_msl_set_mesh_output_spill_layout(
-    spvc_compiler compiler, const spvc_msl_mesh_output_spill_layout *layout,
-    const spvc_msl_mesh_output_spill_field *fields, size_t field_count);
+SPVC_PUBLIC_API spvc_result spvc_compiler_msl_get_mesh_output_spill_field(spvc_compiler compiler, size_t index,
+	                                                                      spvc_msl_mesh_output_spill_field *field);
+SPVC_PUBLIC_API spvc_result
+spvc_compiler_msl_set_mesh_output_spill_layout(spvc_compiler compiler, const spvc_msl_mesh_output_spill_layout *layout,
+	                                           const spvc_msl_mesh_output_spill_field *fields, size_t field_count);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_vertex_attribute(spvc_compiler compiler,
-                                                                   const spvc_msl_vertex_attribute *attrs);
+	                                                               const spvc_msl_vertex_attribute *attrs);
 /* Deprecated; use spvc_compiler_msl_add_resource_binding_2(). */
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
-                                                                   const spvc_msl_resource_binding *binding);
+	                                                               const spvc_msl_resource_binding *binding);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_resource_binding_2(spvc_compiler compiler,
-                                                                     const spvc_msl_resource_binding_2 *binding);
+	                                                                 const spvc_msl_resource_binding_2 *binding);
 /* Deprecated; use spvc_compiler_msl_add_shader_input_2(). */
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_input(spvc_compiler compiler,
-                                                               const spvc_msl_shader_interface_var *input);
+	                                                           const spvc_msl_shader_interface_var *input);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_input_2(spvc_compiler compiler,
-                                                                 const spvc_msl_shader_interface_var_2 *input);
+	                                                             const spvc_msl_shader_interface_var_2 *input);
 /* Deprecated; use spvc_compiler_msl_add_shader_output_2(). */
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_output(spvc_compiler compiler,
-                                                                const spvc_msl_shader_interface_var *output);
+	                                                            const spvc_msl_shader_interface_var *output);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_output_2(spvc_compiler compiler,
-                                                                  const spvc_msl_shader_interface_var_2 *output);
+	                                                              const spvc_msl_shader_interface_var_2 *output);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_discrete_descriptor_set(spvc_compiler compiler, unsigned desc_set);
-SPVC_PUBLIC_API spvc_result spvc_compiler_msl_set_argument_buffer_device_address_space(spvc_compiler compiler, unsigned desc_set, spvc_bool device_address);
+SPVC_PUBLIC_API spvc_result spvc_compiler_msl_set_argument_buffer_device_address_space(spvc_compiler compiler,
+	                                                                                   unsigned desc_set,
+	                                                                                   spvc_bool device_address);
 
 /* Obsolete, use is_shader_input_used. */
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_vertex_attribute_used(spvc_compiler compiler, unsigned location);

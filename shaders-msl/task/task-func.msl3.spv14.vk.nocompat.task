@@ -29,6 +29,4 @@ void main()
   foo();
   barrier();
   boo();
-  payload.c = 4;
-  barrier();
 }

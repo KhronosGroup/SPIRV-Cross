@@ -25,10 +25,10 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
-#include <stdint.h>
 #include <map>
 #include <set>
 #include <stddef.h>
+#include <stdint.h>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -122,8 +122,7 @@ struct MSLMeshOutputSpillField
 	{
 		return key == other.key && base_type == other.base_type && bit_width == other.bit_width &&
 		       vecsize == other.vecsize && columns == other.columns &&
-		       capture_word_offset == other.capture_word_offset &&
-		       capture_word_stride == other.capture_word_stride;
+		       capture_word_offset == other.capture_word_offset && capture_word_stride == other.capture_word_stride;
 	}
 };
 
@@ -731,16 +730,14 @@ public:
 	// compute's dispatch base or MeshEXT's logical grid and flattened batch base.
 	bool needs_dispatch_base_buffer() const
 	{
-		return msl_options.dispatch_base &&
-		       (is_mesh_shader() || !msl_options.supports_msl_version(1, 2));
+		return msl_options.dispatch_base && (is_mesh_shader() || !msl_options.supports_msl_version(1, 2));
 	}
 
 	// Provide feedback to calling API to allow it to pass an output
 	// buffer if the shader needs it.
 	bool needs_output_buffer() const
 	{
-		return (msl_options.mesh_shader_emulation && is_mesh_shader()) ||
-		       has_mesh_output_spill_input_layout ||
+		return (msl_options.mesh_shader_emulation && is_mesh_shader()) || has_mesh_output_spill_input_layout ||
 		       (capture_output_to_buffer && stage_out_var_id != ID(0));
 	}
 
@@ -1075,20 +1072,17 @@ protected:
 	void finalize_mesh_output_spill_interface();
 	void emit_mesh_output_spill_capture();
 	void emit_mesh_output_spill_fragment_setup();
-	std::string mesh_output_spill_reconstruction_expression(uint32_t member_index,
-	                                                        const std::string &basis_method,
+	std::string mesh_output_spill_reconstruction_expression(uint32_t member_index, const std::string &basis_method,
 	                                                        const std::string &dynamic_element = "",
 	                                                        uint32_t dynamic_base_index = 0);
-	bool emit_mesh_output_spill_interpolation(uint32_t result_type, uint32_t result_id,
-	                                          uint32_t input_id, const std::string &basis_method,
-	                                          bool forward);
+	bool emit_mesh_output_spill_interpolation(uint32_t result_type, uint32_t result_id, uint32_t input_id,
+	                                          const std::string &basis_method, bool forward);
 	void emit_mesh_output_capture_wrappers();
 	VariableID get_mesh_output_capture_variable(uint32_t id) const;
 	std::string mesh_output_capture_type(const SPIRType &type, VariableID variable_id);
 	void emit_mesh_output_initializers();
-	void emit_mesh_output_initializer(const SPIRType &type, const std::string &destination,
-	                                  const std::string &source, uint32_t &loop_index,
-	                                  bool cooperative);
+	void emit_mesh_output_initializer(const SPIRType &type, const std::string &destination, const std::string &source,
+	                                  uint32_t &loop_index, bool cooperative);
 	void emit_mesh_outputs(bool replay = false);
 	void emit_mesh_output_assignment(const SPIRType &interface_type, uint32_t member_index,
 	                                 const SPIRVariable &orig_var, const std::string &destination,
@@ -1190,42 +1184,28 @@ protected:
 	                                     SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_composite_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
 	                                               SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
-	void add_plain_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
-	                                           SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
-	bool add_packed_64_bit_integer_variable_to_interface_block(StorageClass storage,
-	                                                          const std::string &ib_var_ref,
-	                                                          SPIRType &ib_type, SPIRVariable &var,
-	                                                          InterfaceBlockMeta &meta);
-	bool add_packed_64_bit_integer_leaf_to_interface_block(StorageClass storage,
-	                                                      const std::string &ib_var_ref,
-	                                                      SPIRType &ib_type, SPIRVariable &var,
-	                                                      const SPIRType &logical_type,
-	                                                      uint32_t location, uint32_t component,
-	                                                      const std::string &member_name_prefix,
-	                                                      const std::string &source_suffix,
-	                                                      uint32_t variable_member_index,
-	                                                      uint32_t variable_element_index,
-	                                                      bool flat, bool no_perspective,
-	                                                      bool centroid, bool sample);
+	void add_plain_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
+	                                           SPIRVariable &var, InterfaceBlockMeta &meta);
+	bool add_packed_64_bit_integer_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
+	                                                           SPIRType &ib_type, SPIRVariable &var,
+	                                                           InterfaceBlockMeta &meta);
+	bool add_packed_64_bit_integer_leaf_to_interface_block(
+	    StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var,
+	    const SPIRType &logical_type, uint32_t location, uint32_t component, const std::string &member_name_prefix,
+	    const std::string &source_suffix, uint32_t variable_member_index, uint32_t variable_element_index, bool flat,
+	    bool no_perspective, bool centroid, bool sample);
 	bool add_component_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
-	                                               SPIRVariable &var, const SPIRType &type,
-	                                               InterfaceBlockMeta &meta);
-	void add_plain_member_variable_to_interface_block(StorageClass storage,
-	                                                  const std::string &ib_var_ref, SPIRType &ib_type,
-	                                                  SPIRVariable &var, SPIRType &var_type,
-	                                                  uint32_t mbr_idx, InterfaceBlockMeta &meta,
-	                                                  const std::string &mbr_name_qual,
-	                                                  const std::string &var_chain_qual,
-	                                                  uint32_t &location, uint32_t &var_mbr_idx,
-	                                                  const SmallVector<uint32_t> &variable_access_indices);
-	void add_composite_member_variable_to_interface_block(StorageClass storage,
-	                                                      const std::string &ib_var_ref, SPIRType &ib_type,
-	                                                      SPIRVariable &var, SPIRType &var_type,
+	                                               SPIRVariable &var, const SPIRType &type, InterfaceBlockMeta &meta);
+	void add_plain_member_variable_to_interface_block(
+	    StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
+	    uint32_t mbr_idx, InterfaceBlockMeta &meta, const std::string &mbr_name_qual, const std::string &var_chain_qual,
+	    uint32_t &location, uint32_t &var_mbr_idx, const SmallVector<uint32_t> &variable_access_indices);
+	void add_composite_member_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
+	                                                      SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
 	                                                      uint32_t mbr_idx, InterfaceBlockMeta &meta,
 	                                                      const std::string &mbr_name_qual,
-	                                                      const std::string &var_chain_qual,
-	                                                      uint32_t &location, uint32_t &var_mbr_idx,
-	                                                      const Bitset &interpolation_qual,
+	                                                      const std::string &var_chain_qual, uint32_t &location,
+	                                                      uint32_t &var_mbr_idx, const Bitset &interpolation_qual,
 	                                                      const SmallVector<uint32_t> &variable_access_indices);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 	void add_tess_level_input(const std::string &base_ref, const std::string &mbr_name, SPIRVariable &var);
@@ -1233,13 +1213,13 @@ protected:
 	void ensure_struct_members_valid_vecsizes(SPIRType &struct_type, uint32_t &location);
 	void fix_up_interface_member_indices(StorageClass storage, uint32_t ib_type_id);
 
-	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
-	                                    StorageClass storage, bool fallback = false);
+	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, StorageClass storage,
+	                                     bool fallback = false);
 	uint32_t get_msl_interface_location_count(const SPIRType &type) const;
 	SmallVector<SmallVector<uint32_t>> get_msl_flattened_io_access_paths(const SPIRType &type) const;
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, BuiltIn builtin);
-	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component,
-	                                   uint32_t num_components, bool strip_array);
+	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component, uint32_t num_components,
+	                                   bool strip_array);
 
 	void emit_custom_templates();
 	void emit_custom_functions();
@@ -1366,7 +1346,6 @@ protected:
 	uint32_t builtin_mesh_primitive_indices_id = 0;
 	uint32_t builtin_mesh_sizes_id = 0;
 	uint32_t builtin_task_grid_id = 0;
-	uint32_t builtin_task_terminated_id = 0;
 	uint32_t builtin_frag_depth_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
