@@ -1002,6 +1002,9 @@ protected:
 	// so we need to workaround by having the application inject a dummy sampler.
 	uint32_t dummy_sampler_id = 0;
 
+	// Set to true if any workgroup memory variables are present with Block decoration
+	bool uses_workgroup_memory_explicit_layout = false;
+
 	void analyze_image_and_sampler_usage();
 
 	struct CombinedImageSamplerDrefHandler : OpcodeHandler
@@ -1235,6 +1238,7 @@ protected:
 	bool type_is_explicit_layout(const SPIRType &type) const;
 	bool type_is_top_level_block(const SPIRType &type) const;
 	bool type_is_opaque_value(const SPIRType &type) const;
+	bool check_is_shared_memory_block(const SPIRVariable &var);
 
 	bool reflection_ssbo_instance_name_is_significant() const;
 	std::string get_remapped_declared_block_name(uint32_t id, bool fallback_prefer_instance_name) const;

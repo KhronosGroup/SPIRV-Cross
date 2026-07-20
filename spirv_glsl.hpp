@@ -617,6 +617,7 @@ protected:
 	std::unordered_set<std::string> block_output_names;
 	std::unordered_set<std::string> block_ubo_names;
 	std::unordered_set<std::string> block_ssbo_names;
+	std::unordered_set<std::string> block_shared_mem_names;
 	std::unordered_set<std::string> block_names; // A union of all block_*_names.
 	std::unordered_map<std::string, std::unordered_set<uint64_t>> function_overloads;
 	std::unordered_map<uint32_t, std::string> preserved_aliases;
