@@ -36,6 +36,28 @@ static const uint32_t k_unknown_location = ~0u;
 static const uint32_t k_unknown_component = ~0u;
 static const char *force_inline = "static inline __attribute__((always_inline))";
 
+static MSLMeshOutputSpillBaseType mesh_output_spill_base_type_for(const SPIRType &type)
+{
+	switch (type.basetype)
+	{
+	case SPIRType::Short:
+	case SPIRType::Int:
+	case SPIRType::Int64:
+		return MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT;
+	case SPIRType::UShort:
+	case SPIRType::UInt:
+	case SPIRType::UInt64:
+		return MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT;
+	case SPIRType::Half:
+	case SPIRType::Float:
+	case SPIRType::Double:
+		return MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT;
+	default:
+		SPIRV_CROSS_THROW(
+		    "Mesh output spill only supports signed integer, unsigned integer, and floating-point fields.");
+	}
+}
+
 CompilerMSL::CompilerMSL(std::vector<uint32_t> spirv_)
     : CompilerGLSL(std::move(spirv_))
 {
@@ -68,6 +90,125 @@ void CompilerMSL::add_msl_shader_output(const MSLShaderInterfaceVariable &so)
 	outputs_by_location[{so.location, so.component}] = so;
 	if (so.builtin != BuiltInMax && !outputs_by_builtin.count(so.builtin))
 		outputs_by_builtin[so.builtin] = so;
+}
+
+void CompilerMSL::add_msl_mesh_output_spill(const MSLMeshOutputSpillKey &key)
+{
+	if (key.location == UINT32_MAX || key.component == UINT32_MAX)
+		SPIRV_CROSS_THROW("Mesh output spill keys require both location and component.");
+	if (key.rate != MSL_SHADER_VARIABLE_RATE_PER_VERTEX && key.rate != MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE)
+		SPIRV_CROSS_THROW("Mesh output spill only supports per-vertex and per-primitive rates.");
+	if (std::find(mesh_output_spill_keys.begin(), mesh_output_spill_keys.end(), key) == mesh_output_spill_keys.end())
+		mesh_output_spill_keys.push_back(key);
+}
+
+void CompilerMSL::set_msl_mesh_output_spill_layout(const MSLMeshOutputSpillLayout &layout,
+                                                   const SmallVector<MSLMeshOutputSpillField> &fields)
+{
+	if (layout.version != 1 && layout.version != 2)
+		SPIRV_CROSS_THROW("Unsupported mesh output spill layout version.");
+	if ((layout.capture_record_stride & 3u) != 0 || layout.capture_record_stride == 0)
+		SPIRV_CROSS_THROW("Mesh output spill capture record stride must be a nonzero multiple of four bytes.");
+	if (fields.empty())
+		SPIRV_CROSS_THROW("Mesh output spill layout requires at least one field.");
+	if (!layout.max_vertices || !layout.max_primitives)
+		SPIRV_CROSS_THROW("Mesh output spill layout requires nonzero mesh output limits.");
+
+	uint32_t topology_vertices = 0;
+	switch (layout.topology)
+	{
+	case MSL_MESH_OUTPUT_SPILL_TOPOLOGY_POINT:
+		topology_vertices = 1;
+		break;
+	case MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE:
+		topology_vertices = 2;
+		break;
+	case MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE:
+		topology_vertices = 3;
+		break;
+	default:
+		SPIRV_CROSS_THROW("Mesh output spill layout has an unsupported topology.");
+	}
+	if (layout.primitive_index_word_stride != topology_vertices)
+		SPIRV_CROSS_THROW("Mesh output spill layout has an invalid primitive-index stride.");
+
+	const uint64_t record_word_count = layout.capture_record_stride / 4u;
+	SmallVector<pair<uint64_t, uint64_t>, 8> occupied_ranges;
+	auto add_capture_range = [&](uint64_t begin, uint64_t end, const char *range_error)
+	{
+		if (begin >= record_word_count || end <= begin || end > record_word_count)
+			SPIRV_CROSS_THROW(range_error);
+		for (auto &range : occupied_ranges)
+			if (begin < range.second && range.first < end)
+				SPIRV_CROSS_THROW("Mesh output spill capture regions overlap.");
+		occupied_ranges.push_back({ begin, end });
+	};
+	uint64_t primitive_index_end = uint64_t(layout.primitive_index_word_offset) +
+	                               uint64_t(layout.max_primitives) * layout.primitive_index_word_stride;
+	add_capture_range(layout.primitive_index_word_offset, primitive_index_end,
+	                  "Mesh output spill primitive indices extend past the capture record.");
+	uint64_t logical_primitive_id_end =
+	    uint64_t(layout.logical_primitive_id_word_offset) + uint64_t(layout.max_primitives);
+	add_capture_range(layout.logical_primitive_id_word_offset, logical_primitive_id_end,
+	                  "Mesh output spill logical primitive IDs extend past the capture record.");
+
+	bool has_per_vertex_field = false;
+	for (uint32_t index = 0; index < fields.size(); ++index)
+	{
+		auto &field = fields[index];
+		if (field.key.location >= 32 || field.key.component >= 4 ||
+		    (field.key.rate != MSL_SHADER_VARIABLE_RATE_PER_VERTEX &&
+		     field.key.rate != MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE))
+			SPIRV_CROSS_THROW("Mesh output spill field has an invalid key.");
+		if (field.base_type != MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT &&
+		    field.base_type != MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT &&
+		    field.base_type != MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT)
+			SPIRV_CROSS_THROW("Mesh output spill field has an unsupported base type.");
+		if ((field.bit_width != 16 && field.bit_width != 32 && field.bit_width != 64) || field.vecsize < 1 ||
+		    field.vecsize > 4 || field.columns != 1)
+			SPIRV_CROSS_THROW("Mesh output spill field has an unsupported scalar/vector shape.");
+		uint32_t expected_stride = field.bit_width == 64 ? field.vecsize * 2u : field.vecsize;
+		if (field.capture_word_stride != expected_stride)
+			SPIRV_CROSS_THROW("Mesh output spill field has an invalid capture word range.");
+		uint64_t element_count =
+		    field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX ? layout.max_vertices : layout.max_primitives;
+		uint64_t field_end = uint64_t(field.capture_word_offset) + element_count * field.capture_word_stride;
+		add_capture_range(field.capture_word_offset, field_end,
+		                  "Mesh output spill field extends past the capture record.");
+		has_per_vertex_field = has_per_vertex_field || field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		for (uint32_t previous = 0; previous < index; ++previous)
+			if (fields[previous].key == field.key)
+				SPIRV_CROSS_THROW("Mesh output spill layout contains duplicate field keys.");
+	}
+
+	uint32_t expected_basis_components = has_per_vertex_field ? topology_vertices - 1u : 0u;
+	auto validate_basis = [&](uint32_t location, uint32_t component, uint32_t components)
+	{
+		if (components != expected_basis_components)
+			SPIRV_CROSS_THROW("Mesh output spill interpolation basis has the wrong width.");
+		if (components)
+		{
+			if (location >= 32 || component >= 4 || component + components > 4)
+				SPIRV_CROSS_THROW("Mesh output spill interpolation basis has an invalid location.");
+		}
+		else if (location != UINT32_MAX || component != UINT32_MAX)
+			SPIRV_CROSS_THROW("Mesh output spill layout has unexpected interpolation basis metadata.");
+	};
+	validate_basis(layout.perspective_basis_location, layout.perspective_basis_component,
+	               layout.perspective_basis_components);
+	validate_basis(layout.no_perspective_basis_location, layout.no_perspective_basis_component,
+	               layout.no_perspective_basis_components);
+	if (expected_basis_components && layout.perspective_basis_location == layout.no_perspective_basis_location)
+	{
+		uint32_t perspective_end = layout.perspective_basis_component + expected_basis_components;
+		uint32_t no_perspective_end = layout.no_perspective_basis_component + expected_basis_components;
+		if (layout.perspective_basis_component < no_perspective_end &&
+		    layout.no_perspective_basis_component < perspective_end)
+			SPIRV_CROSS_THROW("Mesh output spill interpolation basis locations overlap.");
+	}
+	mesh_output_spill_layout = layout;
+	mesh_output_spill_fields = fields;
+	has_mesh_output_spill_input_layout = true;
 }
 
 void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
@@ -273,9 +414,10 @@ void CompilerMSL::build_implicit_builtins()
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
 	bool need_local_invocation_index =
-		(msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId)) || is_mesh_shader() ||
-		needs_workgroup_zero_init || needs_local_invocation_index;
-	bool need_workgroup_size = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups);
+	    (msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId)) || is_mesh_shader() ||
+	    needs_workgroup_zero_init || needs_local_invocation_index;
+	bool need_workgroup_size =
+	    is_mesh_shader() || (msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups));
 	bool force_frag_depth_passthrough =
 	    get_execution_model() == ExecutionModelFragment && !uses_explicit_early_fragment_test() && need_subpass_input &&
 	    msl_options.enable_frag_depth_builtin && msl_options.input_attachment_is_ds_attachment;
@@ -1185,7 +1327,7 @@ void CompilerMSL::build_implicit_builtins()
 		uint_type_ptr.pointer = true;
 		uint_type_ptr.pointer_depth++;
 		uint_type_ptr.parent_type = type_id;
-		uint_type_ptr.storage = StorageClassWorkgroup;
+		uint_type_ptr.storage = msl_options.mesh_shader_emulation ? StorageClassStorageBuffer : StorageClassWorkgroup;
 
 		auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
 		ptr_type.self = type_id;
@@ -1668,11 +1810,39 @@ void CompilerMSL::emit_entry_point_declarations()
 
 	// Holds SetMeshOutputsEXT information. Threadgroup since first thread wins.
 	if (processing_entry_point && is_mesh_shader())
-		statement("threadgroup uint2 spvMeshSizes;");
+	{
+		if (msl_options.mesh_shader_emulation)
+		{
+			statement("const uint spvMeshOutputIndex = spvMeshBatchWorkgroupID.x + "
+			          "spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + spvMeshBatchWorkgroupID.z * "
+			          "spvMeshBatchGrid.x * spvMeshBatchGrid.y;");
+			statement("device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];");
+			statement("device uint2& spvMeshSizes = spvMeshOutput.counts;");
+		}
+		else
+			statement("threadgroup uint2 spvMeshSizes;");
+	}
 }
 
 string CompilerMSL::compile()
 {
+	if (!mesh_output_spill_keys.empty())
+	{
+		if (get_execution_model() != ExecutionModelMeshEXT || !msl_options.mesh_shader_emulation)
+			SPIRV_CROSS_THROW("Mesh output spill requires mesh shader emulation.");
+		std::sort(mesh_output_spill_keys.begin(), mesh_output_spill_keys.end(),
+		          [](const MSLMeshOutputSpillKey &a, const MSLMeshOutputSpillKey &b)
+		          {
+			          if (a.rate != b.rate)
+				          return a.rate < b.rate;
+			          if (a.location != b.location)
+				          return a.location < b.location;
+			          return a.component < b.component;
+		          });
+	}
+	if (has_mesh_output_spill_input_layout && get_execution_model() != ExecutionModelFragment)
+		SPIRV_CROSS_THROW("A mesh output spill input layout can only be used by a fragment shader.");
+
 	replace_illegal_entry_point_names();
 	ir.fixup_reserved_names();
 
@@ -1721,7 +1891,12 @@ string CompilerMSL::compile()
 	backend.supports_spec_constant_array_size = false;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
-	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
+	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer ||
+	                            (msl_options.mesh_shader_emulation && is_mesh_shader());
+
+	if (is_mesh_shader() && msl_options.mesh_shader_emulation && msl_options.multiview &&
+	    msl_options.multiview_layered_rendering)
+		SPIRV_CROSS_THROW("Layered multiview is not yet supported by mesh shader emulation.");
 
 	if (is_mesh_shader() && !get_entry_point().flags.get(ExecutionModeOutputPoints))
 		msl_options.enable_point_size_builtin = false;
@@ -1747,6 +1922,9 @@ string CompilerMSL::compile()
 	analyze_interlocked_resource_usage();
 	analyze_workgroup_variables();
 	preprocess_op_codes();
+	if (has_mesh_output_spill_input_layout && (mesh_output_spill_layout.perspective_basis_components ||
+	                                           mesh_output_spill_layout.no_perspective_basis_components))
+		needs_sample_id = true;
 	build_implicit_builtins();
 
 	if (needs_manual_helper_invocation_updates() && needs_helper_invocation)
@@ -1802,6 +1980,8 @@ string CompilerMSL::compile()
 		stage_out_var_id = add_interface_block(StorageClassOutput);
 		patch_stage_out_var_id = add_interface_block(StorageClassOutput, true);
 		stage_in_var_id = add_interface_block(StorageClassInput);
+		if (has_mesh_output_spill_input_layout && stage_in_var_id)
+			filter_fragment_input_spill_members(get_stage_in_struct_type());
 	}
 
 	if (is_tese_shader())
@@ -1816,6 +1996,8 @@ string CompilerMSL::compile()
 	{
 		mesh_out_per_vertex = add_meshlet_block(false);
 		mesh_out_per_primitive = add_meshlet_block(true);
+		finalize_mesh_output_spill_interface();
+		build_mesh_output_buffer_type();
 	}
 
 	// Metal vertex functions that define no output must disable rasterization and return void.
@@ -1864,6 +2046,8 @@ string CompilerMSL::compile()
 		emit_specialization_constants_and_structs();
 		emit_resources();
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
+		if (msl_options.mesh_shader_emulation && is_mesh_shader())
+			emit_mesh_replay_entry_point();
 
 		pass_count++;
 	} while (is_forcing_recompilation());
@@ -1965,7 +2149,7 @@ void CompilerMSL::localize_global_variables()
 		uint32_t v_id = *iter;
 		auto &var = get<SPIRVariable>(v_id);
 		if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
-		    var.storage == StorageClassTaskPayloadWorkgroupEXT)
+		    (var.storage == StorageClassTaskPayloadWorkgroupEXT && interface_variable_exists_in_entry_point(v_id)))
 		{
 			if (!variable_is_lut(var))
 				entry_func.add_local_variable(v_id);
@@ -2461,7 +2645,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
 				auto &v = set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
-				v.storage = StorageClassWorkgroup;
+				v.storage = msl_options.mesh_shader_emulation ? StorageClassStorageBuffer : StorageClassWorkgroup;
 
 				// Ensure the existing variable has a valid name and the new variable has all the same meta info
 				if (ir.meta[arg_id].decoration.builtin)
@@ -2536,7 +2720,8 @@ void CompilerMSL::mark_packable_structs()
 				mark_as_packable(type);
 		}
 
-		if (var.storage == StorageClassWorkgroup)
+		if (var.storage == StorageClassWorkgroup || (is_mesh_shader() && msl_options.mesh_shader_emulation &&
+		                                             var.storage == StorageClassTaskPayloadWorkgroupEXT))
 		{
 			auto *type = &this->get<SPIRType>(var.basetype);
 			if (type->basetype == SPIRType::Struct)
@@ -2617,10 +2802,10 @@ void CompilerMSL::mark_as_workgroup_struct(SPIRType &type)
 }
 
 // If a shader input exists at the location, it is marked as being used by this shader
-void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
-                                                  StorageClass storage, bool fallback)
+void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, StorageClass storage,
+                                                  bool fallback)
 {
-	uint32_t count = type_to_location_count(type);
+	uint32_t count = get_msl_interface_location_count(type);
 	switch (storage)
 	{
 	case StorageClassInput:
@@ -2639,9 +2824,63 @@ void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRT
 				location_outputs_in_use_fallback.insert(location + i);
 		}
 		break;
+
 	default:
 		return;
 	}
+}
+
+uint32_t CompilerMSL::get_msl_interface_location_count(const SPIRType &type) const
+{
+	uint32_t count = 0;
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (auto member_type : type.member_types)
+			count += get_msl_interface_location_count(get<SPIRType>(member_type));
+	}
+	else
+	{
+		uint32_t locations_per_column = type.width == 64 && type.vecsize > 2 ? 2u : 1u;
+		count = max(type.columns, 1u) * locations_per_column;
+	}
+	for (uint32_t dimension = 0; dimension < type.array.size(); ++dimension)
+		count *= to_array_size_literal(type, dimension);
+	return count;
+}
+
+SmallVector<SmallVector<uint32_t>> CompilerMSL::get_msl_flattened_io_access_paths(const SPIRType &type) const
+{
+	SmallVector<SmallVector<uint32_t>> paths;
+	SmallVector<uint32_t> path;
+	std::function<void(SPIRType)> visit = [&](SPIRType current)
+	{
+		if (!current.array.empty())
+		{
+			uint32_t dimension = uint32_t(current.array.size() - 1);
+			uint32_t count = to_array_size_literal(current, dimension);
+			SPIRType element_type = get<SPIRType>(current.parent_type);
+			for (uint32_t index = 0; index < count; ++index)
+			{
+				path.push_back(index);
+				visit(element_type);
+				path.pop_back();
+			}
+		}
+		else if (current.columns > 1)
+		{
+			SPIRType column_type = get<SPIRType>(current.parent_type);
+			for (uint32_t column = 0; column < current.columns; ++column)
+			{
+				path.push_back(column);
+				visit(column_type);
+				path.pop_back();
+			}
+		}
+		else
+			paths.push_back(path);
+	};
+	visit(type);
+	return paths;
 }
 
 uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
@@ -2812,9 +3051,235 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 		return false;
 }
 
+bool CompilerMSL::add_packed_64_bit_integer_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
+                                                                        SPIRType &ib_type, SPIRVariable &var,
+                                                                        InterfaceBlockMeta &meta)
+{
+	auto &type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
+	bool is_64_bit_integer = (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64) &&
+	                         type.width == 64 && type.columns == 1 && type.array.empty();
+	bool is_mesh_output = is_mesh_shader() && storage == StorageClassOutput && meta.strip_array;
+	bool is_fragment_input =
+	    get_execution_model() == ExecutionModelFragment && storage == StorageClassInput && !meta.strip_array;
+	if (!is_64_bit_integer || is_builtin_variable(var) || (!is_mesh_output && !is_fragment_input) ||
+	    !has_decoration(var.self, DecorationLocation))
+		return false;
+
+	uint32_t location = get_decoration(var.self, DecorationLocation);
+	uint32_t component = get_decoration(var.self, DecorationComponent);
+	if (component & 1u)
+		SPIRV_CROSS_THROW("A 64-bit stage interface variable must start on an even component.");
+
+	if (is_fragment_input)
+	{
+		auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+		entry_func.add_local_variable(var.self);
+		vars_needing_early_declaration.push_back(var.self);
+	}
+
+	MSLMeshOutputSpillKey spill_key;
+	spill_key.location = location;
+	spill_key.component = component;
+	spill_key.rate = is_mesh_output && is_per_primitive_variable(var) ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE :
+	                                                                    MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+	bool spill_64 = false;
+	MSLMeshOutputSpillField configured_field;
+	if (is_mesh_output)
+		spill_64 = std::find(mesh_output_spill_keys.begin(), mesh_output_spill_keys.end(), spill_key) !=
+		           mesh_output_spill_keys.end();
+	else if (is_fragment_input && has_mesh_output_spill_input_layout)
+	{
+		for (auto &field : mesh_output_spill_fields)
+			if (field.key == spill_key)
+			{
+				configured_field = field;
+				spill_64 = true;
+				break;
+			}
+	}
+	if (spill_64)
+	{
+		if (is_fragment_input && (configured_field.base_type != mesh_output_spill_base_type_for(type) ||
+		                          configured_field.bit_width != type.width ||
+		                          configured_field.vecsize != type.vecsize || configured_field.columns != type.columns))
+			SPIRV_CROSS_THROW("Mesh output spill fragment field type does not match its serialized layout.");
+		MeshOutputSpillMember member;
+		member.variable_id = var.self;
+		member.field = configured_field;
+		member.field.key = spill_key;
+		member.field.base_type = type.basetype == SPIRType::Int64 ? MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT :
+		                                                            MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT;
+		member.field.bit_width = 64;
+		member.field.vecsize = type.vecsize;
+		member.field.columns = 1;
+		member.field.capture_word_stride = type.vecsize * 2u;
+		member.flat = has_decoration(var.self, DecorationFlat);
+		member.no_perspective = has_decoration(var.self, DecorationNoPerspective);
+		member.centroid = has_decoration(var.self, DecorationCentroid);
+		member.sample = has_decoration(var.self, DecorationSample);
+		if (is_mesh_output)
+			mesh_output_spill_members.push_back(member);
+		else
+		{
+			fragment_spill_members.push_back(member);
+			pull_model_inputs.erase(var.self);
+		}
+		return true;
+	}
+
+	bool is_flat = has_decoration(var.self, DecorationFlat);
+	bool is_noperspective = has_decoration(var.self, DecorationNoPerspective);
+	bool is_centroid = has_decoration(var.self, DecorationCentroid);
+	bool is_sample = has_decoration(var.self, DecorationSample);
+	uint32_t lane = 0;
+	uint32_t word = component;
+	while (lane < type.vecsize)
+	{
+		uint32_t member_location = location + word / 4u;
+		uint32_t member_component = word % 4u;
+		uint32_t word_count = min(4u - member_component, (type.vecsize - lane) * 2u);
+		if ((word_count & 1u) != 0 || (word_count != 2u && word_count != 4u))
+			SPIRV_CROSS_THROW("Invalid 64-bit stage interface component layout.");
+		uint32_t lane_count = word_count / 2u;
+
+		uint32_t physical_type_id = build_extended_vector_type(get_uint_type_id(), word_count);
+		uint32_t member_index = uint32_t(ib_type.member_types.size());
+		ib_type.member_types.push_back(physical_type_id);
+
+		string member_name = ensure_valid_name(join(to_expression(var.self), "_spv_i64_", lane), "m");
+		set_member_name(ib_type.self, member_index, member_name);
+		set_member_decoration(ib_type.self, member_index, DecorationLocation, member_location);
+		if (member_component != 0)
+			set_member_decoration(ib_type.self, member_index, DecorationComponent, member_component);
+		if (is_flat)
+			set_member_decoration(ib_type.self, member_index, DecorationFlat);
+		if (is_noperspective)
+			set_member_decoration(ib_type.self, member_index, DecorationNoPerspective);
+		if (is_centroid)
+			set_member_decoration(ib_type.self, member_index, DecorationCentroid);
+		if (is_sample)
+			set_member_decoration(ib_type.self, member_index, DecorationSample);
+		set_extended_member_decoration(ib_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID, var.self);
+		mark_location_as_used_by_shader(member_location, get<SPIRType>(physical_type_id), storage);
+
+		if (is_fragment_input)
+		{
+			SPIRType logical_chunk_type = type;
+			logical_chunk_type.vecsize = lane_count;
+			string logical_type_name = type_to_glsl(logical_chunk_type);
+			string destination = to_name(var.self);
+			if (type.vecsize > 1)
+				destination += vector_swizzle(lane_count, lane);
+			string source = join(ib_var_ref, ".", member_name);
+			get<SPIRFunction>(ir.default_entry_point)
+			    .fixup_hooks_in.push_back(
+			        [this, destination, logical_type_name, source]()
+			        { statement(destination, " = as_type<", logical_type_name, ">(", source, ");"); });
+		}
+
+		lane += lane_count;
+		word += word_count;
+	}
+
+	return true;
+}
+
+bool CompilerMSL::add_packed_64_bit_integer_leaf_to_interface_block(
+    StorageClass storage, const string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var, const SPIRType &logical_type,
+    uint32_t location, uint32_t component, const string &member_name_prefix, const string &source_suffix,
+    uint32_t variable_member_index, uint32_t variable_element_index, bool is_flat, bool is_noperspective,
+    bool is_centroid, bool is_sample)
+{
+	bool is_64_bit_integer = (logical_type.basetype == SPIRType::Int64 || logical_type.basetype == SPIRType::UInt64) &&
+	                         logical_type.width == 64 && logical_type.columns == 1 && logical_type.array.empty();
+	bool is_mesh_output = is_mesh_shader() && storage == StorageClassOutput;
+	bool is_fragment_input = get_execution_model() == ExecutionModelFragment && storage == StorageClassInput;
+	if (!is_64_bit_integer || (!is_mesh_output && !is_fragment_input) || location == UINT32_MAX)
+		return false;
+	if (component & 1u)
+		SPIRV_CROSS_THROW("A 64-bit stage interface variable must start on an even component.");
+
+	uint32_t lane = 0;
+	uint32_t word = component;
+	while (lane < logical_type.vecsize)
+	{
+		uint32_t member_location = location + word / 4u;
+		uint32_t member_component = word % 4u;
+		uint32_t word_count = min(4u - member_component, (logical_type.vecsize - lane) * 2u);
+		if ((word_count & 1u) != 0 || (word_count != 2u && word_count != 4u))
+			SPIRV_CROSS_THROW("Invalid 64-bit stage interface component layout.");
+		uint32_t lane_count = word_count / 2u;
+
+		uint32_t physical_type_id = build_extended_vector_type(get_uint_type_id(), word_count);
+		uint32_t member_index = uint32_t(ib_type.member_types.size());
+		ib_type.member_types.push_back(physical_type_id);
+		string member_name = ensure_valid_name(join(member_name_prefix, "_spv_i64_", lane), "m");
+		set_member_name(ib_type.self, member_index, member_name);
+		set_member_decoration(ib_type.self, member_index, DecorationLocation, member_location);
+		if (member_component)
+			set_member_decoration(ib_type.self, member_index, DecorationComponent, member_component);
+		if (is_flat)
+			set_member_decoration(ib_type.self, member_index, DecorationFlat);
+		if (is_noperspective)
+			set_member_decoration(ib_type.self, member_index, DecorationNoPerspective);
+		if (is_centroid)
+			set_member_decoration(ib_type.self, member_index, DecorationCentroid);
+		if (is_sample)
+			set_member_decoration(ib_type.self, member_index, DecorationSample);
+		set_extended_member_decoration(ib_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID, var.self);
+		if (variable_member_index != UINT32_MAX)
+			set_extended_member_decoration(ib_type.self, member_index, SPIRVCrossDecorationInterfaceMemberIndex,
+			                               variable_member_index);
+		if (variable_element_index != UINT32_MAX)
+			set_member_decoration(ib_type.self, member_index, DecorationIndex, variable_element_index);
+		mark_location_as_used_by_shader(member_location, get<SPIRType>(physical_type_id), storage);
+
+		if (is_mesh_output)
+		{
+			uint64_t interface_key = (uint64_t(ib_type.self) << 32) | member_index;
+			mesh_output_interface_source_suffixes[interface_key] = source_suffix;
+			MeshOutputInterfacePacked64 packed;
+			packed.variable_id = var.self;
+			packed.logical_vecsize = logical_type.vecsize;
+			packed.source_lane = lane;
+			packed.logical_location = location;
+			packed.logical_component = component;
+			packed.base_type = logical_type.basetype == SPIRType::Int64 ? MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT :
+			                                                              MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT;
+			packed.source_suffix = source_suffix;
+			mesh_output_interface_packed_64[interface_key] = std::move(packed);
+			if (std::find(mesh_output_composite_packed_64_variables.begin(),
+			              mesh_output_composite_packed_64_variables.end(),
+			              var.self) == mesh_output_composite_packed_64_variables.end())
+				mesh_output_composite_packed_64_variables.push_back(var.self);
+		}
+		else
+		{
+			SPIRType logical_chunk_type = logical_type;
+			logical_chunk_type.vecsize = lane_count;
+			string logical_type_name = type_to_glsl(logical_chunk_type);
+			string destination = to_name(var.self) + source_suffix;
+			if (logical_type.vecsize > 1)
+				destination += vector_swizzle(lane_count, lane);
+			string source = join(ib_var_ref, ".", member_name);
+			get<SPIRFunction>(ir.default_entry_point)
+			    .fixup_hooks_in.push_back(
+			        [this, destination, logical_type_name, source]()
+			        { statement(destination, " = as_type<", logical_type_name, ">(", source, ");"); });
+		}
+
+		lane += lane_count;
+		word += word_count;
+	}
+	return true;
+}
+
 void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
                                                         SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta)
 {
+	if (add_packed_64_bit_integer_variable_to_interface_block(storage, ib_var_ref, ib_type, var, meta))
+		return;
+
 	bool is_builtin = is_builtin_variable(var);
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_flat = has_decoration(var.self, DecorationFlat);
@@ -2839,6 +3304,35 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	uint32_t start_component = 0;
 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+	if (storage == StorageClassInput && get_execution_model() == ExecutionModelFragment &&
+	    has_mesh_output_spill_input_layout && has_decoration(var.self, DecorationLocation))
+	{
+		MSLMeshOutputSpillKey key;
+		key.location = get_decoration(var.self, DecorationLocation);
+		key.component = get_decoration(var.self, DecorationComponent);
+		key.rate = is_per_primitive_variable(var) ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE :
+		                                            MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		for (auto &field : mesh_output_spill_fields)
+			if (field.key == key)
+			{
+				if (field.base_type != mesh_output_spill_base_type_for(type) || field.bit_width != type.width ||
+				    field.vecsize != type.vecsize || field.columns != type.columns)
+					SPIRV_CROSS_THROW("Mesh output spill fragment field type does not match its serialized layout.");
+				entry_func.add_local_variable(var.self);
+				vars_needing_early_declaration.push_back(var.self);
+				ir.meta[var.self].decoration.qualified_alias.clear();
+				pull_model_inputs.erase(var.self);
+				MeshOutputSpillMember member;
+				member.field = field;
+				member.variable_id = var.self;
+				member.flat = is_flat;
+				member.no_perspective = is_noperspective;
+				member.centroid = is_centroid;
+				member.sample = is_sample;
+				fragment_spill_members.push_back(member);
+				return;
+			}
+	}
 
 	if (add_component_variable_to_interface_block(storage, ib_var_ref, var, type, meta))
 		return;
@@ -2863,6 +3357,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		ib_type.member_types.push_back(build_msl_interpolant_type(type_id, is_noperspective));
 	else
 		ib_type.member_types.push_back(type_id);
+	if (is_mesh_shader() && storage == StorageClassOutput)
+		mesh_output_interface_source_suffixes[(uint64_t(ib_type.self) << 32) | ib_mbr_idx] = "";
 
 	// Give the member a name
 	string mbr_name = ensure_valid_name(to_expression(var.self), "m");
@@ -2904,7 +3400,7 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	else if (!meta.strip_array)
 		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
 
-	if (var.storage == StorageClassOutput && var.initializer != ID(0))
+	if (!is_mesh_shader() && var.storage == StorageClassOutput && var.initializer != ID(0))
 	{
 		if (padded_output || padded_input)
 		{
@@ -3013,25 +3509,26 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-	uint32_t elem_cnt = 0;
 
 	if (add_component_variable_to_interface_block(storage, ib_var_ref, var, var_type, meta))
 		return;
 
-	if (is_matrix(var_type))
+	auto element_access_paths = get_msl_flattened_io_access_paths(var_type);
+	uint32_t elem_cnt = uint32_t(element_access_paths.size());
+	auto access_suffix = [](const SmallVector<uint32_t> &path)
 	{
-		if (is_array(var_type))
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-		elem_cnt = var_type.columns;
-	}
-	else if (is_array(var_type))
+		string suffix;
+		for (auto index : path)
+			suffix += join("[", index, "]");
+		return suffix;
+	};
+	auto access_name_suffix = [](const SmallVector<uint32_t> &path)
 	{
-		if (var_type.array.size() != 1)
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-		elem_cnt = to_array_size_literal(var_type);
-	}
+		string suffix;
+		for (auto index : path)
+			suffix += join("_", index);
+		return suffix;
+	};
 
 	bool is_builtin = is_builtin_variable(var);
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
@@ -3057,7 +3554,10 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 	{
 		// Also declare [[clip_distance]] attribute here.
 		uint32_t clip_array_mbr_idx = uint32_t(ib_type.member_types.size());
-		ib_type.member_types.push_back(get_variable_data_type_id(var));
+		uint32_t clip_array_type_id = get_variable_data_type_id(var);
+		if (meta.strip_array && is_array(get<SPIRType>(clip_array_type_id)))
+			clip_array_type_id = get<SPIRType>(clip_array_type_id).parent_type;
+		ib_type.member_types.push_back(clip_array_type_id);
 		set_member_decoration(ib_type.self, clip_array_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
 
 		flatten_from_ib_mbr_name = builtin_to_glsl(BuiltInClipDistance, StorageClassOutput);
@@ -3078,8 +3578,57 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		vars_needing_early_declaration.push_back(var.self);
 	}
 
+	uint32_t mesh_spill_element_count = 0;
 	for (uint32_t i = 0; i < elem_cnt; i++)
 	{
+		auto &element_access_path = element_access_paths[i];
+		string element_suffix = access_suffix(element_access_path);
+		uint32_t location_stride = get_msl_interface_location_count(*usable_type);
+		uint32_t location_offset = i * location_stride;
+		if (storage == StorageClassInput && get_execution_model() == ExecutionModelFragment &&
+		    has_mesh_output_spill_input_layout && get_decoration_bitset(var.self).get(DecorationLocation))
+		{
+			MSLMeshOutputSpillKey key;
+			key.location = get_decoration(var.self, DecorationLocation) + location_offset;
+			key.component = get_decoration(var.self, DecorationComponent);
+			key.rate = is_per_primitive_variable(var) ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE :
+			                                            MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+			for (auto &field : mesh_output_spill_fields)
+				if (field.key == key)
+				{
+					if (field.base_type != mesh_output_spill_base_type_for(*usable_type) ||
+					    field.bit_width != usable_type->width || field.vecsize != usable_type->vecsize ||
+					    field.columns != usable_type->columns)
+						SPIRV_CROSS_THROW(
+						    "Mesh output spill fragment field type does not match its serialized layout.");
+					MeshOutputSpillMember member;
+					member.field = field;
+					member.variable_id = var.self;
+					member.variable_element_index = i;
+					member.variable_access_indices = element_access_path;
+					member.source_suffix = element_suffix;
+					member.flat = is_flat;
+					member.no_perspective = is_noperspective;
+					member.centroid = is_centroid;
+					member.sample = is_sample;
+					fragment_spill_members.push_back(member);
+					mesh_spill_element_count++;
+					break;
+				}
+			if (mesh_spill_element_count && fragment_spill_members.back().variable_id == var.self &&
+			    fragment_spill_members.back().variable_element_index == i)
+				continue;
+		}
+		if (!is_builtin && get_decoration_bitset(var.self).get(DecorationLocation))
+		{
+			uint32_t leaf_location = get_decoration(var.self, DecorationLocation) + location_offset;
+			uint32_t leaf_component = get_decoration(var.self, DecorationComponent);
+			if (add_packed_64_bit_integer_leaf_to_interface_block(
+			        storage, ib_var_ref, ib_type, var, *usable_type, leaf_location, leaf_component,
+			        to_expression(var.self) + access_name_suffix(element_access_path), element_suffix, UINT32_MAX,
+			        element_access_path.empty() ? UINT32_MAX : i, is_flat, is_noperspective, is_centroid, is_sample))
+				continue;
+		}
 		// Add a reference to the variable type to the interface struct.
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 
@@ -3091,7 +3640,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
 		    get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput)
 		{
-			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
+			uint32_t locn = get_decoration(var.self, DecorationLocation) + location_offset;
 			target_components = get_target_components_for_fragment_location(locn);
 			if (usable_type->vecsize < target_components)
 			{
@@ -3105,15 +3654,17 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			ib_type.member_types.push_back(build_msl_interpolant_type(get_pointee_type_id(type_id), is_noperspective));
 		else
 			ib_type.member_types.push_back(get_pointee_type_id(type_id));
+		if (is_mesh_shader() && storage == StorageClassOutput)
+			mesh_output_interface_source_suffixes[(uint64_t(ib_type.self) << 32) | ib_mbr_idx] = element_suffix;
 
 		// Give the member a name
-		string mbr_name = ensure_valid_name(join(to_expression(var.self), "_", i), "m");
+		string mbr_name = ensure_valid_name(to_expression(var.self) + access_name_suffix(element_access_path), "m");
 		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
 		// There is no qualified alias since we need to flatten the internal array on return.
 		if (get_decoration_bitset(var.self).get(DecorationLocation))
 		{
-			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
+			uint32_t locn = get_decoration(var.self, DecorationLocation) + location_offset;
 			uint32_t comp = get_decoration(var.self, DecorationComponent);
 			if (storage == StorageClassInput)
 			{
@@ -3129,15 +3680,17 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, comp);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput &&
+		         inputs_by_builtin.count(builtin))
 		{
-			uint32_t locn = inputs_by_builtin[builtin].location + i;
+			uint32_t locn = inputs_by_builtin[builtin].location + location_offset;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+		else if (is_builtin && capture_output_to_buffer && storage == StorageClassOutput &&
+		         outputs_by_builtin.count(builtin))
 		{
-			uint32_t locn = outputs_by_builtin[builtin].location + i;
+			uint32_t locn = outputs_by_builtin[builtin].location + location_offset;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
@@ -3168,6 +3721,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		}
 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
+		if (is_mesh_shader() && !element_access_path.empty())
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 
 		// Only flatten/unflatten IO composites for non-tessellation cases where arrays are not stripped.
 		if (!meta.strip_array)
@@ -3175,41 +3730,46 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			switch (storage)
 			{
 			case StorageClassInput:
-				entry_func.fixup_hooks_in.push_back([=, &var]() {
-					if (pull_model_inputs.count(var.self))
-					{
-						string lerp_call;
-						if (is_centroid)
-							lerp_call = ".interpolate_at_centroid()";
-						else if (is_sample)
-							lerp_call = join(".interpolate_at_sample(", to_expression(builtin_sample_id_id), ")");
-						else
-							lerp_call = ".interpolate_at_center()";
-						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, lerp_call, ";");
-					}
-					else
-					{
-						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
-					}
-				});
+				entry_func.fixup_hooks_in.push_back(
+				    [=, &var]()
+				    {
+					    if (pull_model_inputs.count(var.self))
+					    {
+						    string lerp_call;
+						    if (is_centroid)
+							    lerp_call = ".interpolate_at_centroid()";
+						    else if (is_sample)
+							    lerp_call = join(".interpolate_at_sample(", to_expression(builtin_sample_id_id), ")");
+						    else
+							    lerp_call = ".interpolate_at_center()";
+						    statement(to_name(var.self), element_suffix, " = ", ib_var_ref, ".", mbr_name, lerp_call,
+						              ";");
+					    }
+					    else
+					    {
+						    statement(to_name(var.self), element_suffix, " = ", ib_var_ref, ".", mbr_name, ";");
+					    }
+				    });
 				break;
 
 			case StorageClassOutput:
-				entry_func.fixup_hooks_out.push_back([=, &var]() {
-					if (padded_output)
-					{
-						auto &padded_type = this->get<SPIRType>(type_id);
-						statement(
-						    ib_var_ref, ".", mbr_name, " = ",
-						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
-						    ";");
-					}
-					else if (flatten_from_ib_var)
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i,
-						          "];");
-					else
-						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
-				});
+				entry_func.fixup_hooks_out.push_back(
+				    [=, &var]()
+				    {
+					    if (padded_output)
+					    {
+						    auto &padded_type = this->get<SPIRType>(type_id);
+						    statement(
+						        ib_var_ref, ".", mbr_name, " = ",
+						        remap_swizzle(padded_type, usable_type->vecsize, to_name(var.self) + element_suffix),
+						        ";");
+					    }
+					    else if (flatten_from_ib_var)
+						    statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name,
+						              element_suffix, ";");
+					    else
+						    statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), element_suffix, ";");
+				    });
 				break;
 
 			default:
@@ -3217,16 +3777,15 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			}
 		}
 	}
+	if (mesh_spill_element_count == elem_cnt)
+		pull_model_inputs.erase(var.self);
 }
 
-void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass storage,
-                                                                   const string &ib_var_ref, SPIRType &ib_type,
-                                                                   SPIRVariable &var, SPIRType &var_type,
-                                                                   uint32_t mbr_idx, InterfaceBlockMeta &meta,
-                                                                   const string &mbr_name_qual,
-                                                                   const string &var_chain_qual,
-                                                                   uint32_t &location, uint32_t &var_mbr_idx,
-                                                                   const Bitset &interpolation_qual)
+void CompilerMSL::add_composite_member_variable_to_interface_block(
+    StorageClass storage, const string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
+    uint32_t mbr_idx, InterfaceBlockMeta &meta, const string &mbr_name_qual, const string &var_chain_qual,
+    uint32_t &location, uint32_t &var_mbr_idx, const Bitset &interpolation_qual,
+    const SmallVector<uint32_t> &variable_access_indices)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -3244,6 +3803,9 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	bool is_sample = interpolation_qual.get(DecorationSample) ||
 	                 has_member_decoration(var_type.self, mbr_idx, DecorationSample) ||
 	                 has_decoration(var.self, DecorationSample);
+	bool is_per_primitive = interpolation_qual.get(DecorationPerPrimitiveEXT) ||
+	                        has_member_decoration(var_type.self, mbr_idx, DecorationPerPrimitiveEXT) ||
+	                        has_decoration(var.self, DecorationPerPrimitiveEXT);
 
 	Bitset inherited_qual;
 	if (is_flat)
@@ -3254,34 +3816,37 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		inherited_qual.set(DecorationCentroid);
 	if (is_sample)
 		inherited_qual.set(DecorationSample);
+	if (is_per_primitive)
+		inherited_qual.set(DecorationPerPrimitiveEXT);
 
 	uint32_t mbr_type_id = var_type.member_types[mbr_idx];
 	auto &mbr_type = get<SPIRType>(mbr_type_id);
+	SmallVector<uint32_t> member_access_indices = variable_access_indices;
+	member_access_indices.push_back(mbr_idx);
 
-	bool mbr_is_indexable = false;
-	uint32_t elem_cnt = 1;
-	if (is_matrix(mbr_type))
+	auto element_access_paths = get_msl_flattened_io_access_paths(mbr_type);
+	uint32_t elem_cnt = uint32_t(element_access_paths.size());
+	auto access_suffix = [](const SmallVector<uint32_t> &path)
 	{
-		if (is_array(mbr_type))
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-		mbr_is_indexable = true;
-		elem_cnt = mbr_type.columns;
-	}
-	else if (is_array(mbr_type))
+		string suffix;
+		for (auto index : path)
+			suffix += join("[", index, "]");
+		return suffix;
+	};
+	auto access_name_suffix = [](const SmallVector<uint32_t> &path)
 	{
-		if (mbr_type.array.size() != 1)
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-		mbr_is_indexable = true;
-		elem_cnt = to_array_size_literal(mbr_type);
-	}
+		string suffix;
+		for (auto index : path)
+			suffix += join("_", index);
+		return suffix;
+	};
 
 	auto *usable_type = &mbr_type;
 	if (usable_type->pointer)
 		usable_type = &get<SPIRType>(usable_type->parent_type);
 	while (is_array(*usable_type) || is_matrix(*usable_type))
 		usable_type = &get<SPIRType>(usable_type->parent_type);
+	uint32_t location_stride = get_msl_interface_location_count(*usable_type);
 
 	bool flatten_from_ib_var = false;
 	string flatten_from_ib_mbr_name;
@@ -3309,15 +3874,20 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	{
 		for (uint32_t i = 0; i < elem_cnt; i++)
 		{
-			string mbr_name = append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : "");
-			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), (mbr_is_indexable ? join("[", i, "]") : ""));
+			auto &element_access_path = element_access_paths[i];
+			string element_suffix = access_suffix(element_access_path);
+			SmallVector<uint32_t> nested_access_indices = member_access_indices;
+			nested_access_indices.insert(nested_access_indices.end(), element_access_path.begin(),
+			                             element_access_path.end());
+			string mbr_name =
+			    append_member_name(mbr_name_qual, var_type, mbr_idx) + access_name_suffix(element_access_path);
+			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), element_suffix);
 			uint32_t sub_mbr_cnt = uint32_t(mbr_type.member_types.size());
 			for (uint32_t sub_mbr_idx = 0; sub_mbr_idx < sub_mbr_cnt; sub_mbr_idx++)
 			{
-				add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
-																 var, mbr_type, sub_mbr_idx,
-																 meta, mbr_name, var_chain,
-																 location, var_mbr_idx, inherited_qual);
+				add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type, var, mbr_type,
+				                                                 sub_mbr_idx, meta, mbr_name, var_chain, location,
+				                                                 var_mbr_idx, inherited_qual, nested_access_indices);
 				// FIXME: Recursive structs and tessellation breaks here.
 				var_mbr_idx++;
 			}
@@ -3327,6 +3897,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 
 	for (uint32_t i = 0; i < elem_cnt; i++)
 	{
+		auto &element_access_path = element_access_paths[i];
+		string element_suffix = access_suffix(element_access_path);
 		// Add a reference to the variable type to the interface struct.
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 		if (storage == StorageClassInput && pull_model_inputs.count(var.self))
@@ -3335,7 +3907,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			ib_type.member_types.push_back(usable_type->self);
 
 		// Give the member a name
-		string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : ""), "m");
+		string mbr_name = ensure_valid_name(
+		    append_member_name(mbr_name_qual, var_type, mbr_idx) + access_name_suffix(element_access_path), "m");
 		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
 		// The SPIRV location of interface variable, used to obtain the initial
@@ -3345,12 +3918,11 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
 		uint32_t orig_vecsize = UINT32_MAX;
 
-		// If we haven't established a location base yet, do so here.
-		if (location == UINT32_MAX)
+		if (has_member_loc_decor)
+			ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+		else if (location == UINT32_MAX)
 		{
-			if (has_member_loc_decor)
-				ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-			else if (has_var_loc_decor)
+			if (has_var_loc_decor)
 				ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
 			else if (is_builtin)
 			{
@@ -3366,8 +3938,10 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		// the nested structures will have consecutive location values. At this point,
 		// we've recursively tunnelled into structs, arrays, and matrices, and are
 		// down to a single location for each member now.
-		if (location == UINT32_MAX && ir_location != UINT32_MAX)
-			location = ir_location + i;
+		if (has_member_loc_decor)
+			location = ir_location + i * location_stride;
+		else if (location == UINT32_MAX && ir_location != UINT32_MAX)
+			location = ir_location + i * location_stride;
 
 		if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
 		{
@@ -3392,11 +3966,47 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 		}
 
+		uint32_t leaf_component = has_member_decoration(var_type.self, mbr_idx, DecorationComponent) ?
+		                              get_member_decoration(var_type.self, mbr_idx, DecorationComponent) :
+		                              0;
+		bool configured_fragment_spill = false;
+		if (storage == StorageClassInput && get_execution_model() == ExecutionModelFragment &&
+		    has_mesh_output_spill_input_layout && location != UINT32_MAX)
+		{
+			MSLMeshOutputSpillKey key;
+			key.location = location;
+			key.component = leaf_component;
+			key.rate = is_per_primitive ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE : MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+			for (auto &field : mesh_output_spill_fields)
+				configured_fragment_spill = configured_fragment_spill || field.key == key;
+		}
+		if (!is_builtin && !configured_fragment_spill && location != UINT32_MAX &&
+		    (usable_type->basetype == SPIRType::Int64 || usable_type->basetype == SPIRType::UInt64))
+		{
+			ib_type.member_types.erase(ib_type.member_types.begin() + ib_mbr_idx);
+			auto &members = ir.meta[ib_type.self].members;
+			if (ib_mbr_idx < members.size())
+				members.erase(members.begin() + ib_mbr_idx);
+			string source_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), element_suffix);
+			string variable_name = to_name(var.self);
+			if (source_chain.compare(0, variable_name.size(), variable_name) != 0)
+				SPIRV_CROSS_THROW("Internal mesh output spill source-chain mismatch.");
+			if (add_packed_64_bit_integer_leaf_to_interface_block(
+			        storage, ib_var_ref, ib_type, var, *usable_type, location, leaf_component, mbr_name,
+			        source_chain.substr(variable_name.size()), var_mbr_idx,
+			        element_access_path.empty() ? UINT32_MAX : i, is_flat, is_noperspective, is_centroid, is_sample))
+			{
+				location += location_stride;
+				continue;
+			}
+			SPIRV_CROSS_THROW("Internal 64-bit interface packing failure.");
+		}
+
 		if ((!is_builtin && location != UINT32_MAX) || (is_builtin && ir_location != UINT32_MAX))
 		{
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 			mark_location_as_used_by_shader(location, *usable_type, storage);
-			location++;
+			location += location_stride;
 		}
 		else if (is_builtin && (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance))
 		{
@@ -3406,7 +4016,59 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
-			SPIRV_CROSS_THROW("DecorationComponent on matrices and arrays is not supported.");
+		{
+			if (is_matrix(mbr_type))
+				SPIRV_CROSS_THROW("DecorationComponent on matrix interface members is not supported.");
+			uint32_t component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, component);
+		}
+
+		if (storage == StorageClassInput && get_execution_model() == ExecutionModelFragment &&
+		    has_mesh_output_spill_input_layout && has_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation))
+		{
+			MSLMeshOutputSpillKey key;
+			key.location = get_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation);
+			key.component = has_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent) ?
+			                    get_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent) :
+			                    0;
+			key.rate = is_per_primitive ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE : MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+			const MSLMeshOutputSpillField *spill_field = nullptr;
+			for (auto &field : mesh_output_spill_fields)
+				if (field.key == key)
+				{
+					spill_field = &field;
+					break;
+				}
+			if (spill_field)
+			{
+				if (spill_field->base_type != mesh_output_spill_base_type_for(*usable_type) ||
+				    spill_field->bit_width != usable_type->width || spill_field->vecsize != usable_type->vecsize ||
+				    spill_field->columns != usable_type->columns)
+					SPIRV_CROSS_THROW("Mesh output spill fragment field type does not match its serialized layout.");
+				string source_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), element_suffix);
+				string variable_name = to_name(var.self);
+				MeshOutputSpillMember member;
+				member.field = *spill_field;
+				member.variable_id = var.self;
+				member.variable_member_index = var_mbr_idx;
+				member.variable_element_index = element_access_path.empty() ? UINT32_MAX : i;
+				member.variable_access_indices = member_access_indices;
+				member.variable_access_indices.insert(member.variable_access_indices.end(), element_access_path.begin(),
+				                                      element_access_path.end());
+				member.source_suffix = source_chain.substr(variable_name.size());
+				member.flat = is_flat;
+				member.no_perspective = is_noperspective;
+				member.centroid = is_centroid;
+				member.sample = is_sample;
+				fragment_spill_members.push_back(member);
+				pull_model_inputs.erase(var.self);
+				ib_type.member_types.erase(ib_type.member_types.begin() + ib_mbr_idx);
+				auto &members = ir.meta[ib_type.self].members;
+				if (ib_mbr_idx < members.size())
+					members.erase(members.begin() + ib_mbr_idx);
+				continue;
+			}
+		}
 
 		if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
 		{
@@ -3423,11 +4085,22 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, var_mbr_idx);
+		if (is_mesh_shader() && !element_access_path.empty())
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
+		if (is_mesh_shader() && storage == StorageClassOutput)
+		{
+			string source_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), element_suffix);
+			string variable_name = to_name(var.self);
+			if (source_chain.compare(0, variable_name.size(), variable_name) != 0)
+				SPIRV_CROSS_THROW("Internal mesh output spill source-chain mismatch.");
+			mesh_output_interface_source_suffixes[(uint64_t(ib_type.self) << 32) | ib_mbr_idx] =
+			    source_chain.substr(variable_name.size());
+		}
 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		if (!meta.strip_array && meta.allow_local_declaration)
 		{
-			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), (mbr_is_indexable ? join("[", i, "]") : ""));
+			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), element_suffix);
 			switch (storage)
 			{
 			case StorageClassInput:
@@ -3450,12 +4123,15 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				break;
 
 			case StorageClassOutput:
-				entry_func.fixup_hooks_out.push_back([=]() {
-					if (flatten_from_ib_var)
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i, "];");
-					else
-						statement(ib_var_ref, ".", mbr_name, " = ", var_chain, ";");
-				});
+				entry_func.fixup_hooks_out.push_back(
+				    [=]()
+				    {
+					    if (flatten_from_ib_var)
+						    statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name,
+						              element_suffix, ";");
+					    else
+						    statement(ib_var_ref, ".", mbr_name, " = ", var_chain, ";");
+				    });
 				break;
 
 			default:
@@ -3465,13 +4141,10 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	}
 }
 
-void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass storage,
-                                                               const string &ib_var_ref, SPIRType &ib_type,
-                                                               SPIRVariable &var, SPIRType &var_type,
-                                                               uint32_t mbr_idx, InterfaceBlockMeta &meta,
-                                                               const string &mbr_name_qual,
-                                                               const string &var_chain_qual,
-                                                               uint32_t &location, uint32_t &var_mbr_idx)
+void CompilerMSL::add_plain_member_variable_to_interface_block(
+    StorageClass storage, const string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
+    uint32_t mbr_idx, InterfaceBlockMeta &meta, const string &mbr_name_qual, const string &var_chain_qual,
+    uint32_t &location, uint32_t &var_mbr_idx, const SmallVector<uint32_t> &variable_access_indices)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -3485,6 +4158,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	                   has_decoration(var.self, DecorationCentroid);
 	bool is_sample =
 	    has_member_decoration(var_type.self, mbr_idx, DecorationSample) || has_decoration(var.self, DecorationSample);
+	bool is_per_primitive = has_member_decoration(var_type.self, mbr_idx, DecorationPerPrimitiveEXT) ||
+	                        has_decoration(var.self, DecorationPerPrimitiveEXT);
 
 	// Add a reference to the member to the interface struct.
 	uint32_t mbr_type_id = var_type.member_types[mbr_idx];
@@ -3537,7 +4212,9 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	// the nested structures will have consecutive location values. At this point,
 	// we've recursively tunnelled into structs, arrays, and matrices, and are
 	// down to a single location for each member now.
-	if (location == UINT32_MAX && ir_location != UINT32_MAX)
+	if (has_member_loc_decor)
+		location = ir_location;
+	else if (location == UINT32_MAX && ir_location != UINT32_MAX)
 		location = ir_location;
 
 	if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
@@ -3562,8 +4239,80 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 	}
 
-	bool flatten_stage_out = false;
 	string var_chain = var_chain_qual + "." + to_member_name(var_type, mbr_idx);
+	if (storage == StorageClassInput && get_execution_model() == ExecutionModelFragment &&
+	    has_mesh_output_spill_input_layout && !is_builtin && location != UINT32_MAX)
+	{
+		MSLMeshOutputSpillKey key;
+		key.location = location;
+		key.component = has_member_decoration(var_type.self, mbr_idx, DecorationComponent) ?
+		                    get_member_decoration(var_type.self, mbr_idx, DecorationComponent) :
+		                    0;
+		key.rate = is_per_primitive ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE : MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		for (auto &field : mesh_output_spill_fields)
+			if (field.key == key)
+			{
+				auto &logical_type = get<SPIRType>(mbr_type_id);
+				if (field.base_type != mesh_output_spill_base_type_for(logical_type) ||
+				    field.bit_width != logical_type.width || field.vecsize != logical_type.vecsize ||
+				    field.columns != logical_type.columns)
+					SPIRV_CROSS_THROW("Mesh output spill fragment field type does not match its serialized layout.");
+				string variable_name = to_name(var.self);
+				MeshOutputSpillMember member;
+				member.field = field;
+				member.variable_id = var.self;
+				member.variable_member_index = var_mbr_idx;
+				member.variable_access_indices = variable_access_indices;
+				member.variable_access_indices.push_back(mbr_idx);
+				member.source_suffix = var_chain.substr(variable_name.size());
+				member.flat = is_flat;
+				member.no_perspective = is_noperspective;
+				member.centroid = is_centroid;
+				member.sample = is_sample;
+				fragment_spill_members.push_back(member);
+				pull_model_inputs.erase(var.self);
+				location += get_msl_interface_location_count(get<SPIRType>(mbr_type_id));
+				ib_type.member_types.erase(ib_type.member_types.begin() + ib_mbr_idx);
+				auto &members = ir.meta[ib_type.self].members;
+				if (ib_mbr_idx < members.size())
+					members.erase(members.begin() + ib_mbr_idx);
+				return;
+			}
+	}
+
+	auto &logical_member_type = get<SPIRType>(mbr_type_id);
+	if (!is_builtin && location != UINT32_MAX &&
+	    (logical_member_type.basetype == SPIRType::Int64 || logical_member_type.basetype == SPIRType::UInt64) &&
+	    logical_member_type.width == 64 && logical_member_type.columns == 1 && logical_member_type.array.empty())
+	{
+		ib_type.member_types.erase(ib_type.member_types.begin() + ib_mbr_idx);
+		auto &members = ir.meta[ib_type.self].members;
+		if (ib_mbr_idx < members.size())
+			members.erase(members.begin() + ib_mbr_idx);
+		string variable_name = to_name(var.self);
+		if (var_chain.compare(0, variable_name.size(), variable_name) != 0)
+			SPIRV_CROSS_THROW("Internal mesh output spill source-chain mismatch.");
+		uint32_t component = has_member_decoration(var_type.self, mbr_idx, DecorationComponent) ?
+		                         get_member_decoration(var_type.self, mbr_idx, DecorationComponent) :
+		                         0;
+		if (!add_packed_64_bit_integer_leaf_to_interface_block(
+		        storage, ib_var_ref, ib_type, var, logical_member_type, location, component, mbr_name,
+		        var_chain.substr(variable_name.size()), var_mbr_idx, UINT32_MAX, is_flat, is_noperspective, is_centroid,
+		        is_sample))
+			SPIRV_CROSS_THROW("Internal 64-bit interface packing failure.");
+		location += get_msl_interface_location_count(logical_member_type);
+		return;
+	}
+
+	bool flatten_stage_out = false;
+	if (is_mesh_shader() && storage == StorageClassOutput)
+	{
+		string variable_name = to_name(var.self);
+		if (var_chain.compare(0, variable_name.size(), variable_name) != 0)
+			SPIRV_CROSS_THROW("Internal mesh output spill source-chain mismatch.");
+		mesh_output_interface_source_suffixes[(uint64_t(ib_type.self) << 32) | ib_mbr_idx] =
+		    var_chain.substr(variable_name.size());
+	}
 	if (is_builtin && !meta.strip_array)
 	{
 		// For the builtin gl_PerVertex, we cannot treat it as a block anyways,
@@ -3601,7 +4350,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	{
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location += type_to_location_count(get<SPIRType>(mbr_type_id));
+		location += get_msl_interface_location_count(get<SPIRType>(mbr_type_id));
 	}
 
 	// Copy the component location, if present.
@@ -3622,8 +4371,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	}
 
 	const SPIRConstant *c = nullptr;
-	if (!flatten_stage_out && var.storage == StorageClassOutput &&
-	    var.initializer != ID(0) && (c = maybe_get<SPIRConstant>(var.initializer)))
+	if (!is_mesh_shader() && !flatten_stage_out && var.storage == StorageClassOutput && var.initializer != ID(0) &&
+	    (c = maybe_get<SPIRConstant>(var.initializer)))
 	{
 		if (meta.strip_array)
 		{
@@ -3857,7 +4606,7 @@ void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, boo
 	{
 		vars_needing_early_declaration.push_back(masked_var.self);
 	}
-	else if (masked_var.initializer)
+	else if (masked_var.initializer && !is_mesh_shader())
 	{
 		// Cannot directly initialize threadgroup variables. Need fixup hooks.
 		ID initializer = masked_var.initializer;
@@ -3959,32 +4708,47 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			bool masked_block = false;
 			uint32_t location = UINT32_MAX;
 			uint32_t var_mbr_idx = 0;
-			uint32_t elem_cnt = 1;
-			if (is_matrix(var_type))
+			auto variable_access_paths = get_msl_flattened_io_access_paths(var_type);
+			uint32_t elem_cnt = uint32_t(variable_access_paths.size());
+			auto access_suffix = [](const SmallVector<uint32_t> &path)
 			{
-				if (is_array(var_type))
-					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-				elem_cnt = var_type.columns;
-			}
-			else if (is_array(var_type))
+				string suffix;
+				for (auto index : path)
+					suffix += join("[", index, "]");
+				return suffix;
+			};
+			auto access_name_suffix = [](const SmallVector<uint32_t> &path)
 			{
-				if (var_type.array.size() != 1)
-					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-				elem_cnt = to_array_size_literal(var_type);
-			}
+				string suffix;
+				for (auto index : path)
+					suffix += join("_", index);
+				return suffix;
+			};
 
 			for (uint32_t elem_idx = 0; elem_idx < elem_cnt; elem_idx++)
 			{
+				auto &variable_access_indices = variable_access_paths[elem_idx];
 				// Flatten the struct members into the interface struct
 				for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
 				{
 					builtin = BuiltInMax;
 					is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 					auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
+					if (meta.mesh_per_primitive >= 0)
+					{
+						bool member_per_primitive =
+						    has_decoration(var.self, DecorationPerPrimitiveEXT) ||
+						    has_member_decoration(var_type.self, mbr_idx, DecorationPerPrimitiveEXT);
+						if (member_per_primitive != (meta.mesh_per_primitive != 0))
+						{
+							location = UINT32_MAX;
+							var_mbr_idx++;
+							continue;
+						}
+					}
 
-					if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
+					if (storage == StorageClassOutput &&
+					    is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 					{
 						location = UINT32_MAX; // Skip this member and resolve location again on next var member
 
@@ -4033,25 +4797,23 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						const string var_name = to_name(var.self);
 						string mbr_name_qual = var_name;
 						string var_chain_qual = var_name;
-						if (elem_cnt > 1)
+						if (!variable_access_indices.empty())
 						{
-							mbr_name_qual += join("_", elem_idx);
-							var_chain_qual += join("[", elem_idx, "]");
+							mbr_name_qual += access_name_suffix(variable_access_indices);
+							var_chain_qual += access_suffix(variable_access_indices);
 						}
 
 						if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
 						{
-							add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
-							                                                 var, var_type, mbr_idx, meta,
-							                                                 mbr_name_qual, var_chain_qual,
-							                                                 location, var_mbr_idx, {});
+							add_composite_member_variable_to_interface_block(
+							    storage, ib_var_ref, ib_type, var, var_type, mbr_idx, meta, mbr_name_qual,
+							    var_chain_qual, location, var_mbr_idx, {}, variable_access_indices);
 						}
 						else
 						{
-							add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
-							                                             var, var_type, mbr_idx, meta,
-							                                             mbr_name_qual, var_chain_qual,
-							                                             location, var_mbr_idx);
+							add_plain_member_variable_to_interface_block(
+							    storage, ib_var_ref, ib_type, var, var_type, mbr_idx, meta, mbr_name_qual,
+							    var_chain_qual, location, var_mbr_idx, variable_access_indices);
 						}
 					}
 					var_mbr_idx++;
@@ -4844,16 +5606,39 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 {
 	// Accumulate the variables that should appear in the interface struct.
 	SmallVector<SPIRVariable *> vars;
+	bool needs_default_position = !per_primitive;
+	bool needs_default_point_size = !per_primitive && msl_options.enable_point_size_builtin &&
+	                                msl_options.enable_point_size_default &&
+	                                get_entry_point().flags.get(ExecutionModeOutputPoints);
+	bool needs_default_layer = per_primitive && outputs_by_builtin.count(BuiltInLayer) != 0;
+	bool needs_default_viewport_index = per_primitive && outputs_by_builtin.count(BuiltInViewportIndex) != 0;
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		if (var.storage != StorageClassOutput || var.self == builtin_mesh_primitive_indices_id)
-			return;
-		if (is_per_primitive_variable(var) != per_primitive)
-			return;
-		vars.push_back(&var);
-	});
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t id, SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassOutput || var.self == builtin_mesh_primitive_indices_id ||
+		        !interface_variable_exists_in_entry_point(id))
+			    return;
+		    auto &var_type = get_variable_element_type(var);
+		    if (has_decoration(var_type.self, DecorationBlock))
+		    {
+			    bool has_matching_member = false;
+			    for (uint32_t member = 0; member < var_type.member_types.size(); ++member)
+			    {
+				    bool member_per_primitive = has_decoration(var.self, DecorationPerPrimitiveEXT) ||
+				                                has_member_decoration(var_type.self, member, DecorationPerPrimitiveEXT);
+				    has_matching_member = has_matching_member || member_per_primitive == per_primitive;
+			    }
+			    if (!has_matching_member)
+				    return;
+		    }
+		    else if (is_per_primitive_variable(var) != per_primitive)
+			    return;
+		    vars.push_back(&var);
+	    });
 
-	if (vars.empty())
+	if (vars.empty() && !needs_default_position && !needs_default_point_size && !needs_default_layer &&
+	    !needs_default_viewport_index && !(per_primitive && !mesh_output_spill_keys.empty()))
 		return 0;
 
 	uint32_t next_id = ir.increase_bound_by(1);
@@ -4865,8 +5650,97 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 	{
 		meta.strip_array = true;
 		meta.allow_local_declaration = false;
+		meta.mesh_per_primitive = per_primitive ? 1 : 0;
 		add_variable_to_interface_block(StorageClassOutput, "", type, *p_var, meta);
 	}
+
+	if (!mesh_output_spill_keys.empty())
+		filter_mesh_output_spill_members(type, per_primitive);
+
+	if (needs_default_position)
+	{
+		bool has_position = false;
+		for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+		{
+			if (has_member_decoration(type.self, index, DecorationBuiltIn) &&
+			    get_member_decoration(type.self, index, DecorationBuiltIn) == BuiltInPosition)
+			{
+				has_position = true;
+				break;
+			}
+		}
+
+		if (!has_position)
+		{
+			uint32_t vec4_type_id = ir.increase_bound_by(1);
+			SPIRType vec4_type{ OpTypeVector };
+			vec4_type.basetype = SPIRType::Float;
+			vec4_type.width = 32;
+			vec4_type.vecsize = 4;
+			set<SPIRType>(vec4_type_id, vec4_type);
+
+			mesh_default_position_member = uint32_t(type.member_types.size());
+			type.member_types.push_back(vec4_type_id);
+			set_member_name(type.self, mesh_default_position_member, "gl_Position");
+			set_member_decoration(type.self, mesh_default_position_member, DecorationBuiltIn, BuiltInPosition);
+		}
+	}
+
+	if (needs_default_point_size)
+	{
+		bool has_point_size = false;
+		for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+		{
+			if (has_member_decoration(type.self, index, DecorationBuiltIn) &&
+			    get_member_decoration(type.self, index, DecorationBuiltIn) == BuiltInPointSize)
+			{
+				has_point_size = true;
+				break;
+			}
+		}
+
+		if (!has_point_size)
+		{
+			uint32_t float_type_id = ir.increase_bound_by(1);
+			SPIRType float_type{ OpTypeFloat };
+			float_type.basetype = SPIRType::Float;
+			float_type.width = 32;
+			float_type.vecsize = 1;
+			set<SPIRType>(float_type_id, float_type);
+
+			mesh_default_point_size_member = uint32_t(type.member_types.size());
+			type.member_types.push_back(float_type_id);
+			set_member_name(type.self, mesh_default_point_size_member, "gl_PointSize");
+			set_member_decoration(type.self, mesh_default_point_size_member, DecorationBuiltIn, BuiltInPointSize);
+		}
+	}
+
+	auto add_default_primitive_builtin = [&](bool needed, BuiltIn builtin, uint32_t &default_member, const char *name)
+	{
+		if (!needed)
+			return;
+		for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+		{
+			if (has_member_decoration(type.self, index, DecorationBuiltIn) &&
+			    get_member_decoration(type.self, index, DecorationBuiltIn) == builtin)
+				return;
+		}
+
+		uint32_t default_uint_type_id = ir.increase_bound_by(1);
+		SPIRType uint_type{ OpTypeInt };
+		uint_type.basetype = SPIRType::UInt;
+		uint_type.width = 32;
+		uint_type.vecsize = 1;
+		set<SPIRType>(default_uint_type_id, uint_type);
+
+		default_member = uint32_t(type.member_types.size());
+		type.member_types.push_back(default_uint_type_id);
+		set_member_name(type.self, default_member, name);
+		set_member_decoration(type.self, default_member, DecorationBuiltIn, builtin);
+	};
+	add_default_primitive_builtin(needs_default_layer, BuiltInLayer, mesh_default_layer_member, "gl_Layer");
+	add_default_primitive_builtin(needs_default_viewport_index, BuiltInViewportIndex,
+	                              mesh_default_viewport_index_member, "gl_ViewportIndex");
 
 	if (per_primitive)
 		set_name(type.self, "spvPerPrimitive");
@@ -4874,6 +5748,825 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 		set_name(type.self, "spvPerVertex");
 
 	return next_id;
+}
+
+void CompilerMSL::filter_mesh_output_spill_members(SPIRType &type, bool per_primitive)
+{
+	SmallVector<string> source_suffixes;
+	SmallVector<MeshOutputInterfacePacked64> packed_64_members;
+	SmallVector<bool> has_packed_64_member;
+	uint32_t original_member_count = uint32_t(type.member_types.size());
+	for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+	{
+		uint64_t interface_key = (uint64_t(type.self) << 32) | index;
+		auto itr = mesh_output_interface_source_suffixes.find(interface_key);
+		source_suffixes.push_back(itr == mesh_output_interface_source_suffixes.end() ? string() : itr->second);
+		auto packed_itr = mesh_output_interface_packed_64.find(interface_key);
+		has_packed_64_member.push_back(packed_itr != mesh_output_interface_packed_64.end());
+		packed_64_members.push_back(
+		    packed_itr == mesh_output_interface_packed_64.end() ? MeshOutputInterfacePacked64{} : packed_itr->second);
+	}
+	std::unordered_set<uint32_t> expanded_variables;
+	for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+	{
+		uint32_t component = 0;
+		uint32_t location = get_member_location(type.self, index, &component);
+		if (component == k_unknown_component)
+			component = 0;
+		if (has_packed_64_member[index])
+		{
+			location = packed_64_members[index].logical_location;
+			component = packed_64_members[index].logical_component;
+		}
+		MSLMeshOutputSpillKey key;
+		key.location = location;
+		key.component = component;
+		key.rate = per_primitive ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE : MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		if (location != k_unknown_location && std::find(mesh_output_spill_keys.begin(), mesh_output_spill_keys.end(),
+		                                                key) != mesh_output_spill_keys.end())
+		{
+			uint32_t variable_id =
+			    get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID);
+			if (variable_id)
+				expanded_variables.insert(variable_id);
+		}
+	}
+
+	for (uint32_t index = 0; index < uint32_t(type.member_types.size());)
+	{
+		uint32_t variable_id = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID);
+		uint32_t component = 0;
+		uint32_t location = get_member_location(type.self, index, &component);
+		if (component == k_unknown_component)
+			component = 0;
+		bool packed_64 = has_packed_64_member[index];
+		if (packed_64)
+		{
+			location = packed_64_members[index].logical_location;
+			component = packed_64_members[index].logical_component;
+		}
+
+		bool logical_primitive_id = false;
+		if (per_primitive && has_member_decoration(type.self, index, DecorationBuiltIn))
+			logical_primitive_id = get_member_decoration(type.self, index, DecorationBuiltIn) == BuiltInPrimitiveId;
+
+		MSLMeshOutputSpillKey key;
+		key.location = location;
+		key.component = component;
+		key.rate = per_primitive ? MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE : MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		bool selected = location != k_unknown_location &&
+		                (expanded_variables.count(variable_id) != 0 ||
+		                 std::find(mesh_output_spill_keys.begin(), mesh_output_spill_keys.end(), key) !=
+		                     mesh_output_spill_keys.end());
+
+		if (!selected && !logical_primitive_id)
+		{
+			index++;
+			continue;
+		}
+
+		if (!variable_id)
+			SPIRV_CROSS_THROW("Mesh output spill cannot identify the originating SPIR-V variable.");
+
+		if (logical_primitive_id)
+		{
+			if (mesh_spill_logical_primitive_id && mesh_spill_logical_primitive_id != variable_id)
+				SPIRV_CROSS_THROW("Mesh output spill found more than one logical PrimitiveId output.");
+			mesh_spill_logical_primitive_id = variable_id;
+			mesh_spill_logical_primitive_id_suffix = source_suffixes[index];
+		}
+
+		if (selected)
+		{
+			if (packed_64)
+			{
+				auto &packed = packed_64_members[index];
+				if (packed.source_lane == 0)
+				{
+					MeshOutputSpillMember member;
+					member.variable_id = variable_id;
+					if (has_member_decoration(type.self, index, DecorationIndex))
+						member.variable_element_index = get_member_decoration(type.self, index, DecorationIndex);
+					if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceMemberIndex))
+						member.variable_member_index =
+						    get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
+					member.source_suffix = packed.source_suffix;
+					member.field.key = key;
+					member.field.base_type = packed.base_type;
+					member.field.bit_width = 64;
+					member.field.vecsize = packed.logical_vecsize;
+					member.field.columns = 1;
+					member.field.capture_word_stride = packed.logical_vecsize * 2u;
+					mesh_output_spill_members.push_back(std::move(member));
+				}
+			}
+			else
+			{
+				auto &physical_type = get<SPIRType>(type.member_types[index]);
+				MSLMeshOutputSpillBaseType base_type;
+				switch (physical_type.basetype)
+				{
+				case SPIRType::Short:
+				case SPIRType::Int:
+				case SPIRType::Int64:
+					base_type = MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT;
+					break;
+				case SPIRType::UShort:
+				case SPIRType::UInt:
+				case SPIRType::UInt64:
+					base_type = MSL_MESH_OUTPUT_SPILL_BASE_TYPE_UINT;
+					break;
+				case SPIRType::Half:
+				case SPIRType::Float:
+				case SPIRType::Double:
+					base_type = MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT;
+					break;
+				default:
+					SPIRV_CROSS_THROW("Mesh output spill only supports int, uint, and float fields.");
+				}
+				if ((physical_type.width != 16 && physical_type.width != 32 && physical_type.width != 64) ||
+				    physical_type.columns != 1 || !physical_type.array.empty() || physical_type.vecsize < 1 ||
+				    physical_type.vecsize > 4)
+					SPIRV_CROSS_THROW(
+					    "Mesh output spill only supports flattened 16-bit, 32-bit, and 64-bit scalar/vector fields.");
+
+				MeshOutputSpillMember member;
+				member.variable_id = variable_id;
+				if (has_member_decoration(type.self, index, DecorationIndex))
+					member.variable_element_index = get_member_decoration(type.self, index, DecorationIndex);
+				if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceMemberIndex))
+					member.variable_member_index =
+					    get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
+				member.source_suffix = source_suffixes[index];
+				member.field.key = key;
+				member.field.base_type = base_type;
+				member.field.bit_width = physical_type.width;
+				member.field.vecsize = physical_type.vecsize;
+				member.field.columns = physical_type.columns;
+				member.field.capture_word_stride =
+				    physical_type.width == 64 ? physical_type.vecsize * 2u : physical_type.vecsize;
+				mesh_output_spill_members.push_back(member);
+			}
+		}
+
+		type.member_types.erase(type.member_types.begin() + index);
+		source_suffixes.erase(source_suffixes.begin() + index);
+		packed_64_members.erase(packed_64_members.begin() + index);
+		has_packed_64_member.erase(has_packed_64_member.begin() + index);
+		auto &members = ir.meta[type.self].members;
+		if (index < members.size())
+			members.erase(members.begin() + index);
+	}
+
+	for (uint32_t index = 0; index < original_member_count; ++index)
+	{
+		uint64_t interface_key = (uint64_t(type.self) << 32) | index;
+		mesh_output_interface_source_suffixes.erase(interface_key);
+		mesh_output_interface_packed_64.erase(interface_key);
+	}
+	for (uint32_t index = 0; index < uint32_t(type.member_types.size()); ++index)
+	{
+		uint64_t interface_key = (uint64_t(type.self) << 32) | index;
+		mesh_output_interface_source_suffixes[interface_key] = source_suffixes[index];
+		if (has_packed_64_member[index])
+			mesh_output_interface_packed_64[interface_key] = packed_64_members[index];
+	}
+}
+
+void CompilerMSL::finalize_mesh_output_spill_interface()
+{
+	if (mesh_output_spill_keys.empty())
+		return;
+
+	std::sort(mesh_output_spill_members.begin(), mesh_output_spill_members.end(),
+	          [](const MeshOutputSpillMember &a, const MeshOutputSpillMember &b)
+	          {
+		          if (a.field.key.rate != b.field.key.rate)
+			          return a.field.key.rate < b.field.key.rate;
+		          if (a.field.key.location != b.field.key.location)
+			          return a.field.key.location < b.field.key.location;
+		          return a.field.key.component < b.field.key.component;
+	          });
+	for (auto &requested : mesh_output_spill_keys)
+	{
+		bool found = false;
+		for (auto &member : mesh_output_spill_members)
+			found = found || member.field.key == requested;
+		if (!found)
+			SPIRV_CROSS_THROW("A requested mesh output spill field was not found as one whole flattened field.");
+	}
+
+	auto &execution = get_entry_point();
+	mesh_output_spill_layout = {};
+	mesh_output_spill_layout.version = 2;
+	mesh_output_spill_layout.max_vertices = execution.output_vertices;
+	mesh_output_spill_layout.max_primitives = execution.output_primitives;
+	uint32_t topology_vertices = 1;
+	if (execution.flags.get(ExecutionModeOutputTrianglesEXT))
+	{
+		mesh_output_spill_layout.topology = MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE;
+		topology_vertices = 3;
+	}
+	else if (execution.flags.get(ExecutionModeOutputLinesEXT))
+	{
+		mesh_output_spill_layout.topology = MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE;
+		topology_vertices = 2;
+	}
+	else if (execution.flags.get(ExecutionModeOutputPoints))
+		mesh_output_spill_layout.topology = MSL_MESH_OUTPUT_SPILL_TOPOLOGY_POINT;
+	else
+		SPIRV_CROSS_THROW("Mesh output spill requires point, line, or triangle output topology.");
+
+	bool has_per_vertex = false;
+	for (auto &member : mesh_output_spill_members)
+		has_per_vertex = has_per_vertex || member.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+
+	bool occupied[32][4] = {};
+	auto mark_occupied = [&](uint32_t type_id)
+	{
+		if (!type_id)
+			return;
+		auto &interface_type = get<SPIRType>(type_id);
+		for (uint32_t index = 0; index < uint32_t(interface_type.member_types.size()); ++index)
+		{
+			if (!has_member_decoration(interface_type.self, index, DecorationLocation))
+				continue;
+			uint32_t location = get_member_decoration(interface_type.self, index, DecorationLocation);
+			uint32_t component = has_member_decoration(interface_type.self, index, DecorationComponent) ?
+			                         get_member_decoration(interface_type.self, index, DecorationComponent) :
+			                         0;
+			auto &member_type = get<SPIRType>(interface_type.member_types[index]);
+			if (location >= 32 || component + member_type.vecsize > 4)
+				SPIRV_CROSS_THROW("Mesh output spill basis allocator encountered an unsupported interface location.");
+			for (uint32_t lane = 0; lane < member_type.vecsize; ++lane)
+				occupied[location][component + lane] = true;
+		}
+	};
+	mark_occupied(mesh_out_per_vertex);
+	mark_occupied(mesh_out_per_primitive);
+
+	auto allocate_components = [&](uint32_t count, uint32_t &location, uint32_t &component)
+	{
+		for (uint32_t loc = 0; loc < 32; ++loc)
+			for (uint32_t comp = 0; comp + count <= 4; ++comp)
+			{
+				bool available = true;
+				for (uint32_t lane = 0; lane < count; ++lane)
+					available = available && !occupied[loc][comp + lane];
+				if (!available)
+					continue;
+				location = loc;
+				component = comp;
+				for (uint32_t lane = 0; lane < count; ++lane)
+					occupied[loc][comp + lane] = true;
+				return;
+			}
+		SPIRV_CROSS_THROW("No conflict-free mesh output location is available for spill reconstruction basis.");
+	};
+
+	uint32_t basis_components = 0;
+	if (has_per_vertex && topology_vertices == 2)
+		basis_components = 1;
+	else if (has_per_vertex && topology_vertices == 3)
+		basis_components = 2;
+
+	if (basis_components)
+	{
+		if (!mesh_out_per_vertex)
+			SPIRV_CROSS_THROW("Mesh output spill reconstruction requires a per-vertex interface.");
+		auto &vertex_type = get<SPIRType>(mesh_out_per_vertex);
+		uint32_t float_type_id = ir.increase_bound_by(1);
+		SPIRType float_type{ basis_components == 1 ? OpTypeFloat : OpTypeVector };
+		float_type.basetype = SPIRType::Float;
+		float_type.width = 32;
+		float_type.vecsize = basis_components;
+		set<SPIRType>(float_type_id, float_type);
+
+		allocate_components(basis_components, mesh_output_spill_layout.perspective_basis_location,
+		                    mesh_output_spill_layout.perspective_basis_component);
+		mesh_output_spill_layout.perspective_basis_components = basis_components;
+		mesh_spill_perspective_member = uint32_t(vertex_type.member_types.size());
+		vertex_type.member_types.push_back(float_type_id);
+		set_member_name(vertex_type.self, mesh_spill_perspective_member, "spvMeshSpillPerspectiveBasis");
+		set_member_decoration(vertex_type.self, mesh_spill_perspective_member, DecorationLocation,
+		                      mesh_output_spill_layout.perspective_basis_location);
+		if (mesh_output_spill_layout.perspective_basis_component)
+			set_member_decoration(vertex_type.self, mesh_spill_perspective_member, DecorationComponent,
+			                      mesh_output_spill_layout.perspective_basis_component);
+
+		allocate_components(basis_components, mesh_output_spill_layout.no_perspective_basis_location,
+		                    mesh_output_spill_layout.no_perspective_basis_component);
+		mesh_output_spill_layout.no_perspective_basis_components = basis_components;
+		mesh_spill_no_perspective_member = uint32_t(vertex_type.member_types.size());
+		vertex_type.member_types.push_back(float_type_id);
+		set_member_name(vertex_type.self, mesh_spill_no_perspective_member, "spvMeshSpillNoPerspectiveBasis");
+		set_member_decoration(vertex_type.self, mesh_spill_no_perspective_member, DecorationLocation,
+		                      mesh_output_spill_layout.no_perspective_basis_location);
+		if (mesh_output_spill_layout.no_perspective_basis_component)
+			set_member_decoration(vertex_type.self, mesh_spill_no_perspective_member, DecorationComponent,
+			                      mesh_output_spill_layout.no_perspective_basis_component);
+		set_member_decoration(vertex_type.self, mesh_spill_no_perspective_member, DecorationNoPerspective);
+	}
+
+	if (!mesh_out_per_primitive)
+	{
+		uint32_t type_id = ir.increase_bound_by(1);
+		auto &primitive_type = set<SPIRType>(type_id, SPIRType(OpTypeStruct));
+		primitive_type.basetype = SPIRType::Struct;
+		set_name(type_id, "spvPerPrimitive");
+		mesh_out_per_primitive = type_id;
+	}
+	auto &primitive_type = get<SPIRType>(mesh_out_per_primitive);
+	uint32_t spill_uint_type_id = ir.increase_bound_by(1);
+	SPIRType uint_type{ OpTypeInt };
+	uint_type.basetype = SPIRType::UInt;
+	uint_type.width = 32;
+	uint_type.vecsize = 1;
+	set<SPIRType>(spill_uint_type_id, uint_type);
+	mesh_spill_token_member = uint32_t(primitive_type.member_types.size());
+	primitive_type.member_types.push_back(spill_uint_type_id);
+	set_member_name(primitive_type.self, mesh_spill_token_member, "spvMeshSpillToken");
+	set_member_decoration(primitive_type.self, mesh_spill_token_member, DecorationBuiltIn, BuiltInPrimitiveId);
+
+	mesh_output_spill_fields.clear();
+	for (auto &member : mesh_output_spill_members)
+		mesh_output_spill_fields.push_back(member.field);
+}
+
+void CompilerMSL::filter_fragment_input_spill_members(SPIRType &type)
+{
+	for (auto &member : fragment_spill_members)
+	{
+		if (member.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX &&
+		    member.field.base_type != MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT && !member.flat)
+			SPIRV_CROSS_THROW("Integral per-vertex mesh spill inputs must use Flat interpolation.");
+	}
+
+	fragment_spill_logical_primitive_id = 0;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t id, const SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassInput || !interface_variable_exists_in_entry_point(id) ||
+		        !is_builtin_variable(var))
+			    return;
+		    if (BuiltIn(get_decoration(id, DecorationBuiltIn)) == BuiltInPrimitiveId)
+			    fragment_spill_logical_primitive_id = id;
+	    });
+
+	auto append_basis =
+	    [&](bool no_perspective, uint32_t location, uint32_t component, uint32_t components, uint32_t &member_index)
+	{
+		if (!components)
+			return;
+		if (location == UINT32_MAX || component == UINT32_MAX || components > 2)
+			SPIRV_CROSS_THROW("Invalid mesh output spill interpolation basis metadata.");
+		uint32_t value_type_id = ir.increase_bound_by(1);
+		SPIRType value_type{ components == 1 ? OpTypeFloat : OpTypeVector };
+		value_type.basetype = SPIRType::Float;
+		value_type.width = 32;
+		value_type.vecsize = components;
+		set<SPIRType>(value_type_id, value_type);
+		uint32_t interpolant_type_id = build_msl_interpolant_type(value_type_id, no_perspective);
+		member_index = uint32_t(type.member_types.size());
+		type.member_types.push_back(interpolant_type_id);
+		set_member_name(type.self, member_index,
+		                no_perspective ? "spvMeshSpillNoPerspectiveBasis" : "spvMeshSpillPerspectiveBasis");
+		set_member_decoration(type.self, member_index, DecorationLocation, location);
+		if (component)
+			set_member_decoration(type.self, member_index, DecorationComponent, component);
+	};
+	append_basis(false, mesh_output_spill_layout.perspective_basis_location,
+	             mesh_output_spill_layout.perspective_basis_component,
+	             mesh_output_spill_layout.perspective_basis_components, mesh_spill_perspective_member);
+	append_basis(true, mesh_output_spill_layout.no_perspective_basis_location,
+	             mesh_output_spill_layout.no_perspective_basis_component,
+	             mesh_output_spill_layout.no_perspective_basis_components, mesh_spill_no_perspective_member);
+}
+
+void CompilerMSL::build_mesh_output_buffer_type()
+{
+	mesh_output_variables.clear();
+	mesh_output_buffer_members.clear();
+	mesh_output_packed_64.clear();
+	mesh_output_buffer_size = 0;
+	mesh_output_buffer_alignment = 0;
+	mesh_output_threadgroup_size = 0;
+
+	SmallVector<VariableID> vertex_outputs;
+	SmallVector<VariableID> primitive_indices;
+	SmallVector<VariableID> primitive_outputs;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t id, SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassOutput || !interface_variable_exists_in_entry_point(id))
+			    return;
+		    if (id == builtin_mesh_primitive_indices_id)
+			    primitive_indices.push_back(id);
+		    else if (is_per_primitive_variable(var))
+			    primitive_outputs.push_back(id);
+		    else
+			    vertex_outputs.push_back(id);
+	    });
+
+	auto append = [&](const SmallVector<VariableID> &vars)
+	{ mesh_output_variables.insert(mesh_output_variables.end(), vars.begin(), vars.end()); };
+	append(vertex_outputs);
+	append(primitive_indices);
+	append(primitive_outputs);
+
+	std::function<std::pair<uint32_t, uint32_t>(TypeID)> natural_layout;
+	std::unordered_set<uint32_t> layout_stack;
+	natural_layout = [&](TypeID type_id) -> std::pair<uint32_t, uint32_t>
+	{
+		if (!layout_stack.insert(type_id).second)
+			SPIRV_CROSS_THROW(join("Recursive mesh output type ", uint32_t(type_id), "."));
+		auto type = get<SPIRType>(type_id);
+		auto arrays = type.array;
+		auto array_size_literal = type.array_size_literal;
+		type.array.clear();
+		type.array_size_literal.clear();
+
+		uint32_t size = 0;
+		uint32_t alignment = 1;
+		if (type.basetype == SPIRType::Struct)
+		{
+			for (uint32_t index = 0; index < type.member_types.size(); ++index)
+			{
+				BuiltIn builtin = BuiltInMax;
+				if (is_member_builtin(type, index, &builtin) && !has_active_builtin(builtin, StorageClassOutput) &&
+				    !has_active_builtin(builtin, StorageClassInput))
+					continue;
+				auto layout = natural_layout(type.member_types[index]);
+				alignment = max(alignment, layout.second);
+				size = (size + layout.second - 1) & ~(layout.second - 1);
+				size += layout.first;
+			}
+			size = max(size, 1u);
+			size = (size + alignment - 1) & ~(alignment - 1);
+		}
+		else
+		{
+			uint32_t component_size = max(type.width / 8u, 1u);
+			uint32_t vector_size = type.vecsize == 3 ? 4 : type.vecsize;
+			alignment = component_size * vector_size;
+			size = alignment * type.columns;
+		}
+
+		for (uint32_t i = uint32_t(arrays.size()); i; --i)
+		{
+			uint32_t count = array_size_literal[i - 1] ? arrays[i - 1] : evaluate_constant_u32(arrays[i - 1]);
+			size = ((size + alignment - 1) & ~(alignment - 1)) * count;
+		}
+		layout_stack.erase(type_id);
+		return { size, alignment };
+	};
+
+	uint32_t offset = 0;
+	mesh_output_buffer_alignment = 1;
+	auto append_layout = [&](TypeID type_id, VariableID id)
+	{
+		auto layout = natural_layout(type_id);
+		mesh_output_buffer_alignment = max(mesh_output_buffer_alignment, layout.second);
+		offset = (offset + layout.second - 1) & ~(layout.second - 1);
+		if (id)
+			mesh_output_buffer_members[id] = offset;
+		offset += layout.first;
+	};
+	append_layout(get_variable_data_type_id(get<SPIRVariable>(builtin_mesh_sizes_id)), 0);
+	for (auto id : mesh_output_variables)
+		append_layout(get_variable_data_type_id(get<SPIRVariable>(id)), id);
+
+	auto append_packed_64 = [&](uint32_t interface_type_id)
+	{
+		if (!interface_type_id)
+			return;
+		auto &interface_type = get<SPIRType>(interface_type_id);
+		for (uint32_t member_index = 0; member_index < interface_type.member_types.size(); ++member_index)
+		{
+			VariableID variable_id =
+			    get_extended_member_decoration(interface_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID);
+			if (!variable_id)
+				continue;
+			auto &variable = get<SPIRVariable>(variable_id);
+			auto &logical_type = get_variable_element_type(variable);
+			auto &physical_type = get<SPIRType>(interface_type.member_types[member_index]);
+			bool packed = (logical_type.basetype == SPIRType::Int64 || logical_type.basetype == SPIRType::UInt64) &&
+			              logical_type.width == 64 && logical_type.columns == 1 && logical_type.array.empty() &&
+			              physical_type.basetype == SPIRType::UInt && physical_type.width == 32;
+			if (!packed)
+				continue;
+
+			MeshOutputPacked64 packed_member;
+			packed_member.interface_type_id = interface_type_id;
+			packed_member.interface_member_index = member_index;
+			packed_member.variable_id = variable_id;
+			mesh_output_packed_64.push_back(std::move(packed_member));
+		}
+	};
+	append_packed_64(mesh_out_per_vertex);
+	append_packed_64(mesh_out_per_primitive);
+	for (auto variable_id : mesh_output_composite_packed_64_variables)
+	{
+		bool present = false;
+		for (auto &packed : mesh_output_packed_64)
+			present = present || packed.variable_id == variable_id;
+		if (!present)
+		{
+			MeshOutputPacked64 packed;
+			packed.variable_id = variable_id;
+			mesh_output_packed_64.push_back(packed);
+		}
+	}
+	for (auto &spill : mesh_output_spill_members)
+	{
+		if (spill.field.bit_width != 64)
+			continue;
+		bool present = false;
+		for (auto &packed : mesh_output_packed_64)
+			present = present || packed.variable_id == spill.variable_id;
+		if (!present)
+		{
+			MeshOutputPacked64 packed;
+			packed.variable_id = spill.variable_id;
+			mesh_output_packed_64.push_back(packed);
+		}
+	}
+
+	if (!mesh_output_spill_members.empty())
+	{
+		offset = (offset + 3u) & ~3u;
+		uint32_t topology_vertices = mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE ? 3u :
+		                             mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE     ? 2u :
+		                                                                                                            1u;
+		mesh_output_spill_layout.primitive_index_word_offset = offset / 4u;
+		mesh_output_spill_layout.primitive_index_word_stride = topology_vertices;
+		offset += mesh_output_spill_layout.max_primitives * topology_vertices * 4u;
+		mesh_output_spill_layout.logical_primitive_id_word_offset = offset / 4u;
+		offset += mesh_output_spill_layout.max_primitives * 4u;
+		for (auto &member : mesh_output_spill_members)
+		{
+			member.field.capture_word_offset = offset / 4u;
+			uint32_t count = member.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX ?
+			                     mesh_output_spill_layout.max_vertices :
+			                     mesh_output_spill_layout.max_primitives;
+			offset += count * member.field.capture_word_stride * 4u;
+		}
+		mesh_output_spill_fields.clear();
+		for (auto &member : mesh_output_spill_members)
+			mesh_output_spill_fields.push_back(member.field);
+	}
+	mesh_output_buffer_size = (offset + mesh_output_buffer_alignment - 1) & ~(mesh_output_buffer_alignment - 1);
+	if (!mesh_output_spill_members.empty())
+		mesh_output_spill_layout.capture_record_stride = mesh_output_buffer_size;
+	mesh_output_threadgroup_size = msl_options.mesh_shader_emulation ? 0 : mesh_output_buffer_size;
+}
+
+uint32_t CompilerMSL::get_mesh_output_buffer_offset(VariableID id) const
+{
+	auto itr = mesh_output_buffer_members.find(id);
+	return itr == mesh_output_buffer_members.end() ? ~0u : itr->second;
+}
+
+void CompilerMSL::emit_mesh_output_capture_wrappers()
+{
+	if (mesh_output_packed_64.empty())
+		return;
+
+	statement("template<typename T>");
+	statement("struct alignas(8) spvMeshCapture64Lane");
+	begin_scope();
+	statement("uint2 data;");
+	statement("");
+	statement("device spvMeshCapture64Lane& operator=(T value) device");
+	begin_scope();
+	statement("data = as_type<uint2>(value);");
+	statement("return *this;");
+	end_scope();
+	statement("");
+	statement("operator T() const device");
+	begin_scope();
+	statement("return as_type<T>(data);");
+	end_scope();
+	for (auto *op : { "+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>" })
+	{
+		statement("");
+		statement("device spvMeshCapture64Lane& operator", op, "=(T value) device");
+		begin_scope();
+		statement("T current = *this;");
+		statement("return *this = current ", op, " value;");
+		end_scope();
+	}
+	for (auto *op : { "++", "--" })
+	{
+		const char *arithmetic_op = op[0] == '+' ? "+" : "-";
+		statement("");
+		statement("device spvMeshCapture64Lane& operator", op, "() device");
+		begin_scope();
+		statement("T current = *this;");
+		statement("*this = current ", arithmetic_op, " T(1);");
+		statement("return *this;");
+		end_scope();
+		statement("");
+		statement("T operator", op, "(int) device");
+		begin_scope();
+		statement("T current = *this;");
+		statement("*this = current ", arithmetic_op, " T(1);");
+		statement("return current;");
+		end_scope();
+	}
+	end_scope_decl();
+	statement("");
+
+	static const char *component_names[] = { "x", "y", "z", "w" };
+	auto capture_name = [](VariableID variable_id, const SPIRType &type)
+	{ return join("spvMeshCapture", uint32_t(variable_id), "_", uint32_t(type.self)); };
+	auto active_struct_member = [&](const SPIRType &type, uint32_t index)
+	{
+		BuiltIn builtin = BuiltInMax;
+		return !is_member_builtin(type, index, &builtin) || has_active_builtin(builtin, StorageClassOutput) ||
+		       has_active_builtin(builtin, StorageClassInput);
+	};
+
+	std::function<void(const SPIRType &, const string &, const string &, uint32_t)> emit_copy;
+	emit_copy = [&](const SPIRType &copy_type, const string &destination, const string &source, uint32_t loop_depth)
+	{
+		if (!copy_type.array.empty())
+		{
+			string destination_element = join("(", destination, ")");
+			string source_element = join("(", source, ")");
+			for (uint32_t dimension = 0; dimension < copy_type.array.size(); ++dimension)
+			{
+				string loop = join("spvMeshCaptureCopy", loop_depth + dimension);
+				statement("for (uint ", loop, " = 0; ", loop, " < ", to_array_size(copy_type, dimension), "; ++", loop,
+				          ")");
+				begin_scope();
+				destination_element += join("[", loop, "]");
+				source_element += join("[", loop, "]");
+			}
+			auto *element_type = &copy_type;
+			while (!element_type->array.empty())
+				element_type = &get<SPIRType>(element_type->parent_type);
+			emit_copy(*element_type, destination_element, source_element,
+			          loop_depth + uint32_t(copy_type.array.size()));
+			for (uint32_t dimension = 0; dimension < copy_type.array.size(); ++dimension)
+				end_scope();
+			return;
+		}
+		if (copy_type.basetype == SPIRType::Struct)
+		{
+			for (uint32_t index = 0; index < copy_type.member_types.size(); ++index)
+			{
+				if (!active_struct_member(copy_type, index))
+					continue;
+				string member_name = to_member_name(copy_type, index);
+				emit_copy(get<SPIRType>(copy_type.member_types[index]), join("(", destination, ").", member_name),
+				          join("(", source, ").", member_name), loop_depth);
+			}
+			return;
+		}
+		statement(destination, " = ", source, ";");
+	};
+
+	std::unordered_set<uint64_t> emitted;
+	std::function<void(const SPIRType &, VariableID)> emit_capture_type;
+	emit_capture_type = [&](const SPIRType &input_type, VariableID variable_id)
+	{
+		auto *type = &input_type;
+		while (!type->array.empty())
+			type = &get<SPIRType>(type->parent_type);
+		bool is_64_bit_integer = (type->basetype == SPIRType::Int64 || type->basetype == SPIRType::UInt64) &&
+		                         type->width == 64 && type->columns == 1;
+		if (!is_64_bit_integer && type->basetype != SPIRType::Struct)
+			return;
+		uint64_t emitted_key = (uint64_t(variable_id) << 32) | type->self;
+		if (!emitted.insert(emitted_key).second)
+			return;
+
+		if (type->basetype == SPIRType::Struct)
+		{
+			for (uint32_t index = 0; index < type->member_types.size(); ++index)
+				if (active_struct_member(*type, index))
+					emit_capture_type(get<SPIRType>(type->member_types[index]), variable_id);
+
+			string wrapper_name = capture_name(variable_id, *type);
+			statement("struct ", wrapper_name);
+			begin_scope();
+			for (uint32_t index = 0; index < type->member_types.size(); ++index)
+			{
+				if (!active_struct_member(*type, index))
+					continue;
+				auto &member_type = get<SPIRType>(type->member_types[index]);
+				statement(mesh_output_capture_type(member_type, variable_id), " ", to_member_name(*type, index), ";");
+			}
+			statement("");
+			statement("device ", wrapper_name, "& operator=(", type_to_glsl(*type), " value) device");
+			begin_scope();
+			emit_copy(*type, "*this", "value", 0);
+			statement("return *this;");
+			end_scope();
+			statement("");
+			statement("operator ", type_to_glsl(*type), "() const device");
+			begin_scope();
+			statement(type_to_glsl(*type), " value = {};");
+			emit_copy(*type, "value", "*this", 0);
+			statement("return value;");
+			end_scope();
+			end_scope_decl();
+			statement("");
+			return;
+		}
+
+		if (type->vecsize == 1)
+			return;
+		SPIRType logical_lane_type = *type;
+		logical_lane_type.vecsize = 1;
+		string lane_type = join("spvMeshCapture64Lane<", type_to_glsl(logical_lane_type), ">");
+		string wrapper_name = capture_name(variable_id, *type);
+		uint32_t alignment = (type->width / 8u) * (type->vecsize == 3 ? 4u : type->vecsize);
+		statement("struct alignas(", alignment, ") ", wrapper_name);
+		begin_scope();
+		for (uint32_t lane = 0; lane < type->vecsize; ++lane)
+			statement(lane_type, " ", component_names[lane], ";");
+		statement("");
+		statement("device ", wrapper_name, "& operator=(", type_to_glsl(*type), " value) device");
+		begin_scope();
+		for (uint32_t lane = 0; lane < type->vecsize; ++lane)
+			statement(component_names[lane], " = value.", component_names[lane], ";");
+		statement("return *this;");
+		end_scope();
+		statement("");
+		statement("operator ", type_to_glsl(*type), "() const device");
+		begin_scope();
+		statement(type_to_glsl(*type), " value = {};");
+		for (uint32_t lane = 0; lane < type->vecsize; ++lane)
+			statement("value.", component_names[lane], " = ", component_names[lane], ";");
+		statement("return value;");
+		end_scope();
+		for (uint32_t is_const = 0; is_const < 2; ++is_const)
+		{
+			statement("");
+			statement(is_const ? "const device " : "device ", lane_type, "& operator[](size_t pos) ",
+			          is_const ? "const device" : "device");
+			begin_scope();
+			for (uint32_t lane = 0; lane + 1 < type->vecsize; ++lane)
+				statement("if (pos == ", lane, ") return ", component_names[lane], ";");
+			statement("return ", component_names[type->vecsize - 1], ";");
+			end_scope();
+		}
+		end_scope_decl();
+		statement("");
+	};
+
+	for (auto &first : mesh_output_packed_64)
+	{
+		auto &variable = get<SPIRVariable>(first.variable_id);
+		emit_capture_type(get_variable_data_type(variable), first.variable_id);
+	}
+}
+
+VariableID CompilerMSL::get_mesh_output_capture_variable(uint32_t id) const
+{
+	uint32_t base_id = id;
+	std::unordered_set<uint32_t> visited;
+	while (visited.insert(base_id).second)
+	{
+		auto *variable = maybe_get<SPIRVariable>(base_id);
+		if (!variable || !variable->basevariable || variable->basevariable == base_id)
+			break;
+		base_id = variable->basevariable;
+	}
+
+	for (auto &packed : mesh_output_packed_64)
+		if (packed.variable_id == base_id)
+			return VariableID(base_id);
+	return VariableID(0);
+}
+
+string CompilerMSL::mesh_output_capture_type(const SPIRType &type, VariableID variable_id)
+{
+	add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+	auto *logical_type = &type;
+	while (!logical_type->array.empty())
+		logical_type = &get<SPIRType>(logical_type->parent_type);
+	string leaf_type;
+	bool is_64_bit_integer =
+	    (logical_type->basetype == SPIRType::Int64 || logical_type->basetype == SPIRType::UInt64) &&
+	    logical_type->width == 64 && logical_type->columns == 1;
+	if (is_64_bit_integer && logical_type->vecsize == 1)
+		leaf_type = join("spvMeshCapture64Lane<", type_to_glsl(*logical_type), ">");
+	else if (is_64_bit_integer || logical_type->basetype == SPIRType::Struct)
+		leaf_type = join("spvMeshCapture", uint32_t(variable_id), "_", uint32_t(logical_type->self));
+	else
+		leaf_type = type_to_glsl(*logical_type);
+
+	string capture_type;
+	string suffix;
+	for (uint32_t i = 0; i < type.array.size(); ++i)
+	{
+		capture_type += "spvUnsafeArray<";
+		suffix += join(", ", to_array_size(type, i), ">");
+	}
+	return join(capture_type, leaf_type, suffix);
 }
 
 // Ensure that the type is compatible with the builtin.
@@ -8285,7 +9978,9 @@ void CompilerMSL::emit_custom_functions()
 			break;
 
 		case SPVFuncImplSetMeshOutputsEXT:
-			statement("void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)");
+			statement("void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, ",
+			          msl_options.mesh_shader_emulation ? "device" : "threadgroup",
+			          " uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)");
 			begin_scope();
 			statement("if (gl_LocalInvocationIndex == 0)");
 			begin_scope();
@@ -8411,6 +10106,31 @@ void CompilerMSL::declare_complex_constant_arrays()
 void CompilerMSL::emit_resources()
 {
 	declare_constant_arrays();
+	if (has_mesh_output_spill_input_layout)
+	{
+		statement("template<typename T>");
+		statement("T spvMeshSpillInterpolateLine(T v0, T v1, uint i0, uint i1, float moment)");
+		begin_scope();
+		statement("if (i0 == i1) return v0;");
+		statement("float t = (moment - float(i0)) / (float(i1) - float(i0));");
+		statement("return v0 + (v1 - v0) * t;");
+		end_scope();
+		statement("");
+		statement("template<typename T>");
+		statement("T spvMeshSpillInterpolateTriangle(T v0, T v1, T v2, uint i0, uint i1, uint i2, float2 moment)");
+		begin_scope();
+		statement("if (i0 == i1 && i1 == i2) return v0;");
+		statement("if (i0 == i1) return spvMeshSpillInterpolateLine(v0, v2, i0, i2, moment.x);");
+		statement("if (i0 == i2) return spvMeshSpillInterpolateLine(v0, v1, i0, i1, moment.x);");
+		statement("if (i1 == i2) return spvMeshSpillInterpolateLine(v0, v1, i0, i1, moment.x);");
+		statement("float a = float(i0), b = float(i1), c = float(i2);");
+		statement("float w0 = (moment.y - (b + c) * moment.x + b * c) / ((a - b) * (a - c));");
+		statement("float w1 = (moment.y - (a + c) * moment.x + a * c) / ((b - a) * (b - c));");
+		statement("float w2 = 1.0 - w0 - w1;");
+		statement("return v0 * w0 + v1 * w1 + v2 * w2;");
+		end_scope();
+		statement("");
+	}
 
 	// Emit the special [[stage_in]] and [[stage_out]] interface blocks which we created.
 	emit_interface_block(stage_out_var_id);
@@ -8420,6 +10140,49 @@ void CompilerMSL::emit_resources()
 
 	if (get_execution_model() == ExecutionModelMeshEXT)
 	{
+		if (msl_options.mesh_shader_emulation || msl_options.dispatch_base)
+		{
+			if (msl_options.mesh_shader_emulation)
+			{
+				emit_mesh_output_capture_wrappers();
+				statement("struct spvMeshOutput");
+				begin_scope();
+				statement("uint2 counts;");
+				for (auto id : mesh_output_variables)
+				{
+					auto &var = get<SPIRVariable>(id);
+					statement(variable_decl(get_variable_data_type(var), join("spv", id), id), ";");
+				}
+				if (!mesh_output_spill_members.empty())
+				{
+					uint32_t first_word = mesh_output_spill_layout.primitive_index_word_offset;
+					uint32_t total_words = mesh_output_buffer_size / 4u - first_word;
+					statement("uint spvMeshSpill[", total_words, "];");
+				}
+				end_scope_decl();
+				statement("static_assert(__builtin_offsetof(spvMeshOutput, counts) == 0, "
+				          "\"invalid mesh output counts offset\");");
+				for (auto id : mesh_output_variables)
+					statement("static_assert(__builtin_offsetof(spvMeshOutput, spv", id,
+					          ") == ", get_mesh_output_buffer_offset(id),
+					          ", \"invalid mesh output variable offset\");");
+				if (!mesh_output_spill_members.empty())
+					statement("static_assert(__builtin_offsetof(spvMeshOutput, spvMeshSpill) == ",
+					          mesh_output_spill_layout.primitive_index_word_offset * 4u,
+					          ", \"invalid mesh output spill offset\");");
+				statement("static_assert(sizeof(spvMeshOutput) == ", mesh_output_buffer_size,
+				          ", \"invalid mesh output size\");");
+				statement("static_assert(alignof(spvMeshOutput) == ", mesh_output_buffer_alignment,
+				          ", \"invalid mesh output alignment\");");
+				statement("");
+			}
+			statement("struct spvMeshDispatch");
+			begin_scope();
+			statement("uint4 grid;");
+			end_scope_decl();
+			statement("");
+		}
+
 		auto &execution = get_entry_point();
 		const char *topology = "";
 		if (execution.flags.get(ExecutionModeOutputTrianglesEXT))
@@ -9378,6 +11141,25 @@ bool CompilerMSL::access_chain_needs_stage_io_builtin_translation(uint32_t base)
 void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t length)
 {
 	auto *var = maybe_get_backing_variable(ops[2]);
+	if (var && has_mesh_output_spill_input_layout)
+	{
+		bool spilled = false;
+		for (auto &member : fragment_spill_members)
+			spilled = spilled || member.variable_id == var->self;
+		if (spilled)
+		{
+			FragmentSpillAccessChain chain;
+			auto base_chain = fragment_spill_access_chains.find(ops[2]);
+			if (base_chain != fragment_spill_access_chains.end())
+				chain = base_chain->second;
+			else
+				chain.variable_id = var->self;
+			for (uint32_t index = 3; index < length; ++index)
+				chain.indices.push_back(ops[index]);
+			fragment_spill_access_chains[ops[1]] = std::move(chain);
+			return;
+		}
+	}
 	if (!var || !pull_model_inputs.count(var->self))
 		return;
 	// Get the base index.
@@ -9428,7 +11210,6 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	// Save this to the access chain itself so we can recover it later when calling an interpolation function.
 	set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, interface_index);
 }
-
 
 // If the physical type of a physical buffer pointer has been changed
 // to a ulong or ulongn vector, add a cast back to the pointer type.
@@ -10698,8 +12479,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpSetMeshOutputsEXT:
 	{
 		flush_variable_declaration(builtin_mesh_primitive_indices_id);
+		register_write(builtin_mesh_sizes_id);
 		add_spv_func_and_recompile(SPVFuncImplSetMeshOutputsEXT);
-		statement("spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, ", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ");");
+		statement("spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, ", to_unpacked_expression(ops[0]), ", ",
+		          to_unpacked_expression(ops[1]), ");");
 		break;
 	}
 
@@ -10966,6 +12749,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	previous_instruction_opcode = opcode;
 }
 
+bool CompilerMSL::current_function_returns_value() const
+{
+	auto &type = get<SPIRType>(current_function->return_type);
+	return type.basetype != SPIRType::Void && (type.array.empty() || backend.can_return_array);
+}
+
 void CompilerMSL::emit_texture_op(const Instruction &i, bool sparse)
 {
 	if (sparse)
@@ -11043,11 +12832,13 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		// For tesc shaders, this also affects objects in the Output storage class.
 		// Since in Metal, these are placed in a device buffer, we have to sync device memory here.
 		if (is_tesc_shader() ||
-		    (mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)))
+		    (mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)) ||
+		    (msl_options.mesh_shader_emulation && is_mesh_shader() && (mem_sem & MemorySemanticsOutputMemoryMask)))
 			mem_flags += "mem_flags::mem_device";
 
 		// Fix tessellation patch function processing
-		if (is_tesc_shader() || (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask)))
+		if (is_tesc_shader() || (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask)) ||
+		    (!msl_options.mesh_shader_emulation && is_mesh_shader() && (mem_sem & MemorySemanticsOutputMemoryMask)))
 		{
 			if (!mem_flags.empty())
 				mem_flags += " | ";
@@ -11067,12 +12858,20 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	}
 	else
 	{
-		if ((mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)) &&
-		    (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask)))
+		bool output_device =
+		    msl_options.mesh_shader_emulation && is_mesh_shader() && (mem_sem & MemorySemanticsOutputMemoryMask);
+		bool output_threadgroup =
+		    !msl_options.mesh_shader_emulation && is_mesh_shader() && (mem_sem & MemorySemanticsOutputMemoryMask);
+		if (((mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)) ||
+		     output_device) &&
+		    ((mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask)) ||
+		     output_threadgroup))
 			bar_stmt += "mem_flags::mem_device_and_threadgroup";
-		else if (mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask))
+		else if ((mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)) ||
+		         output_device)
 			bar_stmt += "mem_flags::mem_device";
-		else if (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask))
+		else if ((mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask)) ||
+		         output_threadgroup)
 			bar_stmt += "mem_flags::mem_threadgroup";
 		else if (mem_sem & MemorySemanticsImageMemoryMask)
 			bar_stmt += "mem_flags::mem_texture";
@@ -11085,9 +12884,10 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		// If there's no device-related memory in the barrier, demote to workgroup scope.
 		// glslang seems to emit device scope even for memoryBarrierShared().
 		if (mem_scope == ScopeDevice &&
-		    (mem_sem & (MemorySemanticsUniformMemoryMask |
-		                MemorySemanticsImageMemoryMask |
-		                MemorySemanticsCrossWorkgroupMemoryMask)) == 0)
+		    (mem_sem &
+		     (MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask |
+		      MemorySemanticsCrossWorkgroupMemoryMask |
+		      (msl_options.mesh_shader_emulation && is_mesh_shader() ? MemorySemanticsOutputMemoryMask : 0))) == 0)
 		{
 			mem_scope = ScopeWorkgroup;
 		}
@@ -11891,6 +13691,9 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	case GLSLstd450InterpolateAtCentroid:
 	{
+		if (emit_mesh_output_spill_interpolation(result_type, id, args[0], ".interpolate_at_centroid()",
+		                                         should_forward(args[0])))
+			break;
 		// We can't just emit the expression normally, because the qualified name contains a call to the default
 		// interpolate method, or refers to a local variable. We saved the interface index we need; use it to construct
 		// the base for the method call.
@@ -11914,6 +13717,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	case GLSLstd450InterpolateAtSample:
 	{
+		if (emit_mesh_output_spill_interpolation(result_type, id, args[0],
+		                                         join(".interpolate_at_sample(", to_expression(args[1]), ")"),
+		                                         should_forward(args[0]) && should_forward(args[1])))
+			break;
 		uint32_t interface_index = get_extended_decoration(args[0], SPIRVCrossDecorationInterfaceMemberIndex);
 		string component;
 		if (has_extended_decoration(args[0], SPIRVCrossDecorationInterpolantComponentExpr))
@@ -11934,6 +13741,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	case GLSLstd450InterpolateAtOffset:
 	{
+		if (emit_mesh_output_spill_interpolation(result_type, id, args[0],
+		                                         join(".interpolate_at_offset(", to_expression(args[1]), " + 0.4375)"),
+		                                         should_forward(args[0]) && should_forward(args[1])))
+			break;
 		uint32_t interface_index = get_extended_decoration(args[0], SPIRVCrossDecorationInterfaceMemberIndex);
 		string component;
 		if (has_extended_decoration(args[0], SPIRVCrossDecorationInterpolantComponentExpr))
@@ -12181,11 +13992,11 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 				set<SPIRExpression>(ed_var.initializer, "{}", ed_var.basetype, true);
 		}
 
-		// add `taskPayloadSharedEXT` variable to entry-point arguments
 		for (auto &v : func.local_variables)
 		{
 			auto &var = get<SPIRVariable>(v);
-			if (var.storage != StorageClassTaskPayloadWorkgroupEXT)
+			if (var.storage != StorageClassTaskPayloadWorkgroupEXT ||
+			    variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 				continue;
 
 			add_local_variable_name(v);
@@ -13709,7 +15520,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 
 			is_using_builtin_array = true;
 			std::string result;
-			if (has_member_decoration(type.self, orig_id, DecorationBuiltIn))
+			if (has_member_decoration(type.self, orig_id, DecorationBuiltIn) &&
+			    !has_member_decoration(type.self, index, DecorationIndex))
 			{
 				// avoid '_RESERVED_IDENTIFIER_FIXUP_' in variable name
 				result = join(type_to_glsl(metallic_type, orig_id, false), " ", qualifier,
@@ -13800,7 +15612,15 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	BuiltIn builtin = BuiltInMax;
 	if (is_mesh_shader() && is_member_builtin(type, index, &builtin))
 	{
-		if (!has_active_builtin(builtin, StorageClassOutput) && !has_active_builtin(builtin, StorageClassInput))
+		bool is_default_mesh_position = type.self == mesh_out_per_vertex && index == mesh_default_position_member;
+		bool is_default_mesh_point_size = type.self == mesh_out_per_vertex && index == mesh_default_point_size_member;
+		bool is_default_mesh_layer = type.self == mesh_out_per_primitive && index == mesh_default_layer_member;
+		bool is_default_mesh_viewport_index =
+		    type.self == mesh_out_per_primitive && index == mesh_default_viewport_index_member;
+		bool is_mesh_spill_token = type.self == mesh_out_per_primitive && index == mesh_spill_token_member;
+		if (!is_default_mesh_position && !is_default_mesh_point_size && !is_default_mesh_layer &&
+		    !is_default_mesh_viewport_index && !is_mesh_spill_token &&
+		    !has_active_builtin(builtin, StorageClassOutput) && !has_active_builtin(builtin, StorageClassInput))
 		{
 			// Do not emit unused builtins in mesh-output blocks
 			return;
@@ -14332,7 +16152,8 @@ bool CompilerMSL::entry_point_returns_stage_output() const
 
 bool CompilerMSL::entry_point_requires_const_device_buffers() const
 {
-	return !has_descriptor_side_effects_buffer && !capture_output_to_buffer;
+	return !(msl_options.mesh_shader_emulation && is_mesh_shader()) && !has_descriptor_side_effects_buffer &&
+	       !capture_output_to_buffer;
 }
 
 // Returns the type declaration for a function, including the
@@ -14383,7 +16204,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		entry_type = "kernel";
 		break;
 	case ExecutionModelMeshEXT:
-		entry_type = "[[mesh]]";
+		entry_type = msl_options.mesh_shader_emulation ? "kernel" : "[[mesh]]";
 		break;
 	case ExecutionModelTaskEXT:
 		entry_type = "[[object]]";
@@ -14566,12 +16387,12 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		}
 
 		if (is_mesh_shader())
-			addr_space = "threadgroup";
+			addr_space = msl_options.mesh_shader_emulation ? "device" : "threadgroup";
 		break;
 
 	case StorageClassTaskPayloadWorkgroupEXT:
 		if (is_mesh_shader())
-			addr_space = "const object_data";
+			addr_space = msl_options.mesh_shader_emulation ? "threadgroup" : "const object_data";
 		else
 			addr_space = "object_data";
 		break;
@@ -14726,80 +16547,118 @@ bool CompilerMSL::is_intersection_query() const
 
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
+	if (has_mesh_output_spill_input_layout)
+	{
+		bool has_logical_primitive_id = false;
+		ir.for_each_typed_id<SPIRVariable>(
+		    [&](uint32_t id, const SPIRVariable &var)
+		    {
+			    if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(id) &&
+			        is_builtin_variable(var) && BuiltIn(get_decoration(id, DecorationBuiltIn)) == BuiltInPrimitiveId)
+				    has_logical_primitive_id = true;
+		    });
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args +=
+		    join("device const uint* spvMeshSpillCapture [[buffer(", msl_options.shader_output_buffer_index, ")]]");
+		if (!has_logical_primitive_id)
+			ep_args += ", uint spvMeshSpillToken [[primitive_id]]";
+	}
+
+	if ((msl_options.mesh_shader_emulation || msl_options.dispatch_base) && is_mesh_shader())
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		if (msl_options.mesh_shader_emulation)
+			ep_args +=
+			    join("device spvMeshOutput* spvMeshOutputs [[buffer(", msl_options.shader_output_buffer_index, ")]], ");
+		ep_args += join("constant spvMeshDispatch& spvMeshDispatch [[buffer(", msl_options.indirect_params_buffer_index,
+		                ")]], uint3 spvMeshBatchWorkgroupID [[threadgroup_position_in_grid]], uint3 "
+		                "spvMeshBatchGrid [[threadgroups_per_grid]], uint3 spvMeshLocalInvocationID "
+		                "[[thread_position_in_threadgroup]]");
+	}
+
 	// Builtin variables
 	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
-		if (var.storage != StorageClassInput)
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t var_id, SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassInput)
+			    return;
 
-		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+		    auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
 
-		// Don't emit SamplePosition as a separate parameter. In the entry
-		// point, we get that by calling get_sample_position() on the sample ID.
-		if (is_builtin_variable(var) &&
-		    get_variable_data_type(var).basetype != SPIRType::Struct &&
-		    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
-		{
-			// If the builtin is not part of the active input builtin set, don't emit it.
-			// Relevant for multiple entry-point modules which might declare unused builtins.
-			if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
-				return;
+		    // Don't emit SamplePosition as a separate parameter. In the entry
+		    // point, we get that by calling get_sample_position() on the sample ID.
+		    if (is_builtin_variable(var) && get_variable_data_type(var).basetype != SPIRType::Struct &&
+		        get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
+		    {
+			    // If the builtin is not part of the active input builtin set, don't emit it.
+			    // Relevant for multiple entry-point modules which might declare unused builtins.
+			    if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
+				    return;
 
-			// Remember this variable. We may need to correct its type.
-			active_builtins.push_back(make_pair(&var, bi_type));
+			    // Remember this variable. We may need to correct its type.
+			    active_builtins.push_back(make_pair(&var, bi_type));
 
-			if (is_direct_input_builtin(bi_type))
-			{
-				if (!ep_args.empty())
-					ep_args += ", ";
+			    if (is_direct_input_builtin(bi_type))
+			    {
+				    bool logical_mesh_grid =
+				        (msl_options.mesh_shader_emulation || msl_options.dispatch_base) && is_mesh_shader() &&
+				        (bi_type == BuiltInWorkgroupId || bi_type == BuiltInNumWorkgroups ||
+				         bi_type == BuiltInGlobalInvocationId || bi_type == BuiltInLocalInvocationId);
+				    if (logical_mesh_grid)
+					    return;
+				    if (!ep_args.empty())
+					    ep_args += ", ";
 
-				// Handle HLSL-style 0-based vertex/instance index.
-				builtin_declaration = true;
+				    // Handle HLSL-style 0-based vertex/instance index.
+				    builtin_declaration = true;
 
-				// Handle different MSL gl_TessCoord types. (float2, float3)
-				if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
-					ep_args += "float2 " + to_expression(var_id) + "In";
-				else
-					ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
+				    // Handle different MSL gl_TessCoord types. (float2, float3)
+				    if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
+					    ep_args += "float2 " + to_expression(var_id) + "In";
+				    else
+					    ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 
-				ep_args += string(" [[") + builtin_qualifier(bi_type);
-				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
-				{
-					if (!msl_options.supports_msl_version(2))
-						SPIRV_CROSS_THROW("Post-depth coverage requires MSL 2.0.");
-					if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
-						SPIRV_CROSS_THROW("Post-depth coverage on Mac requires MSL 2.3.");
-					ep_args += ", post_depth_coverage";
-				}
-				ep_args += "]]";
-				builtin_declaration = false;
-			}
-		}
+				    ep_args += string(" [[") + builtin_qualifier(bi_type);
+				    if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
+				    {
+					    if (!msl_options.supports_msl_version(2))
+						    SPIRV_CROSS_THROW("Post-depth coverage requires MSL 2.0.");
+					    if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
+						    SPIRV_CROSS_THROW("Post-depth coverage on Mac requires MSL 2.3.");
+					    ep_args += ", post_depth_coverage";
+				    }
+				    ep_args += "]]";
+				    builtin_declaration = false;
+			    }
+		    }
 
-		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
-		{
-			// This is a special implicit builtin, not corresponding to any SPIR-V builtin,
-			// which holds the base that was passed to vkCmdDispatchBase() or vkCmdDrawIndexed(). If it's present,
-			// assume we emitted it for a good reason.
-			assert(msl_options.supports_msl_version(1, 2));
-			if (!ep_args.empty())
-				ep_args += ", ";
+		    if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
+		    {
+			    // This is a special implicit builtin, not corresponding to any SPIR-V builtin,
+			    // which holds the base that was passed to vkCmdDispatchBase() or vkCmdDrawIndexed(). If it's present,
+			    // assume we emitted it for a good reason.
+			    assert(msl_options.supports_msl_version(1, 2));
+			    if (!ep_args.empty())
+				    ep_args += ", ";
 
-			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
-		}
+			    ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
+		    }
 
-		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
-		{
-			// This is another special implicit builtin, not corresponding to any SPIR-V builtin,
-			// which holds the number of vertices and instances to draw. If it's present,
-			// assume we emitted it for a good reason.
-			assert(msl_options.supports_msl_version(1, 2));
-			if (!ep_args.empty())
-				ep_args += ", ";
+		    if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
+		    {
+			    // This is another special implicit builtin, not corresponding to any SPIR-V builtin,
+			    // which holds the number of vertices and instances to draw. If it's present,
+			    // assume we emitted it for a good reason.
+			    assert(msl_options.supports_msl_version(1, 2));
+			    if (!ep_args.empty())
+				    ep_args += ", ";
 
-			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_size]]";
-		}
-	});
+			    ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_size]]";
+		    }
+	    });
 
 	// Correct the types of all encountered active builtins. We couldn't do this before
 	// because ensure_correct_builtin_type() may increase the bound, which isn't allowed
@@ -14993,7 +16852,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 		}
 	}
 
-	if (is_mesh_shader())
+	if (is_mesh_shader() && !msl_options.mesh_shader_emulation)
 	{
 		if (!ep_args.empty())
 			ep_args += ", ";
@@ -15424,6 +17283,8 @@ string CompilerMSL::entry_point_args_classic(bool append_comma)
 void CompilerMSL::fix_up_shader_inputs_outputs()
 {
 	auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
+	if (has_mesh_output_spill_input_layout)
+		entry_func.fixup_hooks_in.push_back([this]() { emit_mesh_output_spill_fragment_setup(); });
 
 	// Emit a guard to ensure we don't execute beyond the last vertex.
 	// Vertex shaders shouldn't have the problems with barriers in non-uniform control flow that
@@ -15442,8 +17303,94 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	{
 		// If shader doesn't call SetMeshOutputsEXT, nothing should be rendered.
 		// No need to barrier after this, because only thread 0 writes to this later.
-		entry_func.fixup_hooks_in.push_back([this]() { statement("if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;"); });
-		entry_func.fixup_hooks_out.push_back([this]() { emit_mesh_outputs(); });
+		entry_func.fixup_hooks_in.push_back([this]()
+		                                    { statement("if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;"); });
+		if (msl_options.mesh_shader_emulation || msl_options.dispatch_base)
+		{
+			uint32_t workgroup_id = 0;
+			uint32_t num_workgroups = 0;
+			uint32_t global_invocation_id = 0;
+			uint32_t local_invocation_id = 0;
+			ir.for_each_typed_id<SPIRVariable>(
+			    [&](uint32_t id, const SPIRVariable &var)
+			    {
+				    if (var.storage != StorageClassInput || !is_builtin_variable(var) ||
+				        !interface_variable_exists_in_entry_point(id))
+					    return;
+				    auto builtin = BuiltIn(get_decoration(id, DecorationBuiltIn));
+				    if (!active_input_builtins.get(builtin))
+					    return;
+				    switch (builtin)
+				    {
+				    case BuiltInWorkgroupId:
+					    workgroup_id = id;
+					    break;
+				    case BuiltInNumWorkgroups:
+					    num_workgroups = id;
+					    break;
+				    case BuiltInGlobalInvocationId:
+					    global_invocation_id = id;
+					    break;
+				    case BuiltInLocalInvocationId:
+					    local_invocation_id = id;
+					    break;
+				    default:
+					    break;
+				    }
+			    });
+			entry_func.fixup_hooks_in.push_back(
+			    [this, workgroup_id, num_workgroups, global_invocation_id, local_invocation_id]()
+			    {
+				    if (workgroup_id || global_invocation_id)
+				    {
+					    if (msl_options.dispatch_base && !msl_options.mesh_shader_emulation)
+					    {
+						    statement("const uint spvMeshWorkgroupIndex = spvMeshDispatch.grid.w + "
+						              "spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + "
+						              "spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;");
+						    statement("const uint3 spvMeshWorkgroupID = uint3(spvMeshWorkgroupIndex % "
+						              "spvMeshDispatch.grid.x, "
+						              "(spvMeshWorkgroupIndex / spvMeshDispatch.grid.x) % spvMeshDispatch.grid.y, "
+						              "spvMeshWorkgroupIndex / (spvMeshDispatch.grid.x * spvMeshDispatch.grid.y));");
+					    }
+					    else
+					    {
+						    statement("const uint spvMeshWorkgroupIndex = (spvMeshDispatch.grid.w & 0x7fffffffu) + "
+						              "spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + "
+						              "spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;");
+						    statement("const uint3 spvMeshWorkgroupID = uint3(spvMeshWorkgroupIndex % "
+						              "spvMeshDispatch.grid.x, (spvMeshWorkgroupIndex / spvMeshDispatch.grid.x) % "
+						              "spvMeshDispatch.grid.y, spvMeshWorkgroupIndex / (spvMeshDispatch.grid.x * "
+						              "spvMeshDispatch.grid.y));");
+					    }
+				    }
+				    if (workgroup_id)
+					    statement("uint3 ", to_expression(workgroup_id), " = spvMeshWorkgroupID;");
+				    if (num_workgroups)
+					    statement("uint3 ", to_expression(num_workgroups), " = spvMeshDispatch.grid.xyz;");
+				    if (local_invocation_id)
+					    statement("uint3 ", to_expression(local_invocation_id), " = spvMeshLocalInvocationID;");
+				    if (global_invocation_id)
+					    statement("uint3 ", to_expression(global_invocation_id),
+					              " = spvMeshWorkgroupID * gl_WorkGroupSize + spvMeshLocalInvocationID;");
+			    });
+		}
+
+		bool has_output_initializers = false;
+		ir.for_each_typed_id<SPIRVariable>(
+		    [&](uint32_t id, const SPIRVariable &var)
+		    {
+			    if (var.storage == StorageClassOutput && var.initializer &&
+			        interface_variable_exists_in_entry_point(id))
+				    has_output_initializers = true;
+		    });
+		if (has_output_initializers)
+			entry_func.fixup_hooks_in.push_back([this]() { emit_mesh_output_initializers(); });
+
+		if (!msl_options.mesh_shader_emulation)
+			entry_func.fixup_hooks_out.push_back([this]() { emit_mesh_outputs(); });
+		else if (!mesh_output_spill_members.empty())
+			entry_func.fixup_hooks_out.push_back([this]() { emit_mesh_output_spill_capture(); });
 	}
 
 	// Look for sampled images and buffer. Add hooks to set up the swizzle constants or array lengths.
@@ -15917,24 +17864,31 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// Metal pipelines belong to the devices which create them, so we'll
 				// need to create a MTLPipelineState for every MTLDevice in a grouped
 				// VkDevice. We can assume, then, that the device index is constant.
-				entry_func.fixup_hooks_in.push_back([=]() {
-					statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-					          msl_options.device_index, ";");
-				});
+				entry_func.fixup_hooks_in.push_back(
+				    [=]()
+				    {
+					    statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+					              msl_options.device_index, ";");
+				    });
 				break;
 			case BuiltInWorkgroupId:
-				if (!msl_options.dispatch_base || !active_input_builtins.get(BuiltInWorkgroupId))
+				if (get_execution_model() != ExecutionModelGLCompute || !msl_options.dispatch_base ||
+				    !active_input_builtins.get(BuiltInWorkgroupId))
 					break;
 
 				// The vkCmdDispatchBase() command lets the client set the base value
 				// of WorkgroupId. Metal has no direct equivalent; we must make this
 				// adjustment ourselves.
-				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id), ";");
-				});
+				entry_func.fixup_hooks_in.push_back(
+				    [=]()
+				    {
+					    statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id),
+					              ";");
+				    });
 				break;
 			case BuiltInGlobalInvocationId:
-				if (!msl_options.dispatch_base || !active_input_builtins.get(BuiltInGlobalInvocationId))
+				if (get_execution_model() != ExecutionModelGLCompute || !msl_options.dispatch_base ||
+				    !active_input_builtins.get(BuiltInGlobalInvocationId))
 					break;
 
 				// GlobalInvocationId is defined as LocalInvocationId + WorkgroupId * WorkgroupSize.
@@ -16259,13 +18213,21 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	                              spv_function_implementations.count(SPVFuncImplDynamicImageSampler);
 
 	// Allow Metal to use the array<T> template to make arrays a value type
-	string address_space = arg.alias_global_variable ? get_variable_address_space(var) : get_leaf_argument_address_space(var);
+	string address_space =
+	    arg.alias_global_variable ? get_variable_address_space(var) : get_leaf_argument_address_space(var);
+	if (msl_options.mesh_shader_emulation && is_mesh_shader())
+	{
+		auto capture_variable = get_mesh_output_capture_variable(name_id);
+		if (capture_variable)
+			return join(address_space, " ", mesh_output_capture_type(type, capture_variable), "& ",
+			            to_expression(name_id));
+	}
 	bool builtin = has_decoration(var.self, DecorationBuiltIn);
 	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
 
 	if (var.basevariable && (var.basevariable == stage_in_ptr_var_id || var.basevariable == stage_out_ptr_var_id))
 		decl = join(cv_qualifier, type_to_glsl(type, arg.id));
-	else if (builtin && !is_mesh_shader())
+	else if (builtin && (!is_mesh_shader() || type_storage == StorageClassInput))
 	{
 		// Only use templated array for Clip/Cull distance when feasible.
 		// In other scenarios, we need need to override array length for tess levels (if used as outputs),
@@ -16933,10 +18895,12 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 	auto *var = maybe_get<SPIRVariable>(id);
 	auto &type = expression_type(id);
 
-	if (type.storage == StorageClassTaskPayloadWorkgroupEXT)
+	if (type.storage == StorageClassTaskPayloadWorkgroupEXT &&
+	    !(var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
 		quals += "object_data ";
 
-	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
+	if (type.storage == StorageClassWorkgroup ||
+	    (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
 		quals += "threadgroup ";
 
 	return quals;
@@ -17280,6 +19244,12 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 
 	if (storage == StorageClassWorkgroup)
 	{
+		if (is_mesh_shader() && msl_options.mesh_shader_emulation &&
+		    variable.storage == StorageClassTaskPayloadWorkgroupEXT)
+		{
+			return true;
+		}
+
 		// Specially masked IO block variable.
 		// Normally, we will never access IO blocks directly here.
 		// The only scenario which that should occur is with a masked IO block.
@@ -17289,13 +19259,17 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 			return true;
 		}
 
-		if (is_mesh_shader())
+		if (is_mesh_shader() && !msl_options.mesh_shader_emulation)
 			return variable.storage == StorageClassOutput;
 
 		return variable.storage == StorageClassOutput && is_tesc_shader() && is_stage_output_variable_masked(variable);
 	}
 	else if (storage == StorageClassStorageBuffer)
 	{
+		if (is_mesh_shader() && msl_options.mesh_shader_emulation &&
+		    mesh_output_buffer_members.count(variable.self) != 0)
+			return true;
+
 		// These builtins are passed directly; we don't want to use remapping
 		// for them.
 		auto builtin = (BuiltIn)get_decoration(variable.self, DecorationBuiltIn);
@@ -17317,9 +19291,30 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 	}
 }
 
+std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
+{
+	if (msl_options.mesh_shader_emulation &&
+	    (mesh_output_buffer_members.count(variable.self) != 0 || variable.self == builtin_mesh_sizes_id))
+	{
+		auto &type = get_variable_data_type(variable);
+		if (variable.self == builtin_mesh_sizes_id)
+			return join("device ", variable_decl(type, "&" + to_name(variable.self), variable.self),
+			            " = spvMeshOutput.counts");
+		return join("device ", variable_decl(type, "&" + to_name(variable.self), variable.self), " = spvMeshOutput.spv",
+		            variable.self);
+	}
+	return CompilerGLSL::variable_decl(variable);
+}
+
 // GCC workaround of lambdas calling protected funcs
 std::string CompilerMSL::variable_decl(const SPIRType &type, const std::string &name, uint32_t id)
 {
+	if (msl_options.mesh_shader_emulation && is_mesh_shader() && id)
+	{
+		auto capture_variable = get_mesh_output_capture_variable(id);
+		if (capture_variable)
+			return join(mesh_output_capture_type(type, capture_variable), " ", name);
+	}
 	return CompilerGLSL::variable_decl(type, name, id);
 }
 
@@ -20699,16 +22694,628 @@ void CompilerMSL::emit_mesh_entry_point()
 	ir.default_entry_point = func_id;
 }
 
-void CompilerMSL::emit_mesh_outputs()
+void CompilerMSL::emit_mesh_replay_entry_point()
+{
+	auto name = join(to_name(ir.default_entry_point), "_replay");
+	statement("");
+	statement(
+	    "[[mesh]] void ", name, "(device const spvMeshOutput* spvMeshOutputs [[buffer(",
+	    msl_options.shader_output_buffer_index,
+	    ")]], uint3 spvMeshReplayWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshReplayGrid "
+	    "[[threadgroups_per_grid]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)");
+	begin_scope();
+	statement("const uint spvMeshOutputIndex = spvMeshReplayWorkgroupID.x + spvMeshReplayWorkgroupID.y * "
+	          "spvMeshReplayGrid.x + spvMeshReplayWorkgroupID.z * spvMeshReplayGrid.x * spvMeshReplayGrid.y;");
+	statement("const device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];");
+	statement("const uint2 spvMeshSizes = uint2(spvMeshOutput.counts.x, "
+	          "spvMeshOutput.counts.y & 0x7fffffffu);");
+	statement("const uint spvMeshProvokingVertexLast [[maybe_unused]] = spvMeshOutput.counts.y >> 31u;");
+	for (auto id : mesh_output_variables)
+	{
+		auto &var = get<SPIRVariable>(id);
+		auto &type = get_variable_data_type(var);
+		statement("const device ", variable_decl(type, "&" + to_name(id), id), " = spvMeshOutput.spv", id, ";");
+	}
+	emit_mesh_outputs(true);
+	end_scope();
+}
+
+void CompilerMSL::emit_mesh_output_assignment(const SPIRType &interface_type, uint32_t member_index,
+                                              const SPIRVariable &orig_var, const string &destination,
+                                              const string &source, bool replay, const string &element_index)
+{
+	auto &physical_type = get<SPIRType>(interface_type.member_types[member_index]);
+	auto packed_interface = mesh_output_interface_packed_64.find((uint64_t(interface_type.self) << 32) | member_index);
+	if (packed_interface != mesh_output_interface_packed_64.end())
+	{
+		auto &packed = packed_interface->second;
+		uint32_t lane_count = physical_type.vecsize / 2u;
+		if (replay)
+		{
+			static const char *component_names[] = { "x", "y", "z", "w" };
+			string capture_source = source;
+			if (packed.logical_vecsize == 1)
+				capture_source += ".data";
+			else if (lane_count == 1)
+				capture_source += join(".", component_names[packed.source_lane], ".data");
+			else
+				capture_source =
+				    join(type_to_glsl(physical_type), "(", capture_source, ".", component_names[packed.source_lane],
+				         ".data, ", capture_source, ".", component_names[packed.source_lane + 1], ".data)");
+			statement(destination, " = ", capture_source, ";");
+		}
+		else
+		{
+			string packed_source = source;
+			if (packed.logical_vecsize > 1)
+				packed_source += vector_swizzle(lane_count, packed.source_lane);
+			statement(destination, " = as_type<", type_to_glsl(physical_type), ">(", packed_source, ");");
+		}
+		return;
+	}
+
+	auto &logical_type = get_variable_element_type(orig_var);
+	bool is_packed_64_bit_integer =
+	    (logical_type.basetype == SPIRType::Int64 || logical_type.basetype == SPIRType::UInt64) &&
+	    logical_type.width == 64 && logical_type.columns == 1 && logical_type.array.empty() &&
+	    physical_type.basetype == SPIRType::UInt && physical_type.width == 32;
+	if (!is_packed_64_bit_integer)
+	{
+		statement(destination, " = ", source, ";");
+		return;
+	}
+
+	uint32_t original_location = get_decoration(orig_var.self, DecorationLocation);
+	uint32_t original_component = get_decoration(orig_var.self, DecorationComponent);
+	uint32_t member_component = 0;
+	uint32_t member_location = get_member_location(interface_type.self, member_index, &member_component);
+	if (member_component == k_unknown_component)
+		member_component = 0;
+	uint32_t word_offset = (member_location - original_location) * 4u + member_component - original_component;
+	uint32_t lane = word_offset / 2u;
+	uint32_t lane_count = physical_type.vecsize / 2u;
+	if (replay)
+	{
+		static const char *component_names[] = { "x", "y", "z", "w" };
+		string capture_source = join("spvMeshOutput.spv", uint32_t(orig_var.self), "[", element_index, "]");
+		if (logical_type.vecsize == 1)
+			capture_source += ".data";
+		else if (lane_count == 1)
+			capture_source += join(".", component_names[lane], ".data");
+		else
+			capture_source = join(type_to_glsl(physical_type), "(", capture_source, ".", component_names[lane],
+			                      ".data, ", capture_source, ".", component_names[lane + 1], ".data)");
+		statement(destination, " = ", capture_source, ";");
+		return;
+	}
+
+	string packed_source = source;
+	if (logical_type.vecsize > 1)
+		packed_source += vector_swizzle(lane_count, lane);
+	statement(destination, " = as_type<", type_to_glsl(physical_type), ">(", packed_source, ");");
+}
+
+void CompilerMSL::emit_mesh_output_initializer(const SPIRType &type, const string &destination, const string &source,
+                                               uint32_t &loop_index, bool cooperative)
+{
+	if (!type.array.empty())
+	{
+		const uint32_t dimension = uint32_t(type.array.size() - 1);
+		const string index = join("spvMeshInitIndex", loop_index++);
+		const string first = cooperative ? "gl_LocalInvocationIndex" : "0u";
+		const string stride = cooperative ? "spvMeshInitThreadCount" : "1u";
+		statement("for (uint ", index, " = ", first, "; ", index, " < ", to_array_size(type, dimension), "; ", index,
+		          " += ", stride, ")");
+		begin_scope();
+
+		SPIRType element_type = type;
+		element_type.array.pop_back();
+		element_type.array_size_literal.pop_back();
+		emit_mesh_output_initializer(element_type, join(destination, "[", index, "]"),
+		                             source.empty() ? string() : join(source, "[", index, "]"), loop_index, false);
+
+		end_scope();
+		return;
+	}
+
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (uint32_t member = 0; member < uint32_t(type.member_types.size()); ++member)
+		{
+			const string member_name = to_member_name(type, member);
+			emit_mesh_output_initializer(get<SPIRType>(type.member_types[member]), join(destination, ".", member_name),
+			                             source.empty() ? string() : join(source, ".", member_name), loop_index, false);
+		}
+		return;
+	}
+
+	if (type.columns > 1)
+	{
+		SPIRType column_type = type;
+		column_type.columns = 1;
+		for (uint32_t column = 0; column < type.columns; ++column)
+			emit_mesh_output_initializer(column_type, join(destination, "[", column, "]"),
+			                             source.empty() ? string() : join(source, "[", column, "]"), loop_index, false);
+		return;
+	}
+
+	statement(destination, " = ", source.empty() ? "{}" : source, ";");
+}
+
+void CompilerMSL::emit_mesh_output_initializers()
+{
+	statement("const uint spvMeshInitThreadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;");
+
+	uint32_t loop_index = 0;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t id, const SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassOutput || !var.initializer || !interface_variable_exists_in_entry_point(id))
+			    return;
+
+		    auto &type = get_variable_data_type(var);
+		    string source = to_expression(var.initializer);
+		    if (auto *constant = maybe_get<SPIRConstant>(var.initializer))
+			    if (constant->constant_is_null())
+				    source.clear();
+
+		    if (type.array.empty())
+		    {
+			    statement("if (gl_LocalInvocationIndex == 0)");
+			    begin_scope();
+			    emit_mesh_output_initializer(type, to_name(var.self), source, loop_index, false);
+			    end_scope();
+		    }
+		    else
+			    emit_mesh_output_initializer(type, to_name(var.self), source, loop_index, true);
+	    });
+
+	statement("threadgroup_barrier(mem_flags::", msl_options.mesh_shader_emulation ? "mem_device" : "mem_threadgroup",
+	          ");");
+}
+
+void CompilerMSL::emit_mesh_output_spill_capture()
+{
+	if (mesh_output_spill_members.empty())
+		return;
+
+	const uint32_t first_word = mesh_output_spill_layout.primitive_index_word_offset;
+	statement("threadgroup_barrier(mem_flags::mem_device);");
+	statement("const uint spvMeshSpillThreadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;");
+	statement("for (uint spvMeshSpillPrimitive = gl_LocalInvocationIndex; spvMeshSpillPrimitive < spvMeshSizes.y; "
+	          "spvMeshSpillPrimitive += spvMeshSpillThreadCount)");
+	begin_scope();
+
+	auto spill_store = [&](const string &absolute_word, const string &value)
+	{ statement("spvMeshOutput.spvMeshSpill[", absolute_word, " - ", first_word, "u] = ", value, ";"); };
+
+	uint32_t topology_vertices = mesh_output_spill_layout.primitive_index_word_stride;
+	if (!builtin_mesh_primitive_indices_id)
+	{
+		if (topology_vertices != 1)
+			SPIRV_CROSS_THROW("Line and triangle mesh output spill requires primitive index output.");
+		spill_store(join(mesh_output_spill_layout.primitive_index_word_offset, "u + spvMeshSpillPrimitive"),
+		            "spvMeshSpillPrimitive");
+	}
+	else
+	{
+		static const char *component_names[] = { ".x", ".y", ".z" };
+		for (uint32_t lane = 0; lane < topology_vertices; ++lane)
+		{
+			string source = join(to_name(builtin_mesh_primitive_indices_id), "[spvMeshSpillPrimitive]",
+			                     topology_vertices == 1 ? "" : component_names[lane]);
+			spill_store(join(mesh_output_spill_layout.primitive_index_word_offset, "u + spvMeshSpillPrimitive * ",
+			                 topology_vertices, "u + ", lane, "u"),
+			            source);
+		}
+	}
+
+	string logical_id = "spvMeshSpillPrimitive";
+	if (mesh_spill_logical_primitive_id)
+		logical_id = join("as_type<uint>(", to_name(mesh_spill_logical_primitive_id), "[spvMeshSpillPrimitive]",
+		                  mesh_spill_logical_primitive_id_suffix, ")");
+	spill_store(join(mesh_output_spill_layout.logical_primitive_id_word_offset, "u + spvMeshSpillPrimitive"),
+	            logical_id);
+	end_scope();
+
+	for (auto &member : mesh_output_spill_members)
+	{
+		const bool per_vertex = member.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		const char *index_name = per_vertex ? "spvMeshSpillVertex" : "spvMeshSpillPrimitiveValue";
+		uint32_t count = per_vertex ? mesh_output_spill_layout.max_vertices : mesh_output_spill_layout.max_primitives;
+		const char *actual_count = per_vertex ? "spvMeshSizes.x" : "spvMeshSizes.y";
+		statement("for (uint ", index_name, " = gl_LocalInvocationIndex; ", index_name, " < ", actual_count, "; ",
+		          index_name, " += spvMeshSpillThreadCount)");
+		begin_scope();
+		string source = join(to_name(member.variable_id), "[", index_name, "]", member.source_suffix);
+		for (uint32_t word = 0; word < member.field.capture_word_stride; ++word)
+		{
+			string packed;
+			if (member.field.bit_width == 16)
+			{
+				string lane_source = source;
+				if (member.field.vecsize > 1)
+					lane_source += join("[", word, "]");
+				packed = join("uint(as_type<ushort>(", lane_source, "))");
+			}
+			else if (member.field.bit_width == 64)
+			{
+				uint32_t logical_lane = word / 2u;
+				string lane_source = source;
+				if (member.field.vecsize > 1)
+					lane_source += join("[", logical_lane, "]");
+				if (get_mesh_output_capture_variable(member.variable_id))
+					packed = join(lane_source, ".data[", word & 1u, "]");
+				else
+					packed = join("as_type<uint2>(", lane_source, ")[", word & 1u, "]");
+			}
+			else if (member.field.vecsize == 1)
+				packed = join("as_type<uint>(", source, ")");
+			else
+				packed = join("as_type<uint", member.field.vecsize, ">(", source, ")[", word, "]");
+			spill_store(join(member.field.capture_word_offset, "u + ", index_name, " * ",
+			                 member.field.capture_word_stride, "u + ", word, "u"),
+			            packed);
+		}
+		end_scope();
+		(void)count;
+	}
+	statement("threadgroup_barrier(mem_flags::mem_device);");
+	statement("if (gl_LocalInvocationIndex == 0) spvMeshSizes.y |= spvMeshDispatch.grid.w & 0x80000000u;");
+}
+
+string CompilerMSL::mesh_output_spill_reconstruction_expression(uint32_t member_index, const string &basis_method,
+                                                                const string &dynamic_element,
+                                                                uint32_t dynamic_base_index)
+{
+	if (member_index >= fragment_spill_members.size())
+		SPIRV_CROSS_THROW("Invalid mesh output spill fragment member index.");
+	auto &member = fragment_spill_members[member_index];
+	auto &field = member.field;
+
+	string field_offset = join(field.capture_word_offset, "u");
+	if (!dynamic_element.empty())
+	{
+		uint32_t count = field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX ?
+		                     mesh_output_spill_layout.max_vertices :
+		                     mesh_output_spill_layout.max_primitives;
+		field_offset = join(field.capture_word_offset, "u + (", dynamic_element, " - ", dynamic_base_index, "u) * ",
+		                    count * field.capture_word_stride, "u");
+	}
+
+	auto type_name = [&]() -> string
+	{
+		const char *base = nullptr;
+		if (field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT)
+			base = field.bit_width == 16 ? "half" : field.bit_width == 64 ? "double" : "float";
+		else if (field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT)
+			base = field.bit_width == 16 ? "short" : field.bit_width == 64 ? "long" : "int";
+		else
+			base = field.bit_width == 16 ? "ushort" : field.bit_width == 64 ? "ulong" : "uint";
+		return field.vecsize == 1 ? string(base) : join(base, field.vecsize);
+	};
+
+	auto fetch = [&](const string &element) -> string
+	{
+		string word_base =
+		    join("spvMeshSpillRecordWord + ", field_offset, " + (", element, ") * ", field.capture_word_stride, "u");
+		if (field.bit_width == 16)
+		{
+			SmallVector<string> lanes;
+			for (uint32_t lane = 0; lane < field.vecsize; ++lane)
+				lanes.push_back(join("as_type<",
+				                     field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT ? "half" :
+				                     field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT  ? "short" :
+				                                                                                "ushort",
+				                     ">(ushort(spvMeshSpillCapture[", word_base, " + ", lane, "u]))"));
+			if (field.vecsize == 1)
+				return lanes.front();
+			string result = type_name() + "(";
+			for (uint32_t lane = 0; lane < lanes.size(); ++lane)
+			{
+				if (lane)
+					result += ", ";
+				result += lanes[lane];
+			}
+			result += ")";
+			return result;
+		}
+		if (field.bit_width == 64)
+		{
+			SmallVector<string> lanes;
+			const char *lane_type = field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT ? "double" :
+			                        field.base_type == MSL_MESH_OUTPUT_SPILL_BASE_TYPE_SINT  ? "long" :
+			                                                                                   "ulong";
+			for (uint32_t lane = 0; lane < field.vecsize; ++lane)
+				lanes.push_back(join("as_type<", lane_type, ">(uint2(spvMeshSpillCapture[", word_base, " + ", lane * 2u,
+				                     "u], spvMeshSpillCapture[", word_base, " + ", lane * 2u + 1u, "u]))"));
+			if (field.vecsize == 1)
+				return lanes.front();
+			string result = type_name() + "(";
+			for (uint32_t lane = 0; lane < lanes.size(); ++lane)
+			{
+				if (lane)
+					result += ", ";
+				result += lanes[lane];
+			}
+			result += ")";
+			return result;
+		}
+
+		string words;
+		if (field.capture_word_stride == 1)
+			words = join("spvMeshSpillCapture[", word_base, "]");
+		else
+		{
+			words = join("uint", field.capture_word_stride, "(");
+			for (uint32_t word = 0; word < field.capture_word_stride; ++word)
+			{
+				if (word)
+					words += ", ";
+				words += join("spvMeshSpillCapture[", word_base, " + ", word, "u]");
+			}
+			words += ")";
+		}
+		return join("as_type<", type_name(), ">(", words, ")");
+	};
+
+	if (field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE)
+		return fetch("spvMeshSpillPrimitive");
+	if (member.flat)
+	{
+		const char *last_index =
+		    mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE ? "spvMeshSpillIndex2" :
+		    mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE     ? "spvMeshSpillIndex1" :
+		                                                                                   "spvMeshSpillIndex0";
+		return fetch(join("spvMeshSpillProvokingVertexLast != 0u ? ", last_index, " : spvMeshSpillIndex0"));
+	}
+	if (mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_POINT)
+		return fetch("spvMeshSpillIndex0");
+
+	if (field.base_type != MSL_MESH_OUTPUT_SPILL_BASE_TYPE_FLOAT || (field.bit_width != 16 && field.bit_width != 32))
+		SPIRV_CROSS_THROW("Only 16-bit and 32-bit floating-point mesh spill fields support smooth interpolation.");
+
+	uint32_t basis_member = member.no_perspective ? mesh_spill_no_perspective_member : mesh_spill_perspective_member;
+	if (basis_member == UINT32_MAX || !stage_in_var_id)
+		SPIRV_CROSS_THROW("Mesh output spill is missing its interpolation basis input.");
+	string method = basis_method;
+	if (method.empty())
+	{
+		if (member.centroid)
+			method = ".interpolate_at_centroid()";
+		else if (member.sample)
+			method = join(".interpolate_at_sample(", to_expression(builtin_sample_id_id), ")");
+		else
+			method = ".interpolate_at_center()";
+	}
+	string moment =
+	    join(to_name(stage_in_var_id), ".", to_member_name(get_stage_in_struct_type(), basis_member), method);
+	string interpolation_type = field.vecsize == 1 ? "float" : join("float", field.vecsize);
+	auto interpolation_fetch = [&](const string &element) -> string
+	{
+		string value = fetch(element);
+		return field.bit_width == 16 ? join(interpolation_type, "(", value, ")") : value;
+	};
+	string expression;
+	if (mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_LINE)
+		expression =
+		    join("spvMeshSpillInterpolateLine(", interpolation_fetch("spvMeshSpillIndex0"), ", ",
+		         interpolation_fetch("spvMeshSpillIndex1"), ", spvMeshSpillIndex0, spvMeshSpillIndex1, ", moment, ")");
+	else
+		expression = join("spvMeshSpillInterpolateTriangle(", interpolation_fetch("spvMeshSpillIndex0"), ", ",
+		                  interpolation_fetch("spvMeshSpillIndex1"), ", ", interpolation_fetch("spvMeshSpillIndex2"),
+		                  ", spvMeshSpillIndex0, spvMeshSpillIndex1, spvMeshSpillIndex2, ", moment, ")");
+	return field.bit_width == 16 ? join(type_name(), "(", expression, ")") : expression;
+}
+
+bool CompilerMSL::emit_mesh_output_spill_interpolation(uint32_t result_type, uint32_t result_id, uint32_t input_id,
+                                                       const string &basis_method, bool forward)
+{
+	if (!has_mesh_output_spill_input_layout)
+		return false;
+	auto *variable = maybe_get_backing_variable(input_id);
+	if (!variable)
+		return false;
+
+	SmallVector<uint32_t> access_indices;
+	uint32_t dynamic_aggregate_id = 0;
+	uint32_t dynamic_aggregate_path_index = UINT32_MAX;
+	uint32_t vector_component_id = 0;
+	uint32_t vector_component_constant = UINT32_MAX;
+	auto chain_itr = fragment_spill_access_chains.find(input_id);
+	if (chain_itr != fragment_spill_access_chains.end())
+	{
+		SPIRType current_type = get_variable_data_type(*variable);
+		for (auto index_id : chain_itr->second.indices)
+		{
+			auto *constant = maybe_get<SPIRConstant>(index_id);
+			bool dynamic = !constant || constant->specialization;
+			uint32_t constant_index = dynamic ? UINT32_MAX : constant->scalar();
+
+			if (!current_type.array.empty())
+			{
+				if (dynamic)
+				{
+					if (dynamic_aggregate_id)
+						SPIRV_CROSS_THROW("Mesh output spill supports one dynamic flattened-field index per "
+						                  "interpolation operation.");
+					dynamic_aggregate_id = index_id;
+					dynamic_aggregate_path_index = uint32_t(access_indices.size());
+				}
+				access_indices.push_back(constant_index);
+				current_type = get<SPIRType>(current_type.parent_type);
+			}
+			else if (current_type.basetype == SPIRType::Struct)
+			{
+				if (dynamic || constant_index >= current_type.member_types.size())
+					SPIRV_CROSS_THROW(
+					    "Mesh output spill interpolation requires a constant, in-range structure member index.");
+				access_indices.push_back(constant_index);
+				current_type = get<SPIRType>(current_type.member_types[constant_index]);
+			}
+			else if (current_type.columns > 1)
+			{
+				if (dynamic)
+				{
+					if (dynamic_aggregate_id)
+						SPIRV_CROSS_THROW("Mesh output spill supports one dynamic flattened-field index per "
+						                  "interpolation operation.");
+					dynamic_aggregate_id = index_id;
+					dynamic_aggregate_path_index = uint32_t(access_indices.size());
+				}
+				access_indices.push_back(constant_index);
+				current_type = get<SPIRType>(current_type.parent_type);
+			}
+			else if (current_type.vecsize > 1)
+			{
+				if (vector_component_id)
+					SPIRV_CROSS_THROW("Mesh output spill interpolation has more than one vector component index.");
+				vector_component_id = index_id;
+				vector_component_constant = constant_index;
+				current_type = get<SPIRType>(current_type.parent_type);
+			}
+			else
+				SPIRV_CROSS_THROW("Mesh output spill interpolation access chain indexes past the field type.");
+		}
+	}
+
+	SmallVector<uint32_t> candidates;
+	for (uint32_t index = 0; index < fragment_spill_members.size(); ++index)
+	{
+		auto &member = fragment_spill_members[index];
+		if (member.variable_id != variable->self || member.variable_access_indices.size() != access_indices.size())
+			continue;
+		bool match = true;
+		for (uint32_t path_index = 0; path_index < access_indices.size(); ++path_index)
+			if (path_index != dynamic_aggregate_path_index &&
+			    member.variable_access_indices[path_index] != access_indices[path_index])
+				match = false;
+		if (match)
+			candidates.push_back(index);
+	}
+	if (candidates.empty())
+		return false;
+
+	uint32_t selected = candidates.front();
+	string dynamic_element;
+	uint32_t dynamic_base_index = 0;
+	if (dynamic_aggregate_id)
+	{
+		std::sort(candidates.begin(), candidates.end(),
+		          [&](uint32_t a, uint32_t b)
+		          {
+			          return fragment_spill_members[a].variable_access_indices[dynamic_aggregate_path_index] <
+			                 fragment_spill_members[b].variable_access_indices[dynamic_aggregate_path_index];
+		          });
+		selected = candidates.front();
+		auto &base = fragment_spill_members[selected];
+		dynamic_base_index = base.variable_access_indices[dynamic_aggregate_path_index];
+		uint32_t field_count = base.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX ?
+		                           mesh_output_spill_layout.max_vertices :
+		                           mesh_output_spill_layout.max_primitives;
+		for (uint32_t pos = 0; pos < candidates.size(); ++pos)
+		{
+			auto &candidate = fragment_spill_members[candidates[pos]];
+			if (candidate.variable_access_indices[dynamic_aggregate_path_index] != dynamic_base_index + pos ||
+			    candidate.field.base_type != base.field.base_type ||
+			    candidate.field.bit_width != base.field.bit_width || candidate.field.vecsize != base.field.vecsize ||
+			    candidate.field.capture_word_stride != base.field.capture_word_stride ||
+			    candidate.field.capture_word_offset !=
+			        base.field.capture_word_offset + pos * field_count * base.field.capture_word_stride ||
+			    candidate.flat != base.flat || candidate.no_perspective != base.no_perspective)
+				SPIRV_CROSS_THROW(
+				    "Dynamically indexed mesh output spill fields must have one contiguous homogeneous layout.");
+		}
+		dynamic_element = to_expression(dynamic_aggregate_id);
+	}
+	else if (candidates.size() > 1)
+		SPIRV_CROSS_THROW("Could not uniquely resolve a mesh output spill interpolation field.");
+
+	string expression =
+	    mesh_output_spill_reconstruction_expression(selected, basis_method, dynamic_element, dynamic_base_index);
+	auto &result = get<SPIRType>(result_type);
+	if (result.vecsize == 1 && fragment_spill_members[selected].field.vecsize > 1)
+	{
+		if (!vector_component_id)
+			SPIRV_CROSS_THROW("Scalar mesh output spill interpolation requires a vector component index.");
+		if (vector_component_constant == UINT32_MAX)
+			expression += join("[", to_expression(vector_component_id), "]");
+		else
+			expression += join(".", index_to_swizzle(vector_component_constant));
+	}
+	emit_op(result_type, result_id, expression, forward);
+	inherit_expression_dependencies(result_id, input_id);
+	return true;
+}
+
+void CompilerMSL::emit_mesh_output_spill_fragment_setup()
+{
+	if (!has_mesh_output_spill_input_layout)
+		return;
+	if (!fragment_spill_logical_primitive_id)
+	{
+		ir.for_each_typed_id<SPIRVariable>(
+		    [&](uint32_t id, const SPIRVariable &var)
+		    {
+			    if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(id) &&
+			        is_builtin_variable(var) && BuiltIn(get_decoration(id, DecorationBuiltIn)) == BuiltInPrimitiveId)
+				    fragment_spill_logical_primitive_id = id;
+		    });
+	}
+	string token = fragment_spill_logical_primitive_id ?
+	                   join("uint(", to_expression(fragment_spill_logical_primitive_id), ")") :
+	                   string("spvMeshSpillToken");
+	statement("const uint spvMeshSpillTokenValue = ", token, ";");
+	if (mesh_output_spill_layout.version >= 2)
+	{
+		statement("const uint spvMeshSpillProvokingVertexLast = spvMeshSpillTokenValue & 1u;");
+		statement("const uint spvMeshSpillTokenBase = spvMeshSpillTokenValue >> 1u;");
+	}
+	else
+	{
+		statement("const uint spvMeshSpillProvokingVertexLast = 0u;");
+		statement("const uint spvMeshSpillTokenBase = spvMeshSpillTokenValue;");
+	}
+	statement("const uint spvMeshSpillRecord = spvMeshSpillTokenBase / ", mesh_output_spill_layout.max_primitives,
+	          "u;");
+	statement("const uint spvMeshSpillPrimitive = spvMeshSpillTokenBase % ", mesh_output_spill_layout.max_primitives,
+	          "u;");
+	statement("const uint spvMeshSpillRecordWord = spvMeshSpillRecord * ",
+	          mesh_output_spill_layout.capture_record_stride / 4u, "u;");
+	for (uint32_t lane = 0; lane < mesh_output_spill_layout.primitive_index_word_stride; ++lane)
+		statement("const uint spvMeshSpillIndex", lane, " = spvMeshSpillCapture[spvMeshSpillRecordWord + ",
+		          mesh_output_spill_layout.primitive_index_word_offset, "u + spvMeshSpillPrimitive * ",
+		          mesh_output_spill_layout.primitive_index_word_stride, "u + ", lane, "u];");
+
+	if (fragment_spill_logical_primitive_id)
+	{
+		auto &variable = get<SPIRVariable>(fragment_spill_logical_primitive_id);
+		statement(to_expression(fragment_spill_logical_primitive_id), " = as_type<",
+		          type_to_glsl(get_variable_data_type(variable)), ">(spvMeshSpillCapture[spvMeshSpillRecordWord + ",
+		          mesh_output_spill_layout.logical_primitive_id_word_offset, "u + spvMeshSpillPrimitive]);");
+	}
+
+	for (uint32_t index = 0; index < fragment_spill_members.size(); ++index)
+	{
+		auto &member = fragment_spill_members[index];
+		statement(to_name(member.variable_id), member.source_suffix, " = ",
+		          mesh_output_spill_reconstruction_expression(index, ""), ";");
+	}
+}
+
+void CompilerMSL::emit_mesh_outputs(bool replay)
 {
 	auto &mode = get_entry_point();
 
 	// predefined thread count or zero, if specialization constant is in use
 	uint32_t num_invocations = 0;
-	if (mode.workgroup_size.id_x == 0 && mode.workgroup_size.id_y == 0 && mode.workgroup_size.id_z == 0)
+	SpecializationConstant wg_x, wg_y, wg_z;
+	get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+	if (wg_x.id == 0 && wg_y.id == 0 && wg_z.id == 0)
 		num_invocations = mode.workgroup_size.x * mode.workgroup_size.y * mode.workgroup_size.z;
 
-	statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
+	if (!replay)
+		statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
 	statement("if (spvMeshSizes.y == 0)");
 	begin_scope();
 	statement("return;");
@@ -20736,8 +23343,32 @@ void CompilerMSL::emit_mesh_outputs()
 		statement("spvPerVertex spvV = {};");
 		for (uint32_t index = 0; index < uint32_t(type_vert.member_types.size()); ++index)
 		{
-			uint32_t orig_var = get_extended_member_decoration(type_vert.self, index, SPIRVCrossDecorationInterfaceOrigID);
-			uint32_t orig_id = get_extended_member_decoration(type_vert.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
+			if (index == mesh_spill_perspective_member || index == mesh_spill_no_perspective_member)
+			{
+				if (mesh_output_spill_layout.topology == MSL_MESH_OUTPUT_SPILL_TOPOLOGY_TRIANGLE)
+					statement("spvV.", to_member_name(type_vert, index),
+					          " = float2(float(spvVI), float(spvVI) * float(spvVI));");
+				else
+					statement("spvV.", to_member_name(type_vert, index), " = float(spvVI);");
+				continue;
+			}
+			if (index == mesh_default_position_member)
+			{
+				statement("spvV.", to_member_name(type_vert, index), " = float4(0.0, 0.0, 0.0, 1.0);");
+				continue;
+			}
+
+			if (index == mesh_default_point_size_member)
+			{
+				statement("spvV.", to_member_name(type_vert, index), " = ",
+				          format_float(msl_options.default_point_size), ";");
+				continue;
+			}
+
+			uint32_t orig_var =
+			    get_extended_member_decoration(type_vert.self, index, SPIRVCrossDecorationInterfaceOrigID);
+			uint32_t orig_id =
+			    get_extended_member_decoration(type_vert.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
 
 			// Clip/cull distances are special-case
 			if (orig_var == 0 && orig_id == (~0u))
@@ -20748,9 +23379,16 @@ void CompilerMSL::emit_mesh_outputs()
 
 			// FIXME: Need to deal with complex composite IO types. These may need extra unroll, etc.
 
-			BuiltIn builtin = BuiltInMax;
+			BuiltIn builtin = has_decoration(orig_var, DecorationBuiltIn) ?
+			                      BuiltIn(get_decoration(orig_var, DecorationBuiltIn)) :
+			                      BuiltInMax;
 			std::string access;
-			if (orig_type.basetype == SPIRType::Struct)
+			auto source_suffix = mesh_output_interface_source_suffixes.find((uint64_t(type_vert.self) << 32) | index);
+			bool use_source_suffix = source_suffix != mesh_output_interface_source_suffixes.end() &&
+			                         !has_member_decoration(type_vert.self, index, DecorationBuiltIn);
+			if (use_source_suffix)
+				access = source_suffix->second;
+			else if (orig_type.basetype == SPIRType::Struct)
 			{
 				if (has_member_decoration(orig_type.self, orig_id, DecorationBuiltIn))
 					builtin = BuiltIn(get_member_decoration(orig_type.self, orig_id, DecorationBuiltIn));
@@ -20768,16 +23406,34 @@ void CompilerMSL::emit_mesh_outputs()
 					break;
 				}
 
-				if (has_member_decoration(type_vert.self, index, DecorationIndex))
-				{
-					// Declare the Clip/CullDistance as [[user(clip/cullN)]].
-					const uint32_t orig_index = get_member_decoration(type_vert.self, index, DecorationIndex);
-					access += "[" + to_string(orig_index) + "]";
-					statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index, "] = ", to_name(orig_var), "[spvVI]", access, ";");
-				}
+				auto &orig_member_type = get<SPIRType>(orig_type.member_types[orig_id]);
+				if (builtin != BuiltInClipDistance && builtin != BuiltInCullDistance &&
+				    (is_array(orig_member_type) || is_matrix(orig_member_type)) &&
+				    has_member_decoration(type_vert.self, index, DecorationIndex))
+					access += "[" + to_string(get_member_decoration(type_vert.self, index, DecorationIndex)) + "]";
 			}
-
-			statement("spvV.", to_member_name(type_vert, index), " = ", to_name(orig_var), "[spvVI]", access, ";");
+			else
+			{
+				auto &orig_element_type = get_variable_element_type(orig);
+				if ((is_array(orig_element_type) || is_matrix(orig_element_type)) &&
+				    has_member_decoration(type_vert.self, index, DecorationIndex))
+					access = "[" + to_string(get_member_decoration(type_vert.self, index, DecorationIndex)) + "]";
+			}
+			if (builtin == BuiltInClipDistance && has_member_decoration(type_vert.self, index, DecorationIndex))
+			{
+				const uint32_t orig_index = get_member_decoration(type_vert.self, index, DecorationIndex);
+				if (orig_type.basetype == SPIRType::Struct)
+					access += "[" + to_string(orig_index) + "]";
+				statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index,
+				          "] = ", to_name(orig_var), "[spvVI]", access, ";");
+			}
+			emit_mesh_output_assignment(type_vert, index, orig, join("spvV.", to_member_name(type_vert, index)),
+			                            join(to_name(orig_var), "[spvVI]", access), replay, "spvVI");
+			if (options.vertex.fixup_clipspace && builtin == BuiltInPosition)
+			{
+				statement("spvV.", to_member_name(type_vert, index), ".z = (spvV.", to_member_name(type_vert, index),
+				          ".z + spvV.", to_member_name(type_vert, index), ".w) * 0.5;");
+			}
 			if (options.vertex.flip_vert_y && builtin == BuiltInPosition)
 			{
 				statement("spvV.", to_member_name(type_vert, index), ".y = -(", "spvV.",
@@ -20829,16 +23485,36 @@ void CompilerMSL::emit_mesh_outputs()
 			statement("spvPerPrimitive spvP = {};");
 			for (uint32_t index = 0; index < uint32_t(type_prim.member_types.size()); ++index)
 			{
+				if (index == mesh_default_layer_member || index == mesh_default_viewport_index_member)
+				{
+					statement("spvP.", to_member_name(type_prim, index), " = 0u;");
+					continue;
+				}
+				if (index == mesh_spill_token_member)
+				{
+					statement("spvP.", builtin_to_glsl(BuiltInPrimitiveId, StorageClassOutput), " = ",
+					          replay ? join("((spvMeshOutputIndex * ", mesh_output_spill_layout.max_primitives,
+					                        "u + spvPI) << 1u) | spvMeshProvokingVertexLast") :
+					                   string("spvPI"),
+					          ";");
+					continue;
+				}
 				uint32_t orig_var =
-						get_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationInterfaceOrigID);
+				    get_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationInterfaceOrigID);
 				uint32_t orig_id =
-						get_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
+				    get_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
 				auto &orig = get<SPIRVariable>(orig_var);
 				auto &orig_type = get<SPIRType>(orig.basetype);
 
 				BuiltIn builtin = BuiltInMax;
 				std::string access;
-				if (orig_type.basetype == SPIRType::Struct)
+				auto source_suffix =
+				    mesh_output_interface_source_suffixes.find((uint64_t(type_prim.self) << 32) | index);
+				bool use_source_suffix = source_suffix != mesh_output_interface_source_suffixes.end() &&
+				                         !has_member_decoration(type_prim.self, index, DecorationBuiltIn);
+				if (use_source_suffix)
+					access = source_suffix->second;
+				else if (orig_type.basetype == SPIRType::Struct)
 				{
 					if (has_member_decoration(orig_type.self, orig_id, DecorationBuiltIn))
 						builtin = BuiltIn(get_member_decoration(orig_type.self, orig_id, DecorationBuiltIn));
@@ -20855,8 +23531,21 @@ void CompilerMSL::emit_mesh_outputs()
 					default:
 						access = "." + to_member_name(orig_type, orig_id);
 					}
+
+					auto &orig_member_type = get<SPIRType>(orig_type.member_types[orig_id]);
+					if ((is_array(orig_member_type) || is_matrix(orig_member_type)) &&
+					    has_member_decoration(type_prim.self, index, DecorationIndex))
+						access += "[" + to_string(get_member_decoration(type_prim.self, index, DecorationIndex)) + "]";
 				}
-				statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
+				else
+				{
+					auto &orig_element_type = get_variable_element_type(orig);
+					if ((is_array(orig_element_type) || is_matrix(orig_element_type)) &&
+					    has_member_decoration(type_prim.self, index, DecorationIndex))
+						access = "[" + to_string(get_member_decoration(type_prim.self, index, DecorationIndex)) + "]";
+				}
+				emit_mesh_output_assignment(type_prim, index, orig, join("spvP.", to_member_name(type_prim, index)),
+				                            join(to_name(orig_var), "[spvPI]", access), replay, "spvPI");
 			}
 			statement("spvMesh.set_primitive(spvPI, spvP);");
 		}
@@ -20867,15 +23556,9 @@ void CompilerMSL::emit_mesh_outputs()
 
 void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 {
-	// GLSL: Once this instruction is called, the workgroup must be terminated immediately, and the mesh shaders are launched.
-	// TODO: find relieble and clean of terminating shader.
 	flush_variable_declaration(builtin_task_grid_id);
 	statement("spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
 	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
-	// This is correct if EmitMeshTasks is called in the entry function for shader.
-	// Only viable solutions would be:
-	// - Caller ensures the SPIR-V is inlined, then this always holds true.
-	// - Pass down a "should terminate" bool to leaf functions and chain return (horrible and disgusting, let's not).
 	statement("return;");
 }
 

@@ -266,6 +266,12 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-pad-fragment-output')
     if '.capture.' in shader:
         msl_args.append('--msl-capture-output')
+    if '.mesh-emulation.' in shader:
+        msl_args.append('--msl-mesh-shader-emulation')
+    if '.fixup-clipspace.' in shader:
+        msl_args.append('--fixup-clipspace')
+    if '.flip-vert-y.' in shader:
+        msl_args.append('--flip-vert-y')
     if '.domain.' in shader:
         msl_args.append('--msl-domain-lower-left')
     if '.argument.' in shader:
