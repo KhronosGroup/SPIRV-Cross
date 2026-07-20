@@ -1,0 +1,20 @@
+#version 460
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT scenes[2];
+layout(set = 1, binding = 0, std430) buffer Output { uint value; } outputData;
+
+accelerationStructureEXT getScene(accelerationStructureEXT scene)
+{
+    return scene;
+}
+
+void main()
+{
+    rayQueryEXT query;
+    rayQueryInitializeEXT(query, getScene(scenes[nonuniformEXT(gl_GlobalInvocationID.x & 1u)]), 0u, 0xffu,
+                          vec3(0.0), 0.0, vec3(0.0, 0.0, -1.0), 100.0);
+    rayQueryProceedEXT(query);
+    outputData.value = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(query, false);
+}

@@ -1,0 +1,15 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+hitAttributeEXT vec2 hitData;
+
+uint[2] reportHit()
+{
+    reportIntersectionEXT(1.0, 0u);
+    return uint[2](1u, 2u);
+}
+
+void main()
+{
+    reportHit();
+}

@@ -1,0 +1,257 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvRayHitAttribute
+{
+    ulong4 data;
+};
+struct spvRayTracingContext
+{
+    uint3 launchId;
+    uint3 launchSize;
+    float3 worldRayOrigin;
+    float3 worldRayDirection;
+    float3 objectRayOrigin;
+    float3 objectRayDirection;
+    float rayTmin;
+    float rayTmax;
+    uint instanceCustomIndex;
+    uint instanceId;
+    float4x3 objectToWorld;
+    float4x3 worldToObject;
+    spvRayHitAttribute hitAttribute;
+    uint hitKind;
+    uint incomingRayFlags;
+    uint geometryIndex;
+    uint primitiveId;
+    uint cullMask;
+    float traceRayTmax;
+    float reportedDistance;
+    spvRayHitAttribute reportedHitAttribute;
+    uint reportedHitKind;
+    bool reportAccepted;
+    bool candidateNonOpaque;
+    uint shaderRecordIndex;
+};
+struct spvRayTracingDispatch
+{
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong hitSize;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+};
+struct spvRayTracingState;
+struct spvRayDataStorage
+{
+    ulong instanceMetadataAddress;
+    ulong hitTableAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+};
+template<typename T>
+struct spvRayDataWithPayload
+{
+    spvRayDataStorage data;
+    T payload;
+};
+using spvRayFunctionTable = visible_function_table<void(thread void*, thread spvRayTracingContext&, thread uint&, thread spvRayTracingState&)>;
+using spvCallableFunctionTable = visible_function_table<void(thread void*, thread ulong&, thread spvRayTracingState&)>;
+struct spvRayTracingState
+{
+    spvRayFunctionTable functions;
+    spvRayFunctionTable intersections;
+    spvCallableFunctionTable callables;
+    spvRayFunctionTable recursiveFunctions;
+    spvRayFunctionTable recursiveIntersections;
+    ulong missAddress;
+    ulong missStride;
+    ulong hitAddress;
+    ulong hitStride;
+    ulong hitSize;
+    ulong callableAddress;
+    ulong callableStride;
+    ulong hitTableOffset;
+    ulong raygenAddress;
+    ulong swizzleAddress;
+    ulong bufferSizeAddress;
+    ulong dynamicOffsetsAddress;
+    ulong accelerationStructureAddressTableAddress;
+    ulong pushConstantsAddress;
+    ulong descriptorSet0;
+    ulong descriptorSet1;
+    ulong descriptorSet2;
+    ulong descriptorSet3;
+    ulong descriptorSet4;
+    ulong descriptorSet5;
+    ulong descriptorSet6;
+    ulong descriptorSet7;
+    uint pipelineFlags;
+    uint3 launchId;
+    uint3 launchSize;
+};
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToStack(thread T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToThreadGroup(threadgroup T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToStack(thread T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToThreadGroup(threadgroup T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToStack(thread T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToThreadGroup(threadgroup T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToDevice(device T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToDevice(device T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToDevice(device T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToDevice(device T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToStack(thread T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToThreadGroup(threadgroup T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+struct spvCallableDataStorage_27
+{
+    float4 value[2];
+};
+
+static inline __attribute__((always_inline))
+void update(thread float4 (&values)[2], thread void* spvCallableDataValue, thread spvRayTracingState& spvRayState)
+{
+    values[0] += values[1];
+}
+
+[[visible]] void main0(thread void* spvCallableDataValue, thread ulong& spvShaderRecordAddress, thread spvRayTracingState& spvRayState)
+{
+    float4 param[2];
+    spvArrayCopyFromStackToStack(param, reinterpret_cast<thread spvCallableDataStorage_27*>(spvCallableDataValue)->value);
+    update(param, spvCallableDataValue, spvRayState);
+    spvArrayCopyFromStackToStack(reinterpret_cast<thread spvCallableDataStorage_27*>(spvCallableDataValue)->value, param);
+}
+

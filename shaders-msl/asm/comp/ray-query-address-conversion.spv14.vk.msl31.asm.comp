@@ -1,0 +1,89 @@
+               OpCapability Shader
+               OpCapability RayQueryKHR
+               OpExtension "SPV_KHR_ray_query"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %addresses %registers %query %outputData
+               OpExecutionMode %main LocalSize 1 1 1
+               OpDecorate %addressValues ArrayStride 8
+               OpDecorate %Addresses Block
+               OpMemberDecorate %Addresses 0 NonWritable
+               OpMemberDecorate %Addresses 0 Offset 0
+               OpDecorate %addresses Binding 0
+               OpDecorate %addresses DescriptorSet 0
+               OpDecorate %Registers Block
+               OpMemberDecorate %Registers 0 Offset 0
+               OpDecorate %Output Block
+               OpMemberDecorate %Output 0 NonReadable
+               OpMemberDecorate %Output 0 Offset 0
+               OpDecorate %outputData Binding 1
+               OpDecorate %outputData DescriptorSet 0
+       %void = OpTypeVoid
+   %function = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+     %v2uint = OpTypeVector %uint 2
+%addressValues = OpTypeRuntimeArray %v2uint
+  %Addresses = OpTypeStruct %addressValues
+%addressBuffer = OpTypePointer StorageBuffer %Addresses
+  %addresses = OpVariable %addressBuffer StorageBuffer
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+  %Registers = OpTypeStruct %uint
+%registerBuffer = OpTypePointer PushConstant %Registers
+  %registers = OpVariable %registerBuffer PushConstant
+%registerPointer = OpTypePointer PushConstant %uint
+%addressPointer = OpTypePointer StorageBuffer %v2uint
+       %bool = OpTypeBool
+      %false = OpConstantFalse %bool
+  %queryType = OpTypeRayQueryKHR
+%queryPointer = OpTypePointer Private %queryType
+      %query = OpVariable %queryPointer Private
+      %scene = OpTypeAccelerationStructureKHR
+%convertType = OpTypeFunction %scene %v2uint
+     %uint_0 = OpConstant %uint 0
+   %uint_255 = OpConstant %uint 255
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+    %float_0 = OpConstant %float 0
+     %origin = OpConstantComposite %v3float %float_0 %float_0 %float_0
+    %float_1 = OpConstant %float 1
+  %direction = OpConstantComposite %v3float %float_0 %float_0 %float_1
+ %float_1000 = OpConstant %float 1000
+     %Output = OpTypeStruct %uint
+%outputBuffer = OpTypePointer StorageBuffer %Output
+ %outputData = OpVariable %outputBuffer StorageBuffer
+%outputPointer = OpTypePointer StorageBuffer %uint
+    %convert = OpFunction %scene None %convertType
+%convertAddress = OpFunctionParameter %v2uint
+%convertEntry = OpLabel
+%convertedScene = OpConvertUToAccelerationStructureKHR %scene %convertAddress
+               OpReturnValue %convertedScene
+               OpFunctionEnd
+       %main = OpFunction %void None %function
+      %entry = OpLabel
+      %index = OpAccessChain %registerPointer %registers %int_0
+ %indexValue = OpLoad %uint %index
+%addressElement = OpAccessChain %addressPointer %addresses %int_0 %indexValue
+%addressValue = OpLoad %v2uint %addressElement
+%sceneValue = OpFunctionCall %scene %convert %addressValue
+               OpBranch %loop
+       %loop = OpLabel
+               OpLoopMerge %merge %continue None
+               OpBranch %body
+       %body = OpLabel
+               OpBranch %continue
+   %continue = OpLabel
+               OpBranchConditional %false %loop %merge
+      %merge = OpLabel
+               OpRayQueryInitializeKHR %query %sceneValue %uint_0 %uint_255 %origin %float_0 %direction %float_1000
+   %proceeds = OpRayQueryProceedKHR %bool %query
+               OpSelectionMerge %done None
+               OpBranchConditional %proceeds %hit %done
+        %hit = OpLabel
+     %offset = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %uint %query %int_0
+%outputElement = OpAccessChain %outputPointer %outputData %int_0
+               OpStore %outputElement %offset
+               OpBranch %done
+       %done = OpLabel
+               OpReturn
+               OpFunctionEnd

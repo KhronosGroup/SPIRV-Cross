@@ -1,0 +1,64 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+static inline __attribute__((always_inline))
+uint2 queryData(const raytracing::acceleration_structure<raytracing::instancing> scene, device const uint2* spvRayMetadata_19, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& query, thread device const uint2*& spvRayQueryMetadataAddress_34, thread uint& spvRayQueryFlags_34)
+{
+    spvRayQueryFlags_34 = 0u;
+    spvRayQueryMetadataAddress_34 = spvRayMetadata_19;
+    query.reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), scene, (255u & 255u), spvMakeIntersectionParams(0u));
+    bool _44 = query.next();
+    uint _45 = spvRayQueryFlags_34;
+    uint _49 = spvRayQueryMetadataAddress_34[query.get_candidate_instance_id()].y;
+    return uint2(_45, _49);
+}
+
+static inline __attribute__((always_inline))
+float4 color(thread const uint3& position)
+{
+    return float4(float3(position), 1.0);
+}
+
+kernel void main0(device const uint2* as_spvRayMetadata [[buffer(1)]], texture2d<float, access::write> image [[texture(0)]], raytracing::acceleration_structure<raytracing::instancing> as [[buffer(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]])
+{
+    device const uint2* spvRayQueryMetadataAddress_34 = {};
+    uint spvRayQueryFlags_34 = {};
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;
+    uint2 _56 = queryData(as, as_spvRayMetadata, query, spvRayQueryMetadataAddress_34, spvRayQueryFlags_34);
+    uint2 data = _56;
+    uint3 param = gl_LaunchIDNV;
+    image.write(color(param) + float4(float(data.x + data.y)), uint2(int2(gl_LaunchIDNV.xy)));
+}
+

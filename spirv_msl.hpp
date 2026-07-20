@@ -103,6 +103,8 @@ struct MSLShaderInterfaceVariable
 // remap to will become an [[id(N)]] attribute within the "descriptor set" argument buffer structure.
 // For resources which are bound in the "classic" MSL 1.0 way or discrete descriptors, the remap will
 // become a [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
+// For acceleration structures, msl_buffer is the acceleration structure binding and msl_texture is
+// the non-overlapping companion instance-metadata buffer binding.
 struct MSLResourceBinding
 {
 	ExecutionModel stage = ExecutionModelMax;
@@ -550,6 +552,30 @@ public:
 		// Requires MSL 3.2 or above, and has no effect with earlier MSL versions.
 		bool use_fast_math_pragmas = false;
 
+		// Pipeline emulation host ABI: each 32-byte SBT header stores uint handles for general/closest-hit,
+		// any-hit, and intersection at byte offsets 0, 4, and 8; shader-record data starts at byte 32.
+		// spvRayTracingDispatch stores, in order, miss address/stride, hit address/stride/size, callable
+		// address/stride, hit-table offset, raygen, swizzle, buffer-size, dynamic-offset, acceleration-structure
+		// address-table, and push-constant addresses; eight descriptor-set addresses; then uint pipeline flags.
+		// Instance metadata is uint2(custom index, SBT record offset). An acceleration-structure reference
+		// argument-buffer record has [[id(0)]] acceleration structure, [[id(1)]] metadata, and [[id(2)]] resource ID.
+		// Its ulong2 address table starts with { mask, count }, followed by { device address, reference address }
+		// entries using SplitMix64 finalization and linear probing. If ray tracing position fetch is used,
+		// ray function table entries also take an intersection_query<instancing, triangle_data>&. The option
+		// must be enabled consistently for every non-callable stage linked into the same function tables.
+		// Triangle acceleration structures built for position fetch must store three packed_float3 values
+		// (36 bytes total) as each triangle's primitive data.
+		bool enable_ray_tracing_pipeline_emulation = false;
+		uint32_t ray_tracing_intersection_buffer_index = 17;
+		uint32_t ray_tracing_callable_buffer_index = 16;
+		uint32_t ray_tracing_recursive_function_buffer_index = 15;
+		uint32_t ray_tracing_recursive_intersection_buffer_index = 14;
+		uint32_t ray_tracing_instance_metadata_buffer_index = 13;
+		uint32_t ray_tracing_acceleration_structure_address_table_buffer_index = 12;
+		uint32_t ray_tracing_stage_depth = 0;
+		bool ray_tracing_raygen_visible = false;
+		bool enable_ray_tracing_position_fetch = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -612,6 +638,11 @@ public:
 	bool needs_buffer_size_buffer() const
 	{
 		return !buffers_requiring_array_length.empty();
+	}
+
+	bool needs_acceleration_structure_address_table() const
+	{
+		return uses_ray_tracing_address_conversion;
 	}
 
 	// Provide feedback to calling API to determine if the vertex shader writes
@@ -742,9 +773,9 @@ public:
 	// If no binding exists, uint32_t(-1) is returned.
 	uint32_t get_automatic_msl_resource_binding(uint32_t id) const;
 
-	// Same as get_automatic_msl_resource_binding, but should only be used for combined image samplers, in which case the
-	// sampler's binding is returned instead. For any other resource type, -1 is returned.
-	// Secondary bindings are also used for the auxillary image atomic buffer.
+	// Same as get_automatic_msl_resource_binding, but returns the sampler binding for combined image samplers,
+	// the auxiliary atomic buffer for images, or the instance-metadata buffer for acceleration structures.
+	// For any other resource type, -1 is returned.
 	uint32_t get_automatic_msl_resource_binding_secondary(uint32_t id) const;
 
 	// Same as get_automatic_msl_resource_binding, but should only be used for combined image samplers for multiplanar images,
@@ -919,6 +950,7 @@ protected:
 	                                           const uint32_t *args, uint32_t count) override;
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
+	void emit_return_value(uint32_t return_value) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_subgroup_op(const Instruction &i) override;
 	void emit_subgroup_cluster_op(uint32_t result_type, uint32_t result_id, uint32_t cluster_size, uint32_t op0,
@@ -936,6 +968,12 @@ protected:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	bool current_function_returns_value() const;
+	void emit_array_return_value(uint32_t return_value) override;
+	void emit_phi_assignment(uint32_t lhs_id, uint32_t rhs_id, const std::string &lhs, const std::string &rhs) override;
+	void emit_additional_phi_assignments(BlockID from, BlockID to) override;
+	void emit_ignore_intersection() override;
+	void emit_terminate_ray() override;
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
 	void emit_mesh_tasks(SPIRBlock &block) override;
@@ -954,6 +992,7 @@ protected:
 	std::string sampler_type(const SPIRType &type, uint32_t id, bool member);
 	std::string builtin_to_glsl(BuiltIn builtin, StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
 	std::string to_function_name(const TextureFunctionNameArguments &args) override;
 	std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward) override;
@@ -1089,6 +1128,24 @@ protected:
 	std::string to_buffer_size_expression(uint32_t id);
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
+	bool uses_ray_tracing_pipeline_emulation() const;
+	bool uses_ray_position_fetch_abi() const;
+	bool is_visible_raygen() const;
+	bool is_indirect_ray_stage() const;
+	bool needs_raygen_state() const;
+	void analyze_ray_tracing_scene_phis();
+	void declare_ray_tracing_metadata_variables();
+	void declare_ray_query_state_variables();
+	bool function_returns_ray_tracing_scene(const SPIRFunction &func) const;
+	const SPIRFunction::Parameter *find_ray_tracing_scene_parameter(uint32_t source_id) const;
+	std::string ray_tracing_metadata_array_type(const SPIRType &type);
+	uint32_t ray_tracing_array_element_count(const SPIRType &type) const;
+	std::string ray_tracing_array_initializer(const std::string &name, const SPIRType &type) const;
+	void emit_native_array_copy(const std::string &dst, const std::string &src, const SPIRType &type,
+	                            const std::string &suffix, const char *index_prefix = "spvRayMetadataIndex_");
+	bool resolve_ray_tracing_metadata(uint32_t scene_id, std::string &expression);
+	std::string ray_tracing_metadata_fallback() const;
+	std::string ray_query_state_expression(uint32_t query_id, const std::unordered_map<uint32_t, std::string> &states);
 	bool is_direct_input_builtin(BuiltIn builtin);
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
@@ -1163,6 +1220,7 @@ protected:
 	                     StorageClass lhs_storage, StorageClass rhs_storage) override;
 	void build_implicit_builtins();
 	uint32_t build_constant_uint_array_pointer();
+	uint32_t build_device_ulong2_array_pointer();
 	void emit_entry_point_declarations() override;
 	bool uses_explicit_early_fragment_test();
 
@@ -1188,8 +1246,33 @@ protected:
 	uint32_t builtin_mesh_sizes_id = 0;
 	uint32_t builtin_task_grid_id = 0;
 	uint32_t builtin_frag_depth_id = 0;
+	uint32_t builtin_launch_id_id = 0;
+	uint32_t builtin_launch_size_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
+	uint32_t acceleration_structure_address_table_buffer_id = 0;
+	bool indirect_push_constants_declared = false;
+	std::unordered_set<uint32_t> indirect_implicit_buffers_declared;
+	std::unordered_set<uint32_t> indirect_argument_buffers_declared;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_metadata_vars;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_metadata_sources;
+	std::unordered_map<uint32_t, std::string> ray_tracing_metadata_expressions;
+	uint32_t ray_tracing_metadata_call_result = 0;
+	struct RayTracingSceneSelect
+	{
+		uint32_t condition;
+		uint32_t true_value;
+		uint32_t false_value;
+	};
+	std::unordered_map<uint32_t, RayTracingSceneSelect> ray_tracing_scene_selects;
+	std::unordered_map<uint32_t, uint32_t> ray_tracing_scene_aliases;
+	std::unordered_map<uint32_t, std::string> ray_tracing_scene_phi_metadata;
+	std::unordered_set<uint32_t> ray_tracing_scene_phi_metadata_copies;
+	std::unordered_map<uint32_t, std::string> ray_query_metadata_addresses;
+	std::unordered_map<uint32_t, std::string> ray_query_flag_variables;
+	std::unordered_set<uint32_t> ray_tracing_scene_arrays_declared;
+	std::unordered_set<uint32_t> ray_tracing_metadata_arrays_declared;
+	std::vector<std::string> ray_tracing_native_storage_declarations;
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t draw_index_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
@@ -1199,6 +1282,7 @@ protected:
 	uint32_t argument_buffer_padding_buffer_type_id = 0;
 	uint32_t argument_buffer_padding_image_type_id = 0;
 	uint32_t argument_buffer_padding_sampler_type_id = 0;
+	uint32_t argument_buffer_padding_acceleration_structure_type_id = 0;
 
 	bool does_shader_write_sample_mask = false;
 	bool frag_shader_needs_discard_checks = false;
@@ -1247,6 +1331,7 @@ protected:
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
 	std::unordered_map<StageSetBinding, uint32_t, InternalHasher> resource_arg_buff_idx_to_binding_number;
+	std::unordered_map<StageSetBinding, MSLResourceBinding, InternalHasher> resource_arg_buff_aux_resources;
 
 	uint32_t next_metal_resource_index_buffer = 0;
 	uint32_t next_metal_resource_index_texture = 0;
@@ -1277,6 +1362,13 @@ protected:
 	TriState needs_base_instance_arg = TriState::Neutral;
 
 	bool has_sampled_images = false;
+	bool uses_trace_ray = false;
+	bool uses_execute_callable = false;
+	bool uses_ray_instance_metadata = false;
+	bool uses_ray_tracing_address_conversion = false;
+	bool uses_ray_position_fetch = false;
+	bool uses_ray_query_flags = false;
+	bool uses_shader_record_buffer = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 
 	bool is_using_builtin_array = false; // Force the use of C style array declaration.
@@ -1355,6 +1447,9 @@ protected:
 	void add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
+	void add_argument_buffer_padding_acceleration_structure_type(SPIRType &struct_type, uint32_t &mbr_idx,
+	                                                             uint32_t &arg_buff_index,
+	                                                             MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
@@ -1414,6 +1509,7 @@ protected:
 		bool needs_sample_id = false;
 		bool needs_helper_invocation = false;
 		bool uses_cooperative_matrix = false;
+		bool uses_ray_query = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images

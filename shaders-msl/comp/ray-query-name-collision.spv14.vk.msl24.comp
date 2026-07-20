@@ -1,0 +1,22 @@
+#version 460
+#extension GL_EXT_ray_query : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT scene;
+layout(set = 0, binding = 1, std430) buffer Output
+{
+    uint value;
+} outputData;
+
+uint queryScene(vec3 ray)
+{
+    uint metal = gl_GlobalInvocationID.x & 0xffu;
+    rayQueryEXT query;
+    rayQueryInitializeEXT(query, scene, metal, 0xffu, vec3(0.0), 0.0, ray, 100.0);
+    rayQueryProceedEXT(query);
+    return rayQueryGetIntersectionTypeEXT(query, true);
+}
+
+void main()
+{
+    outputData.value = queryScene(vec3(0.0, 0.0, -1.0));
+}

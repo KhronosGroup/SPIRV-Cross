@@ -1,0 +1,17 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+struct LargeData
+{
+    vec4 values[20];
+    uint marker;
+};
+
+layout(location = 0) callableDataEXT LargeData data;
+
+void main()
+{
+    data.values[19] = vec4(1.0);
+    data.marker = 42u;
+    executeCallableEXT(0, 0);
+}

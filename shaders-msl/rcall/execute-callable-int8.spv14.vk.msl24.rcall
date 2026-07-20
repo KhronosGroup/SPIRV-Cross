@@ -1,0 +1,15 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+
+struct CallableData
+{
+    int8_t value;
+};
+
+layout(location = 0) callableDataInEXT CallableData data;
+
+void main()
+{
+    data.value = int8_t(data.value + int8_t(1));
+}

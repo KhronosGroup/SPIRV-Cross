@@ -1,0 +1,63 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct spvDescriptorSetBuffer0
+{
+    raytracing::acceleration_structure<raytracing::instancing> scenes [[id(0)]][2];
+    texture2d<uint, access::write> image [[id(2)]];
+    const device uint2* scenes_spvRayMetadata_1 [[id(3)]][2];
+};
+
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], uint3 gl_LaunchIDNV [[thread_position_in_grid]])
+{
+    device const uint2* spvRayQueryMetadataAddress_11[2] = {};
+    uint spvRayQueryFlags_11[2] = {};
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> queries[2];
+    spvRayQueryFlags_11[0] = 1u;
+    spvRayQueryMetadataAddress_11[0] = spvDescriptorSet0.scenes_spvRayMetadata_1[0];
+    queries[0].reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), spvDescriptorSet0.scenes[0], (255u & 255u), spvMakeIntersectionParams(1u));
+    spvRayQueryFlags_11[1] = 4u;
+    spvRayQueryMetadataAddress_11[1] = spvDescriptorSet0.scenes_spvRayMetadata_1[1];
+    queries[1].reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), spvDescriptorSet0.scenes[1], (255u & 255u), spvMakeIntersectionParams(4u));
+    bool _39 = queries[0].next();
+    bool _41 = queries[1].next();
+    uint _46 = spvRayQueryFlags_11[0];
+    uint _48 = spvRayQueryFlags_11[1];
+    uint _51 = spvRayQueryMetadataAddress_11[0][queries[0].get_candidate_instance_id()].y;
+    uint _53 = spvRayQueryMetadataAddress_11[1][queries[1].get_candidate_instance_id()].y;
+    uint4 result = uint4(_46, _48, _51, _53);
+    spvDescriptorSet0.image.write(result, uint2(int2(gl_LaunchIDNV.xy)));
+}
+

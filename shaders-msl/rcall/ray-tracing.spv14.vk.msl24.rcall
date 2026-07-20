@@ -1,0 +1,19 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(location = 4) callableDataInEXT float data;
+layout(shaderRecordEXT, std430) buffer Record
+{
+    float factor;
+} record;
+
+float applyRecord()
+{
+    return data * record.factor;
+}
+
+void main()
+{
+    data = applyRecord();
+    executeCallableEXT(10, 4);
+}

@@ -1,0 +1,12 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0, r32f) uniform writeonly image2D image;
+layout(location = 0) callableDataEXT float data;
+
+void main()
+{
+    data = 0.0;
+    executeCallableEXT(0, 0);
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(data));
+}

@@ -17976,6 +17976,15 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	statement(decl);
 }
 
+void CompilerGLSL::emit_return_value(uint32_t return_value)
+{
+	statement("return ", to_unpacked_expression(return_value), ";");
+}
+
+void CompilerGLSL::emit_array_return_value(uint32_t)
+{
+}
+
 void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 {
 	// Avoid potential cycles.
@@ -18192,7 +18201,8 @@ void CompilerGLSL::flush_phi(BlockID from, BlockID to)
 						var.allocate_temporary_copy = true;
 						force_recompile();
 					}
-					statement("_", phi.function_variable, "_copy", " = ", to_name(phi.function_variable), ";");
+					emit_phi_assignment(phi.function_variable, phi.function_variable,
+					                    join("_", phi.function_variable, "_copy"), to_name(phi.function_variable));
 					temporary_phi_variables.insert(phi.function_variable);
 				}
 
@@ -18206,13 +18216,25 @@ void CompilerGLSL::flush_phi(BlockID from, BlockID to)
 				else
 					rhs = to_pointer_expression(phi.local_variable);
 
-				if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs))
-					statement(lhs, " = ", rhs, ";");
+				emit_phi_assignment(phi.function_variable, phi.local_variable, lhs, rhs);
 			}
 
 			register_write(phi.function_variable);
 		}
 	}
+
+	emit_additional_phi_assignments(from, to);
+}
+
+void CompilerGLSL::emit_phi_assignment(uint32_t lhs_id, uint32_t, const string &lhs, const string &rhs)
+{
+	auto &var = get<SPIRVariable>(lhs_id);
+	if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs))
+		statement(lhs, " = ", rhs, ";");
+}
+
+void CompilerGLSL::emit_additional_phi_assignments(BlockID, BlockID)
+{
 }
 
 void CompilerGLSL::branch_to_continue(BlockID from, BlockID to)
@@ -19394,6 +19416,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 				{
 					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClassFunction,
 					                get_expression_effective_storage_class(block.return_value));
+					emit_array_return_value(block.return_value);
 				}
 
 				if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||
@@ -19406,7 +19429,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 			{
 				// OpReturnValue can return Undef, so don't emit anything for this case.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
-					statement("return ", to_unpacked_expression(block.return_value), ";");
+					emit_return_value(block.return_value);
 			}
 		}
 		else if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||
@@ -19425,7 +19448,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	case SPIRBlock::Kill:
 		statement(backend.discard_literal, ";");
 		if (block.return_value)
-			statement("return ", to_unpacked_expression(block.return_value), ";");
+			emit_return_value(block.return_value);
 		break;
 
 	case SPIRBlock::Unreachable:
@@ -19434,7 +19457,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 		// statement to avoid potential compiler errors from non-void functions without a return value.
 		if (block.return_value)
 		{
-			statement("return ", to_unpacked_expression(block.return_value), ";");
+			emit_return_value(block.return_value);
 			break;
 		}
 
@@ -19476,11 +19499,11 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	case SPIRBlock::IgnoreIntersection:
-		statement("ignoreIntersectionEXT;");
+		emit_ignore_intersection();
 		break;
 
 	case SPIRBlock::TerminateRay:
-		statement("terminateRayEXT;");
+		emit_terminate_ray();
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
@@ -19578,6 +19601,16 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	return trailing_block_id;
+}
+
+void CompilerGLSL::emit_ignore_intersection()
+{
+	statement("ignoreIntersectionEXT;");
+}
+
+void CompilerGLSL::emit_terminate_ray()
+{
+	statement("terminateRayEXT;");
 }
 
 void CompilerGLSL::emit_block_chain_cleanup(SPIRBlock &block)
@@ -21035,4 +21068,3 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 
 	return "descriptor_heap";
 }
-

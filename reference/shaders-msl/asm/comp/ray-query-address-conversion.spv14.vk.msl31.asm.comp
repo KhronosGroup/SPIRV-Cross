@@ -1,0 +1,121 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvAccelerationStructureReference
+{
+    raytracing::acceleration_structure<raytracing::instancing> accelerationStructure [[id(0)]];
+    device const uint2* instanceMetadata [[id(1)]];
+    ulong resourceID [[id(2)]];
+};
+static inline __attribute__((always_inline)) device const spvAccelerationStructureReference* spvAccelerationStructureReferenceFromAddress(ulong address, device const ulong2* addressTable)
+{
+    if (!address || !addressTable)
+        return nullptr;
+    ulong mask = addressTable[0].x;
+    ulong count = addressTable[0].y;
+    if (!count)
+        return nullptr;
+    ulong remaining = min(count, mask) + 1;
+    ulong hash = address;
+    hash ^= hash >> 30;
+    hash *= 0xbf58476d1ce4e5b9ul;
+    hash ^= hash >> 27;
+    hash *= 0x94d049bb133111ebul;
+    hash ^= hash >> 31;
+    ulong slot = hash & mask;
+    while (remaining != 0)
+    {
+        ulong2 entry = addressTable[slot + 1];
+        if (entry.x == address)
+            return reinterpret_cast<device const spvAccelerationStructureReference*>(entry.y);
+        if (!entry.x)
+            return nullptr;
+        slot = (slot + 1) & mask;
+        --remaining;
+    }
+    return nullptr;
+}
+static inline __attribute__((always_inline)) raytracing::acceleration_structure<raytracing::instancing> spvAccelerationStructureFromAddress(ulong address, device const ulong2* addressTable)
+{
+    device const auto* reference = spvAccelerationStructureReferenceFromAddress(address, addressTable);
+    return reference ? reference->accelerationStructure : raytracing::acceleration_structure<raytracing::instancing>();
+}
+static inline __attribute__((always_inline)) device const uint2* spvAccelerationStructureMetadataFromAddress(ulong address, device const ulong2* addressTable)
+{
+    device const auto* reference = spvAccelerationStructureReferenceFromAddress(address, addressTable);
+    return reference ? reference->instanceMetadata : nullptr;
+}
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct _8
+{
+    uint2 _m0[1];
+};
+
+struct _9
+{
+    uint _m0;
+};
+
+struct _10
+{
+    uint _m0;
+};
+
+static inline __attribute__((always_inline))
+raytracing::acceleration_structure<raytracing::instancing> _38(uint2 _39, device const ulong2* spvAccelerationStructureAddressTable, thread device const uint2*& spvRayMetadataReturn)
+{
+    spvRayMetadataReturn = spvAccelerationStructureMetadataFromAddress(as_type<ulong>(_39), spvAccelerationStructureAddressTable);
+    return spvAccelerationStructureFromAddress(as_type<ulong>(_39), spvAccelerationStructureAddressTable);
+}
+
+kernel void main0(device const ulong2* spvAccelerationStructureAddressTable [[buffer(12)]], device _8& _3 [[buffer(0)]], constant _9& _4 [[buffer(1)]], device _10& _6 [[buffer(2)]], device const uint2* spvRayInstanceMetadata [[buffer(13)]])
+{
+    device const uint2* spvRayQueryMetadataAddress_5 = {};
+    device const uint2* spvRayMetadata_47;
+    raytracing::acceleration_structure<raytracing::instancing> _47 = _38(_3._m0[_4._m0], spvAccelerationStructureAddressTable, spvRayMetadata_47);
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> _5;
+    do
+    {
+    } while (false);
+    spvRayQueryMetadataAddress_5 = spvRayMetadata_47;
+    _5.reset(::metal::raytracing::ray(float3(0.0), float3(0.0, 0.0, 1.0), 0.0, 1000.0), _47, (255u & 255u), spvMakeIntersectionParams(0u));
+    bool _52 = _5.next();
+    if (_52)
+    {
+        uint _55 = spvRayQueryMetadataAddress_5[_5.get_candidate_instance_id()].y;
+        _6._m0 = _55;
+    }
+}
+
