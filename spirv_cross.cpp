@@ -1289,9 +1289,10 @@ void Compiler::parse_fixup()
 		else if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
+			check_is_shared_memory_block(var);
 
 			if (var.storage == StorageClassPrivate ||
-				(var.storage == StorageClassWorkgroup && !check_is_shared_memory_block(var)) ||
+				(var.storage == StorageClassWorkgroup && !uses_workgroup_memory_explicit_layout) ||
 			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
 			    var.storage == StorageClassOutput)
 			{
@@ -5282,6 +5283,8 @@ bool Compiler::check_is_shared_memory_block(const SPIRVariable &var)
 		uses_workgroup_memory_explicit_layout = true;
 		return true;
 	}
+	// If one workgroup variable is a block, then all must be
+	assert(!uses_workgroup_memory_explicit_layout);
 	return false;
 }
 
