@@ -12427,7 +12427,14 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 		else
 			fname += "sample";
 
-		if (args.has_dref)
+		// A Dref sample instruction only needs the Metal "_compare" variant if the resource is
+		// actually typed as a depth/comparison texture. Resource typing already excludes usage
+		// that occurs solely in specialization-dead code (see find_specialization_dead_blocks
+		// and CombinedImageSamplerUsageHandler), so a Dref instruction can legitimately remain
+		// in the generated code - still textually present, but on a path that's provably never
+		// taken - referencing a texture that was correctly typed texture2d rather than depth2d.
+		// Emitting "_compare" there would call a method that doesn't exist on texture2d.
+		if (args.has_dref && args.base.imgtype && is_depth_image(*args.base.imgtype, img))
 			fname += "_compare";
 	}
 
@@ -12732,8 +12739,11 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		}
 	}
 
-	// Depth compare reference value
-	if (args.dref)
+	// Depth compare reference value. Only pass it through when the resource is actually typed
+	// as depth/comparison in the generated MSL - see the matching check in to_function_name().
+	// A Dref instruction can be textually present but on a specialization-dead path, referencing
+	// a resource that was (correctly) typed texture2d rather than depth2d for the live path.
+	if (args.dref && is_depth_image(imgtype, img))
 	{
 		forward = forward && should_forward(args.dref);
 		farg_str += ", ";
