@@ -2271,6 +2271,295 @@ uint32_t Compiler::evaluate_constant_u32(uint32_t id) const
 		return evaluate_spec_constant_u32(get<SPIRConstantOp>(id));
 }
 
+bool Compiler::evaluate_constant_scalar_expression(uint32_t id, const SPIRFunction &context_func,
+                                                    uint32_t &out_value) const
+{
+	std::unordered_set<uint32_t> visited_functions;
+	return evaluate_constant_scalar_expression_impl(id, context_func, nullptr, out_value, visited_functions, 0);
+}
+
+bool Compiler::evaluate_constant_scalar_expression_impl(uint32_t id, const SPIRFunction &context_func,
+                                                         const std::unordered_map<uint32_t, uint32_t> *substitutions,
+                                                         uint32_t &out_value,
+                                                         std::unordered_set<uint32_t> &visited_functions,
+                                                         uint32_t depth) const
+{
+	// This subset of SPIR-V cannot legally recurse forever (function calls here are only ever
+	// inlined when the callee is a single, non-recursive block), but a cheap depth guard costs
+	// nothing and protects against unexpectedly deep call chains.
+	if (depth > 16)
+		return false;
+
+	if (substitutions)
+	{
+		auto subst = substitutions->find(id);
+		if (subst != substitutions->end())
+		{
+			out_value = subst->second;
+			return true;
+		}
+	}
+
+	if (const auto *c = maybe_get<SPIRConstant>(id))
+	{
+		if (!is_scalar(get<SPIRType>(c->constant_type)))
+			return false;
+		out_value = c->scalar();
+		return true;
+	}
+
+	if (const auto *cop = maybe_get<SPIRConstantOp>(id))
+	{
+		out_value = evaluate_spec_constant_u32(*cop);
+		return true;
+	}
+
+	// Not a constant node. Search for the instruction defining this id within context_func and
+	// try to fold it structurally, using only a small, conservative subset of pure integer and
+	// boolean opcodes. Anything else (memory access, unsupported opcodes, etc.) fails cleanly.
+	for (auto block_id : context_func.blocks)
+	{
+		auto &block = get<SPIRBlock>(block_id);
+		for (auto &instr : block.ops)
+		{
+			auto op = static_cast<Op>(instr.op);
+			auto *ops = stream(instr);
+
+			// Every opcode handled below is a typed value instruction: ops[0] = result type,
+			// ops[1] = result id, ops[2..] = operands. Bail on anything shorter than that.
+			if (!ops || instr.length < 2 || ops[1] != id)
+				continue;
+
+			const auto resolve = [&](uint32_t operand_id, uint32_t &value) -> bool {
+				return evaluate_constant_scalar_expression_impl(operand_id, context_func, substitutions, value,
+				                                                visited_functions, depth + 1);
+			};
+
+			switch (op)
+			{
+			case OpLogicalNot:
+			case OpNot:
+			{
+				uint32_t a;
+				if (instr.length < 3 || !resolve(ops[2], a))
+					return false;
+				out_value = ~a;
+				if (op == OpLogicalNot)
+					out_value &= 1u;
+				return true;
+			}
+
+			case OpIMul:
+			case OpBitwiseAnd:
+			case OpBitwiseOr:
+			case OpBitwiseXor:
+			case OpShiftRightLogical:
+			case OpShiftLeftLogical:
+			case OpIEqual:
+			case OpINotEqual:
+			case OpULessThan:
+			case OpULessThanEqual:
+			case OpUGreaterThan:
+			case OpUGreaterThanEqual:
+			case OpLogicalAnd:
+			case OpLogicalOr:
+			{
+				uint32_t a, b;
+				if (instr.length < 4 || !resolve(ops[2], a) || !resolve(ops[3], b))
+					return false;
+
+				switch (op)
+				{
+				case OpIMul:
+					out_value = a * b;
+					break;
+				case OpBitwiseAnd:
+					out_value = a & b;
+					break;
+				case OpBitwiseOr:
+					out_value = a | b;
+					break;
+				case OpBitwiseXor:
+					out_value = a ^ b;
+					break;
+				case OpShiftRightLogical:
+					out_value = a >> b;
+					break;
+				case OpShiftLeftLogical:
+					out_value = a << b;
+					break;
+				case OpIEqual:
+					out_value = a == b ? 1u : 0u;
+					break;
+				case OpINotEqual:
+					out_value = a != b ? 1u : 0u;
+					break;
+				case OpULessThan:
+					out_value = a < b ? 1u : 0u;
+					break;
+				case OpULessThanEqual:
+					out_value = a <= b ? 1u : 0u;
+					break;
+				case OpUGreaterThan:
+					out_value = a > b ? 1u : 0u;
+					break;
+				case OpUGreaterThanEqual:
+					out_value = a >= b ? 1u : 0u;
+					break;
+				case OpLogicalAnd:
+					out_value = (a != 0 && b != 0) ? 1u : 0u;
+					break;
+				case OpLogicalOr:
+					out_value = (a != 0 || b != 0) ? 1u : 0u;
+					break;
+				default:
+					return false;
+				}
+				return true;
+			}
+
+			case OpBitFieldUExtract:
+			{
+				uint32_t base, offset, count;
+				if (instr.length < 5 || !resolve(ops[2], base) || !resolve(ops[3], offset) || !resolve(ops[4], count))
+					return false;
+				if (offset >= 32 || count == 0 || offset + count > 32)
+					out_value = 0;
+				else
+					out_value = (base >> offset) & ((1u << count) - 1u);
+				return true;
+			}
+
+			case OpSelect:
+			{
+				uint32_t cond, true_val, false_val;
+				if (instr.length < 5 || !resolve(ops[2], cond) || !resolve(ops[3], true_val) ||
+				    !resolve(ops[4], false_val))
+					return false;
+				out_value = cond != 0 ? true_val : false_val;
+				return true;
+			}
+
+			case OpFunctionCall:
+			{
+				// ops[2] = function id, ops[3..] = call arguments.
+				if (instr.length < 3)
+					return false;
+				uint32_t callee_id = ops[2];
+				if (visited_functions.count(callee_id))
+					return false; // Defensive cycle guard; not expected in valid shader input.
+
+				auto &callee = get<SPIRFunction>(callee_id);
+				// Only inline genuinely simple callees: a single basic block (no internal
+				// control flow to reason about) that unconditionally returns a value.
+				if (callee.blocks.size() != 1)
+					return false;
+				auto &callee_block = get<SPIRBlock>(callee.blocks.front());
+				if (callee_block.terminator != SPIRBlock::Return || callee_block.return_value == ID(0))
+					return false;
+
+				uint32_t arg_count = instr.length - 3;
+				if (arg_count != callee.arguments.size())
+					return false;
+
+				std::unordered_map<uint32_t, uint32_t> callee_substitutions;
+				for (uint32_t i = 0; i < arg_count; i++)
+				{
+					uint32_t arg_value;
+					if (!resolve(ops[3 + i], arg_value))
+						return false;
+					callee_substitutions[callee.arguments[i].id] = arg_value;
+				}
+
+				visited_functions.insert(callee_id);
+				bool ok = evaluate_constant_scalar_expression_impl(callee_block.return_value, callee,
+				                                                   &callee_substitutions, out_value,
+				                                                   visited_functions, depth + 1);
+				visited_functions.erase(callee_id);
+				return ok;
+			}
+
+			default:
+				return false;
+			}
+		}
+	}
+
+	return false;
+}
+
+void Compiler::mark_dead_subtree(const SPIRFunction &func, uint32_t start_block, uint32_t stop_at_block,
+                                 std::unordered_set<uint32_t> &dead_blocks) const
+{
+	if (start_block == stop_at_block || dead_blocks.count(start_block))
+		return;
+	dead_blocks.insert(start_block);
+
+	auto &block = get<SPIRBlock>(start_block);
+	switch (block.terminator)
+	{
+	case SPIRBlock::Direct:
+		mark_dead_subtree(func, block.next_block, stop_at_block, dead_blocks);
+		break;
+	case SPIRBlock::Select:
+		mark_dead_subtree(func, block.true_block, stop_at_block, dead_blocks);
+		mark_dead_subtree(func, block.false_block, stop_at_block, dead_blocks);
+		break;
+	case SPIRBlock::MultiSelect:
+		for (auto &c : get_case_list(block))
+			mark_dead_subtree(func, c.block, stop_at_block, dead_blocks);
+		mark_dead_subtree(func, block.default_block, stop_at_block, dead_blocks);
+		break;
+	default:
+		// Return/Unreachable/Kill/etc. have no successors to continue marking.
+		break;
+	}
+}
+
+void Compiler::collect_specialization_dead_blocks(const SPIRFunction &func, std::unordered_set<uint32_t> &dead_blocks,
+                                                   std::unordered_set<uint32_t> &visited_functions) const
+{
+	if (!visited_functions.insert(func.self).second)
+		return;
+
+	for (auto block_id : func.blocks)
+	{
+		auto &block = get<SPIRBlock>(block_id);
+		if (dead_blocks.count(block_id))
+			continue;
+
+		if (block.terminator == SPIRBlock::Select && block.condition != ID(0))
+		{
+			uint32_t cond_value;
+			if (evaluate_constant_scalar_expression(block.condition, func, cond_value))
+			{
+				uint32_t dead_target = cond_value != 0 ? block.false_block : block.true_block;
+				if (dead_target != 0)
+					mark_dead_subtree(func, dead_target, block.merge_block, dead_blocks);
+			}
+		}
+
+		// Recurse into any functions called from this block, dead or not - a call inside an
+		// already-dead block contributes nothing either way, and this keeps the traversal simple.
+		for (auto &instr : block.ops)
+		{
+			if (static_cast<Op>(instr.op) != OpFunctionCall)
+				continue;
+			auto *ops = stream(instr);
+			if (ops && instr.length >= 3)
+				collect_specialization_dead_blocks(get<SPIRFunction>(ops[2]), dead_blocks, visited_functions);
+		}
+	}
+}
+
+std::unordered_set<uint32_t> Compiler::find_specialization_dead_blocks(const SPIRFunction &entry_func) const
+{
+	std::unordered_set<uint32_t> dead_blocks;
+	std::unordered_set<uint32_t> visited_functions;
+	collect_specialization_dead_blocks(entry_func, dead_blocks, visited_functions);
+	return dead_blocks;
+}
+
 size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
 	if (struct_type.member_types.empty())
@@ -4779,6 +5068,8 @@ void Compiler::analyze_image_and_sampler_usage()
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), dref_handler);
 
 	CombinedImageSamplerUsageHandler handler(*this, dref_handler.dref_combined_samplers);
+	auto dead_blocks = find_specialization_dead_blocks(get<SPIRFunction>(ir.default_entry_point));
+	handler.spec_dead_blocks = &dead_blocks;
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 
 	// Need to run this traversal twice. First time, we propagate any comparison sampler usage from leaf functions
@@ -4973,8 +5264,20 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 		add_hierarchy_to_comparison_ids(dep_id);
 }
 
+void Compiler::CombinedImageSamplerUsageHandler::set_current_block(const SPIRBlock &block)
+{
+	current_block_is_dead = spec_dead_blocks && spec_dead_blocks->count(block.self) != 0;
+}
+
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
+	// Resource usage found only in a branch that's provably unreachable once specialization
+	// constants are known (e.g. a shadow-sampler code path a shader never actually takes for
+	// this specialization) must not influence how the resource is typed for the code that
+	// actually runs. See Compiler::find_specialization_dead_blocks().
+	if (current_block_is_dead)
+		return true;
+
 	switch (opcode)
 	{
 	case OpAccessChain:
