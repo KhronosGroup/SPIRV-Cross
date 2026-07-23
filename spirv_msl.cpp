@@ -21988,7 +21988,8 @@ void CompilerMSL::analyze_xfb_buffers()
 		mark_as_packable(buffer_type);
 		// If the declared stride is not a multiple of the struct's natural alignment,
 		// then the struct needs to be packed.
-		bool packed_buffer = xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type, false, false) != 0;
+		bool packed_buffer =
+		    xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type.self, nullptr, false, false) != 0;
 		if (packed_buffer)
 			mark_struct_members_packed(buffer_type);
 		// If the block or any members are packed, we have to make sure that this is
@@ -22016,7 +22017,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			}
 		}
 		// Make sure struct is padded to declared stride, so indexing works properly.
-		if (xfb_strides[xfb_buffer] > get_declared_struct_size_msl(buffer_type, packed_buffer))
+		if (xfb_strides[xfb_buffer] > get_declared_struct_size_msl(buffer_type))
 			set_extended_decoration(type_id, SPIRVCrossDecorationPaddingTarget, xfb_strides[xfb_buffer]);
 	}
 }
