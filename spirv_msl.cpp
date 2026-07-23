@@ -4502,7 +4502,24 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	{
 		bool block_requires_flattening =
 		    variable_storage_requires_stage_io(storage) || (is_block && var_type.array.empty());
-		bool needs_local_declaration = !is_builtin && block_requires_flattening && meta.allow_local_declaration;
+		bool needs_flattened_builtin_local = false;
+		if (storage == StorageClassOutput && block_requires_flattening && meta.allow_local_declaration)
+		{
+			for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
+			{
+				BuiltIn member_builtin = BuiltInMax;
+				if (is_member_builtin(var_type, mbr_idx, &member_builtin) &&
+				    member_builtin == BuiltInCullDistance &&
+				    has_active_builtin(member_builtin, storage))
+				{
+					flattened_output_builtin_members[uint32_t(member_builtin)] = { var.self, mbr_idx };
+					needs_flattened_builtin_local = true;
+				}
+			}
+		}
+
+		bool needs_local_declaration =
+		    (!is_builtin || needs_flattened_builtin_local) && block_requires_flattening && meta.allow_local_declaration;
 
 		if (needs_local_declaration)
 		{
@@ -9165,7 +9182,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			mark_scalar_layout_structs(type);
 	});
 
-	bool builtin_block_type_is_required = is_mesh_shader();
+	bool builtin_block_type_is_required = is_mesh_shader() || !flattened_output_builtin_members.empty();
 	// Very special case. If gl_PerVertex is initialized as an array (tessellation)
 	// we have to potentially emit the gl_PerVertex struct type so that we can emit a constant LUT.
 	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, SPIRConstant &c) {
@@ -19334,6 +19351,17 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		    (current_function->self == ir.default_entry_point))
 			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".",
 			            CompilerGLSL::builtin_to_glsl(builtin, storage));
+		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
+		{
+			auto flattened_itr = flattened_output_builtin_members.find(uint32_t(builtin));
+			if (flattened_itr != end(flattened_output_builtin_members))
+			{
+				auto &flattened_var = get<SPIRVariable>(flattened_itr->second.first);
+				auto &flattened_type = get_variable_data_type(flattened_var);
+				return join(to_name(flattened_var.self), ".",
+				            to_member_name(flattened_type, flattened_itr->second.second));
+			}
+		}
 		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 		    !is_stage_output_builtin_masked(builtin)) {
 			if (builtin_is_per_primitive_mesh_output(builtin) && get_execution_model() == ExecutionModelGeometry) {

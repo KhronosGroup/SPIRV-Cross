@@ -1320,6 +1320,7 @@ protected:
 	std::unordered_set<uint32_t> location_outputs_in_use;
 	std::unordered_set<uint32_t> location_outputs_in_use_fallback;
 	std::unordered_set<uint32_t> mesh_geometry_input_block_vars;
+	std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> flattened_output_builtin_members;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_output_location;
