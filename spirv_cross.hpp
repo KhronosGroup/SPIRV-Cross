@@ -1035,6 +1035,14 @@ protected:
 		bool need_subpass_input = false;
 		bool need_subpass_input_ms = false;
 		void add_dependency(uint32_t dst, uint32_t src);
+
+		// Blocks that are unreachable once specialization constants are known (see
+		// Compiler::find_specialization_dead_blocks()). Instructions in these blocks must not
+		// contribute to comparison_ids, or a resource used only on a dead depth-compare path
+		// gets permanently mistyped as a depth/comparison resource for the whole shader.
+		const std::unordered_set<uint32_t> *spec_dead_blocks = nullptr;
+		bool current_block_is_dead = false;
+		void set_current_block(const SPIRBlock &block) override;
 	};
 
 	void build_function_control_flow_graphs_and_analyze();
@@ -1243,6 +1251,26 @@ protected:
 
 	uint32_t evaluate_spec_constant_u32(const SPIRConstantOp &spec) const;
 
+	// Attempts to resolve `id` to a compile-time-known 32-bit scalar value, tracing through a
+	// bounded, conservative subset of pure integer/boolean SPIR-V opcodes, in addition to the
+	// OpConstant/OpSpecConstant/OpSpecConstantOp nodes evaluate_constant_u32() already handles.
+	// Notably, this inlines calls to simple (single basic block, non-recursive) callee
+	// functions by substituting their OpFunctionParameter ids with the resolved call-site
+	// argument values - shader compilers commonly factor specialization-constant-derived
+	// state into small reusable "getter" functions (bitfield extraction, comparisons) and
+	// branch on their results, so a branch condition being "just" a function call must not
+	// prevent recognizing it as compile-time-known once specialization constants are fixed.
+	// Returns false (never a wrong answer, only a lack of one) for anything outside this
+	// subset: memory loads, loops, recursive or multi-block functions, unsupported opcodes.
+	bool evaluate_constant_scalar_expression(uint32_t id, const SPIRFunction &context_func, uint32_t &out_value) const;
+
+	// Computes the set of block ids that are unreachable from `entry_func`'s entry block once
+	// branches with a compile-time-known condition (see evaluate_constant_scalar_expression)
+	// are resolved, recursing into any functions it calls. Used to keep post-specialization
+	// analysis passes (e.g. CombinedImageSamplerUsageHandler's depth/comparison detection)
+	// from being misled by resource usage that only occurs in provably dead code.
+	std::unordered_set<uint32_t> find_specialization_dead_blocks(const SPIRFunction &entry_func) const;
+
 	bool is_vertex_like_shader() const;
 
 	// Get the correct case list for the OpSwitch, since it can be either a
@@ -1254,6 +1282,17 @@ private:
 	// Used only to implement the old deprecated get_entry_point() interface.
 	const SPIREntryPoint &get_first_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_first_entry_point(const std::string &name);
+
+	// Implementation details for evaluate_constant_scalar_expression()/find_specialization_dead_blocks().
+	bool evaluate_constant_scalar_expression_impl(uint32_t id, const SPIRFunction &context_func,
+	                                              const std::unordered_map<uint32_t, uint32_t> *substitutions,
+	                                              uint32_t &out_value,
+	                                              std::unordered_set<uint32_t> &visited_functions,
+	                                              uint32_t depth) const;
+	void collect_specialization_dead_blocks(const SPIRFunction &func, std::unordered_set<uint32_t> &dead_blocks,
+	                                        std::unordered_set<uint32_t> &visited_functions) const;
+	void mark_dead_subtree(const SPIRFunction &func, uint32_t start_block, uint32_t stop_at_block,
+	                       std::unordered_set<uint32_t> &dead_blocks) const;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 
