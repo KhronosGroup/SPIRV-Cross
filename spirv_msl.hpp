@@ -28,6 +28,7 @@
 #include <map>
 #include <set>
 #include <stddef.h>
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -46,6 +47,17 @@ enum MSLShaderVariableFormat
 	MSL_SHADER_VARIABLE_FORMAT_ANY16 = 3,
 	MSL_SHADER_VARIABLE_FORMAT_ANY32 = 4,
 
+	// The GS-via-mesh path needs concrete attribute formats: mesh pipelines have no
+	// vertex-fetch hardware, so the object stage must fetch and convert by hand.
+	// The GS patch originally gave these values 3 and 4, taking ANY16/ANY32's numbers;
+	// upstream MoltenVK still uses those, so they are appended here instead.
+	MSL_SHADER_VARIABLE_FORMAT_UINT32 = 5,
+	MSL_SHADER_VARIABLE_FORMAT_FLOAT = 6,
+	MSL_SHADER_VARIABLE_FORMAT_INT8 = 7,
+	MSL_SHADER_VARIABLE_FORMAT_INT16 = 8,
+	MSL_SHADER_VARIABLE_FORMAT_INT32 = 9,
+	MSL_SHADER_VARIABLE_FORMAT_HALF = 10,
+
 	// Deprecated aliases.
 	MSL_VERTEX_FORMAT_OTHER = MSL_SHADER_VARIABLE_FORMAT_OTHER,
 	MSL_VERTEX_FORMAT_UINT8 = MSL_SHADER_VARIABLE_FORMAT_UINT8,
@@ -53,8 +65,6 @@ enum MSLShaderVariableFormat
 	MSL_SHADER_INPUT_FORMAT_OTHER = MSL_SHADER_VARIABLE_FORMAT_OTHER,
 	MSL_SHADER_INPUT_FORMAT_UINT8 = MSL_SHADER_VARIABLE_FORMAT_UINT8,
 	MSL_SHADER_INPUT_FORMAT_UINT16 = MSL_SHADER_VARIABLE_FORMAT_UINT16,
-	MSL_SHADER_INPUT_FORMAT_ANY16 = MSL_SHADER_VARIABLE_FORMAT_ANY16,
-	MSL_SHADER_INPUT_FORMAT_ANY32 = MSL_SHADER_VARIABLE_FORMAT_ANY32,
 
 	MSL_SHADER_VARIABLE_FORMAT_INT_MAX = 0x7fffffff
 };
@@ -82,6 +92,11 @@ struct MSLShaderInterfaceVariable
 	BuiltIn builtin = BuiltInMax;
 	uint32_t vecsize = 0;
 	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+	SPIRType::BaseType type = SPIRType::Unknown;
+	uint32_t offset = 0;
+	uint32_t stride = 0;
+	uint32_t binding = 0;
+	bool normalized = false;
 };
 
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
@@ -288,6 +303,11 @@ static const uint32_t kArgumentBufferBinding = ~(3u);
 
 static const uint32_t kMaxArgumentBuffers = 8;
 
+static const uint32_t kMaxXfbBuffers = 4;
+
+// The arbitrary maximum for the nesting of array of array copies.
+static const uint32_t kArrayCopyMultidimMax = 6;
+
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
 {
@@ -317,8 +337,11 @@ public:
 		uint32_t shader_input_buffer_index = 22;
 		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_patch_input_buffer_index = 20;
-        uint32_t draw_id_buffer_index = 19;
+		uint32_t draw_id_buffer_index = 19;
 		uint32_t reversed_depth_viewport_buffer_index = 18;
+		uint32_t xfb_counter_buffer_index_base = 16;
+		uint32_t xfb_output_buffer_index_base = 12;
+		uint32_t draw_info_index = 20;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -549,6 +572,33 @@ public:
 		// Use Fast Math pragmas in MSL code, based on SPIR-V float controls and FP ExecutionModes.
 		// Requires MSL 3.2 or above, and has no effect with earlier MSL versions.
 		bool use_fast_math_pragmas = false;
+        // Compile for use with a geometry shader. If set, vertex shaders will be compiled as [[object]]
+        // functions, and geometry shaders as [[mesh]].
+		bool for_mesh_pipeline = false;
+
+		enum class PrimitiveTopology {
+			Triangles, TriangleStrip, Points
+		} input_primitive_type;
+		// Known primitive types. Largely uses the same values as VkPrimitiveTopology.
+		enum class PrimitiveType
+		{
+			Dynamic = -1,
+			PointList,
+			LineList,
+			LineStrip,
+			TriangleList,
+			TriangleStrip,
+			TriangleFan,
+			LineListWithAdjacency,
+			LineStripWithAdjacency,
+			TriangleListWithAdjacency,
+			TriangleStripWithAdjacency,
+			// 10 reserved for patch list
+		};
+
+		// Indicates the kind of input primitive. Only needed for vertex shaders that have the
+		// Xfb execution mode set; used to control storage of transformed vertices.
+		PrimitiveType xfb_primitive_type = PrimitiveType::Dynamic;
 
 		bool is_ios() const
 		{
@@ -598,6 +648,22 @@ public:
 		return is_rasterization_disabled && (get_entry_point().model == ExecutionModelVertex ||
 		                                     get_entry_point().model == ExecutionModelTessellationControl ||
 		                                     get_entry_point().model == ExecutionModelTessellationEvaluation);
+	}
+
+	// Provide feedback to calling API to allow runtime to bind buffers
+	// for transform feedback if a vertex pipeline shader requires it.
+	bool needs_transform_feedback() const
+	{
+		auto &execution = get_entry_point();
+		return execution.flags.get(spv::ExecutionModeXfb) &&
+		       (execution.model == spv::ExecutionModelVertex ||
+		        execution.model == spv::ExecutionModelTessellationEvaluation);
+	}
+
+	bool vertex_shader_is_kernel() const
+	{
+		return get_execution_model() == spv::ExecutionModelVertex &&
+		       (msl_options.vertex_for_tessellation || needs_transform_feedback());
 	}
 
 	// Provide feedback to calling API to allow it to pass an auxiliary
@@ -904,6 +970,7 @@ protected:
 		SPVFuncImplMulExtended,
 		SPVFuncImplSetMeshOutputsEXT,
 		SPVFuncImplAssume,
+		SPVFuncImplEmitVertex,
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
@@ -1004,7 +1071,7 @@ protected:
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
 	                                            std::unordered_set<uint32_t> &global_var_ids,
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
-	uint32_t add_interface_block(StorageClass storage, bool patch = false);
+	uint32_t add_interface_block(StorageClass storage, bool patch = false, bool mesh_primitive = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, StorageClass storage);
 	uint32_t add_meshlet_block(bool per_primitive);
 
@@ -1070,6 +1137,7 @@ protected:
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	bool is_var_runtime_size_array(const SPIRVariable &var) const;
 	uint32_t get_resource_array_size(const SPIRType &type, uint32_t id) const;
+	void emit_mesh_wrapper();
 
 	void fix_up_shader_inputs_outputs();
 
@@ -1082,6 +1150,20 @@ protected:
 	std::string entry_point_arg_stage_in();
 	void entry_point_args_builtin(std::string &args);
 	void entry_point_args_discrete_descriptors(std::string &args);
+
+	struct Entry_Point_Resource
+	{
+		SPIRVariable *var;
+		// Upstream renamed this from descriptor_alias after the GS patch was written.
+		SPIRVariable *discrete_descriptor_alias;
+		std::string name;
+		SPIRType::BaseType basetype;
+		uint32_t index;
+		uint32_t plane;
+		uint32_t secondary_index;
+	};
+
+	SmallVector<Entry_Point_Resource> get_sorted_entry_point_args(bool add_name = true);
 	std::string append_member_name(const std::string &qualifier, const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
@@ -1237,6 +1319,8 @@ protected:
 	std::unordered_set<uint32_t> location_inputs_in_use_fallback;
 	std::unordered_set<uint32_t> location_outputs_in_use;
 	std::unordered_set<uint32_t> location_outputs_in_use_fallback;
+	std::unordered_set<uint32_t> mesh_geometry_input_block_vars;
+	std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> flattened_output_builtin_members;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_output_location;
@@ -1265,6 +1349,7 @@ protected:
 	VariableID mesh_out_per_vertex = 0;
 	VariableID mesh_out_per_primitive = 0;
 	VariableID stage_out_masked_builtin_type_id = 0;
+	VariableID stage_out_mesh_primitive_var_id = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.
 	enum class TriState
@@ -1301,6 +1386,7 @@ protected:
 	std::string qual_viewport_idx_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
+	std::string stage_out_mesh_primitive_var_name = "out_1";
 	std::string patch_stage_in_var_name = "patchIn";
 	std::string patch_stage_out_var_name = "patchOut";
 	std::string sampler_name_suffix = "Smplr";
@@ -1326,6 +1412,15 @@ protected:
 	std::unordered_set<uint32_t> atomic_image_vars_emulated; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
 	std::unordered_set<uint32_t> recursive_inputs;
+
+	VariableID xfb_counters[kMaxXfbBuffers];
+	VariableID xfb_buffers[kMaxXfbBuffers];
+	VariableID xfb_locals[kMaxXfbBuffers];
+	uint32_t xfb_strides[kMaxXfbBuffers];
+	std::unordered_map<int, uint32_t> xfb_captured_builtins;
+	std::unordered_set<VariableID> xfb_captured_outputs;
+	std::unordered_set<VariableID> xfb_packed_outputs;
+	std::unordered_set<int> xfb_packed_builtins;
 
 	SmallVector<SPIRVariable *> entry_point_bindings;
 
@@ -1356,6 +1451,8 @@ protected:
 	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
+
+	void analyze_xfb_buffers();
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
