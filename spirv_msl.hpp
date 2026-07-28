@@ -136,8 +136,7 @@ enum MSLMeshOutputSpillTopology
 };
 
 // All offsets are uint-word offsets from the start of one capture record.
-// Version 2 carries the provoking-vertex mode in the replay primitive token;
-// version 1 remains accepted as a legacy first-provoking-vertex layout.
+// Version 2 carries the provoking-vertex mode in the replay primitive token.
 // The fragment compiler deliberately chooses its own Metal buffer index.
 struct MSLMeshOutputSpillLayout
 {
@@ -730,7 +729,8 @@ public:
 	// compute's dispatch base or MeshEXT's logical grid and flattened batch base.
 	bool needs_dispatch_base_buffer() const
 	{
-		return msl_options.dispatch_base && (is_mesh_shader() || !msl_options.supports_msl_version(1, 2));
+		return (msl_options.mesh_shader_emulation && is_mesh_shader()) ||
+		       (msl_options.dispatch_base && (is_mesh_shader() || !msl_options.supports_msl_version(1, 2)));
 	}
 
 	// Provide feedback to calling API to allow it to pass an output
@@ -750,13 +750,6 @@ public:
 	{
 		return mesh_output_buffer_alignment;
 	}
-
-	uint32_t get_mesh_output_threadgroup_size() const
-	{
-		return mesh_output_threadgroup_size;
-	}
-
-	uint32_t get_mesh_output_buffer_offset(VariableID id) const;
 
 	// Selects one whole flattened mesh output for device-buffer spill. This is
 	// supported only by taskless mesh-shader emulation.
@@ -1062,7 +1055,6 @@ protected:
 	                             const std::string &qualifier = "");
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
-	bool current_function_returns_value() const;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
@@ -1483,7 +1475,6 @@ protected:
 	std::unordered_map<uint32_t, FragmentSpillAccessChain> fragment_spill_access_chains;
 	uint32_t mesh_output_buffer_size = 0;
 	uint32_t mesh_output_buffer_alignment = 0;
-	uint32_t mesh_output_threadgroup_size = 0;
 	VariableID stage_out_masked_builtin_type_id = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.

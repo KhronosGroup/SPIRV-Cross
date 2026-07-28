@@ -255,7 +255,7 @@ set(spirv-cross-util-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_util.hpp)
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 70)
+set(spirv-cross-abi-minor 68)
 set(spirv-cross-abi-patch 0)
 set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
 
@@ -547,6 +547,10 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-msl-ycbcr-conversion-test spirv-cross-c)
 				set_target_properties(spirv-cross-msl-ycbcr-conversion-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				add_executable(spirv-cross-msl-mesh-emulation-test tests-other/msl_mesh_emulation_test.cpp)
+				target_link_libraries(spirv-cross-msl-mesh-emulation-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-mesh-emulation-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				add_executable(spirv-cross-typed-id-test tests-other/typed_id_test.cpp)
 				target_link_libraries(spirv-cross-typed-id-test spirv-cross-core)
 				set_target_properties(spirv-cross-typed-id-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
@@ -579,6 +583,10 @@ if (SPIRV_CROSS_CLI)
 						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test.spv)
 				add_test(NAME spirv-cross-msl-ycbcr-conversion-test-2
 						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test_2.spv)
+				add_test(NAME spirv-cross-msl-mesh-emulation-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-mesh-emulation-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_mesh_emulation_test.spv
+						${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c_api_test.spv
+						${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_constexpr_test.spv)
 				add_test(NAME spirv-cross-typed-id-test
 						COMMAND $<TARGET_FILE:spirv-cross-typed-id-test>)
 				add_test(NAME spirv-cross-debug-lines-test

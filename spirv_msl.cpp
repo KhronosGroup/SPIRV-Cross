@@ -105,7 +105,7 @@ void CompilerMSL::add_msl_mesh_output_spill(const MSLMeshOutputSpillKey &key)
 void CompilerMSL::set_msl_mesh_output_spill_layout(const MSLMeshOutputSpillLayout &layout,
                                                    const SmallVector<MSLMeshOutputSpillField> &fields)
 {
-	if (layout.version != 1 && layout.version != 2)
+	if (layout.version != 2)
 		SPIRV_CROSS_THROW("Unsupported mesh output spill layout version.");
 	if ((layout.capture_record_stride & 3u) != 0 || layout.capture_record_stride == 0)
 		SPIRV_CROSS_THROW("Mesh output spill capture record stride must be a nonzero multiple of four bytes.");
@@ -6150,7 +6150,6 @@ void CompilerMSL::build_mesh_output_buffer_type()
 	mesh_output_packed_64.clear();
 	mesh_output_buffer_size = 0;
 	mesh_output_buffer_alignment = 0;
-	mesh_output_threadgroup_size = 0;
 
 	SmallVector<VariableID> vertex_outputs;
 	SmallVector<VariableID> primitive_indices;
@@ -6318,13 +6317,6 @@ void CompilerMSL::build_mesh_output_buffer_type()
 	mesh_output_buffer_size = (offset + mesh_output_buffer_alignment - 1) & ~(mesh_output_buffer_alignment - 1);
 	if (!mesh_output_spill_members.empty())
 		mesh_output_spill_layout.capture_record_stride = mesh_output_buffer_size;
-	mesh_output_threadgroup_size = msl_options.mesh_shader_emulation ? 0 : mesh_output_buffer_size;
-}
-
-uint32_t CompilerMSL::get_mesh_output_buffer_offset(VariableID id) const
-{
-	auto itr = mesh_output_buffer_members.find(id);
-	return itr == mesh_output_buffer_members.end() ? ~0u : itr->second;
 }
 
 void CompilerMSL::emit_mesh_output_capture_wrappers()
@@ -10164,7 +10156,7 @@ void CompilerMSL::emit_resources()
 				          "\"invalid mesh output counts offset\");");
 				for (auto id : mesh_output_variables)
 					statement("static_assert(__builtin_offsetof(spvMeshOutput, spv", id,
-					          ") == ", get_mesh_output_buffer_offset(id),
+					          ") == ", mesh_output_buffer_members.find(id)->second,
 					          ", \"invalid mesh output variable offset\");");
 				if (!mesh_output_spill_members.empty())
 					statement("static_assert(__builtin_offsetof(spvMeshOutput, spvMeshSpill) == ",
@@ -12747,12 +12739,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 
 	previous_instruction_opcode = opcode;
-}
-
-bool CompilerMSL::current_function_returns_value() const
-{
-	auto &type = get<SPIRType>(current_function->return_type);
-	return type.basetype != SPIRType::Void && (type.array.empty() || backend.can_return_array);
 }
 
 void CompilerMSL::emit_texture_op(const Instruction &i, bool sparse)
@@ -22922,7 +22908,6 @@ void CompilerMSL::emit_mesh_output_spill_capture()
 	{
 		const bool per_vertex = member.field.key.rate == MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
 		const char *index_name = per_vertex ? "spvMeshSpillVertex" : "spvMeshSpillPrimitiveValue";
-		uint32_t count = per_vertex ? mesh_output_spill_layout.max_vertices : mesh_output_spill_layout.max_primitives;
 		const char *actual_count = per_vertex ? "spvMeshSizes.x" : "spvMeshSizes.y";
 		statement("for (uint ", index_name, " = gl_LocalInvocationIndex; ", index_name, " < ", actual_count, "; ",
 		          index_name, " += spvMeshSpillThreadCount)");
@@ -22958,7 +22943,6 @@ void CompilerMSL::emit_mesh_output_spill_capture()
 			            packed);
 		}
 		end_scope();
-		(void)count;
 	}
 	statement("threadgroup_barrier(mem_flags::mem_device);");
 	statement("if (gl_LocalInvocationIndex == 0) spvMeshSizes.y |= spvMeshDispatch.grid.w & 0x80000000u;");
@@ -23266,16 +23250,8 @@ void CompilerMSL::emit_mesh_output_spill_fragment_setup()
 	                   join("uint(", to_expression(fragment_spill_logical_primitive_id), ")") :
 	                   string("spvMeshSpillToken");
 	statement("const uint spvMeshSpillTokenValue = ", token, ";");
-	if (mesh_output_spill_layout.version >= 2)
-	{
-		statement("const uint spvMeshSpillProvokingVertexLast = spvMeshSpillTokenValue & 1u;");
-		statement("const uint spvMeshSpillTokenBase = spvMeshSpillTokenValue >> 1u;");
-	}
-	else
-	{
-		statement("const uint spvMeshSpillProvokingVertexLast = 0u;");
-		statement("const uint spvMeshSpillTokenBase = spvMeshSpillTokenValue;");
-	}
+	statement("const uint spvMeshSpillProvokingVertexLast = spvMeshSpillTokenValue & 1u;");
+	statement("const uint spvMeshSpillTokenBase = spvMeshSpillTokenValue >> 1u;");
 	statement("const uint spvMeshSpillRecord = spvMeshSpillTokenBase / ", mesh_output_spill_layout.max_primitives,
 	          "u;");
 	statement("const uint spvMeshSpillPrimitive = spvMeshSpillTokenBase % ", mesh_output_spill_layout.max_primitives,
@@ -23556,9 +23532,15 @@ void CompilerMSL::emit_mesh_outputs(bool replay)
 
 void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 {
+	// GLSL: Once this instruction is called, the workgroup must be terminated immediately, and the mesh shaders are launched.
+	// TODO: find relieble and clean of terminating shader.
 	flush_variable_declaration(builtin_task_grid_id);
 	statement("spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
 	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
+	// This is correct if EmitMeshTasks is called in the entry function for shader.
+	// Only viable solutions would be:
+	// - Caller ensures the SPIR-V is inlined, then this always holds true.
+	// - Pass down a "should terminate" bool to leaf functions and chain return (horrible and disgusting, let's not).
 	statement("return;");
 }
 
