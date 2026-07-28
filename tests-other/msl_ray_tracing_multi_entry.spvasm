@@ -1,13 +1,20 @@
                OpCapability Shader
                OpCapability RayQueryKHR
                OpCapability RayQueryPositionFetchKHR
+               OpCapability RayTracingKHR
+               OpCapability RayTracingPositionFetchKHR
+               OpCapability RayTracingNV
+               OpCapability RayTracingMotionBlurNV
                OpCapability RayTracingClusterAccelerationStructureNV
                OpCapability RayTracingSpheresGeometryNV
                OpCapability RayTracingLinearSweptSpheresGeometryNV
                OpExtension "SPV_KHR_ray_query"
+               OpExtension "SPV_KHR_ray_tracing"
                OpExtension "SPV_KHR_ray_tracing_position_fetch"
                OpExtension "SPV_NV_cluster_acceleration_structure"
                OpExtension "SPV_NV_linear_swept_spheres"
+               OpExtension "SPV_NV_ray_tracing"
+               OpExtension "SPV_NV_ray_tracing_motion_blur"
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %plain "plain"
                OpEntryPoint GLCompute %ray "ray" %scene %query
@@ -20,6 +27,11 @@
                OpEntryPoint GLCompute %lss_hit_value "lss_hit_value" %query
                OpEntryPoint GLCompute %is_sphere_hit "is_sphere_hit" %query
                OpEntryPoint GLCompute %is_lss_hit "is_lss_hit" %query
+               OpEntryPoint AnyHitKHR %whole_block "whole_block" %builtins %hit_value
+               OpEntryPoint AnyHitKHR %copied_member "copied_member" %builtins %hit_value
+               OpEntryPoint RayGenerationKHR %motion "motion" %scene %motion_payload
+               OpEntryPoint RayGenerationKHR %legacy_motion "legacy_motion" %scene
+               OpEntryPoint MissKHR %current_time "current_time" %current_ray_time
                OpExecutionMode %plain LocalSize 1 1 1
                OpExecutionMode %ray LocalSize 1 1 1
                OpExecutionMode %triangle_positions LocalSize 1 1 1
@@ -33,8 +45,15 @@
                OpExecutionMode %is_lss_hit LocalSize 1 1 1
                OpName %plain "plain"
                OpName %ray "ray"
+               OpName %Builtins "Builtins"
+               OpMemberName %Builtins 0 "gl_HitTriangleVertexPositionsEXT"
+               OpMemberName %Builtins 1 "gl_IncomingRayFlagsEXT"
                OpDecorate %scene DescriptorSet 0
                OpDecorate %scene Binding 0
+               OpMemberDecorate %Builtins 0 BuiltIn HitTriangleVertexPositionsKHR
+               OpMemberDecorate %Builtins 1 BuiltIn IncomingRayFlagsKHR
+               OpDecorate %Builtins Block
+               OpDecorate %current_ray_time BuiltIn CurrentRayTimeNV
 
        %void = OpTypeVoid
     %void_fn = OpTypeFunction %void
@@ -46,6 +65,7 @@
       %query = OpVariable %ptr_private_query Private
        %uint = OpTypeInt 32 0
      %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
      %uint_2 = OpConstant %uint 2
      %uint_3 = OpConstant %uint 3
    %uint_255 = OpConstant %uint 255
@@ -59,8 +79,20 @@
     %float_0 = OpConstant %float 0
    %float_n1 = OpConstant %float -1
   %float_100 = OpConstant %float 100
+%float_0_5 = OpConstant %float 0.5
        %zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
         %dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+   %Builtins = OpTypeStruct %arr_v3float_3 %uint
+%ptr_input_builtins = OpTypePointer Input %Builtins
+%ptr_input_arr_v3float_3 = OpTypePointer Input %arr_v3float_3
+   %builtins = OpVariable %ptr_input_builtins Input
+%ptr_hit_value = OpTypePointer IncomingRayPayloadKHR %v3float
+  %hit_value = OpVariable %ptr_hit_value IncomingRayPayloadKHR
+    %v4float = OpTypeVector %float 4
+%ptr_motion_payload = OpTypePointer RayPayloadKHR %v4float
+%motion_payload = OpVariable %ptr_motion_payload RayPayloadKHR
+%ptr_input_float = OpTypePointer Input %float
+%current_ray_time = OpVariable %ptr_input_float Input
 
       %plain = OpFunction %void None %void_fn
 %plain_entry = OpLabel
@@ -125,5 +157,49 @@
 %is_lss_hit = OpFunction %void None %void_fn
 %is_lss_hit_entry = OpLabel
 %is_lss_hit_value = OpRayQueryIsLSSHitNV %bool %query %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%whole_block = OpFunction %void None %void_fn
+%whole_block_entry = OpLabel
+%copied_builtins = OpCopyObject %ptr_input_builtins %builtins
+%loaded_builtins = OpLoad %Builtins %copied_builtins
+%loaded_positions = OpCompositeExtract %arr_v3float_3 %loaded_builtins 0
+%loaded_position = OpCompositeExtract %v3float %loaded_positions 0
+%loaded_flags = OpCompositeExtract %uint %loaded_builtins 1
+%loaded_flags_float = OpConvertUToF %float %loaded_flags
+%loaded_flags_vector = OpCompositeConstruct %v3float %loaded_flags_float %loaded_flags_float %loaded_flags_float
+%whole_block_result = OpFAdd %v3float %loaded_position %loaded_flags_vector
+               OpStore %hit_value %whole_block_result
+               OpReturn
+               OpFunctionEnd
+
+%copied_member = OpFunction %void None %void_fn
+%copied_member_entry = OpLabel
+%copied_member_builtins = OpCopyObject %ptr_input_builtins %builtins
+%copied_member_positions_ptr = OpAccessChain %ptr_input_arr_v3float_3 %copied_member_builtins %uint_0
+%copied_member_positions = OpLoad %arr_v3float_3 %copied_member_positions_ptr
+%copied_member_position = OpCompositeExtract %v3float %copied_member_positions 0
+               OpStore %hit_value %copied_member_position
+               OpReturn
+               OpFunctionEnd
+
+     %motion = OpFunction %void None %void_fn
+%motion_entry = OpLabel
+%motion_scene = OpLoad %as %scene
+               OpTraceRayMotionNV %motion_scene %uint_1 %uint_255 %uint_0 %uint_0 %uint_0 %zero %float_0 %dir %float_100 %float_0_5 %motion_payload
+               OpReturn
+               OpFunctionEnd
+
+%legacy_motion = OpFunction %void None %void_fn
+%legacy_motion_entry = OpLabel
+%legacy_motion_scene = OpLoad %as %scene
+               OpTraceMotionNV %legacy_motion_scene %uint_1 %uint_255 %uint_0 %uint_0 %uint_0 %zero %float_0 %dir %float_100 %float_0_5 %uint_0
+               OpReturn
+               OpFunctionEnd
+
+%current_time = OpFunction %void None %void_fn
+%current_time_entry = OpLabel
+%loaded_current_time = OpLoad %float %current_ray_time
                OpReturn
                OpFunctionEnd

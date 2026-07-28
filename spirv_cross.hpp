@@ -955,9 +955,11 @@ protected:
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 
 		void handle_builtin(const SPIRType &type, BuiltIn builtin, const Bitset &decoration_flags);
+		uint32_t resolve_copy_object(uint32_t id) const;
 		void add_if_builtin(uint32_t id);
 		void add_if_builtin_or_block(uint32_t id);
 		void add_if_builtin(uint32_t id, bool allow_blocks);
+		std::unordered_map<uint32_t, uint32_t> copy_objects;
 	};
 
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;

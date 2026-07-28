@@ -1,0 +1,21 @@
+               OpCapability Shader
+               OpCapability UntypedPointersKHR
+               OpCapability WorkgroupMemoryExplicitLayoutKHR
+               OpExtension "SPV_KHR_workgroup_memory_explicit_layout"
+               OpExtension "SPV_KHR_untyped_pointers"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %var
+               OpDecorate %struct Block
+               OpMemberDecorate %struct 0 Offset 0
+       %void = OpTypeVoid
+        %int = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+     %struct = OpTypeStruct %int
+        %ptr = OpTypeUntypedPointerKHR Workgroup
+        %var = OpUntypedVariableKHR %ptr Workgroup %struct
+    %void_fn = OpTypeFunction %void
+       %main = OpFunction %void None %void_fn
+      %entry = OpLabel
+       %load = OpLoad %float %var
+               OpReturn
+               OpFunctionEnd

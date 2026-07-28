@@ -257,6 +257,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     msl_args.append(path_to_msl_standard_cli(shader))
     if any(shader.endswith(ext) for ext in ('.rgen', '.rmiss', '.rchit', '.rahit', '.rint', '.rcall')):
         msl_args.append('--msl-enable-ray-tracing-pipeline-emulation')
+    if '.position-fetch-abi.' in shader:
+        msl_args.append('--msl-enable-ray-tracing-position-fetch')
     if '.raygen-visible.' in shader:
         msl_args.append('--msl-ray-tracing-raygen-visible')
     stage_depth = re.search(r'\.stage-depth-([0-9]+)\.', shader)

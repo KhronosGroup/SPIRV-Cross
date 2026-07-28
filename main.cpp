@@ -628,12 +628,6 @@ struct CLIArguments
 	uint32_t version = 0;
 	uint32_t shader_model = 0;
 	uint32_t msl_version = 0;
-	uint32_t msl_ray_tracing_intersection_buffer_index = 17;
-	uint32_t msl_ray_tracing_callable_buffer_index = 16;
-	uint32_t msl_ray_tracing_recursive_function_buffer_index = 15;
-	uint32_t msl_ray_tracing_recursive_intersection_buffer_index = 14;
-	uint32_t msl_ray_tracing_instance_metadata_buffer_index = 13;
-	uint32_t msl_ray_tracing_acceleration_structure_address_table_buffer_index = 12;
 	uint32_t msl_ray_tracing_stage_depth = 0;
 	bool es = false;
 	bool set_version = false;
@@ -880,13 +874,6 @@ static void print_help_msl()
 	                "\t[--msl-enable-ray-tracing-pipeline-emulation]:\n\t\tEnable Vulkan ray tracing pipeline emulation. Requires MSL 2.4 or later.\n"
 	                "\t[--msl-enable-ray-tracing-position-fetch]:\n"
 	                "\t\tUse the position-fetch ray-function ABI. Enable this consistently for every stage in a pipeline.\n"
-	                "\t[--msl-ray-tracing-intersection-buffer-index <index>]:\n\t\tSet the intersection function table buffer index.\n"
-	                "\t[--msl-ray-tracing-callable-buffer-index <index>]:\n\t\tSet the callable function table buffer index.\n"
-	                "\t[--msl-ray-tracing-recursive-function-buffer-index <index>]:\n\t\tSet the recursive ray function table buffer index.\n"
-	                "\t[--msl-ray-tracing-recursive-intersection-buffer-index <index>]:\n\t\tSet the recursive intersection function table buffer index.\n"
-	                "\t[--msl-ray-tracing-instance-metadata-buffer-index <index>]:\n\t\tSet the ray tracing instance metadata buffer index.\n"
-	                "\t[--msl-ray-tracing-acceleration-structure-address-table-buffer-index <index>]:\n"
-	                "\t\tSet the acceleration structure address table buffer index.\n"
 	                "\t[--msl-ray-tracing-stage-depth <depth>]:\n\t\tSet the ray tracing pipeline recursion depth for this stage.\n"
 	                "\t[--msl-ray-tracing-raygen-visible]:\n\t\tEmit a visible ray generation function instead of a kernel.\n"
 	                "\t[--msl-capture-output]:\n\t\tWrites geometry varyings to a buffer instead of as stage-outputs.\n"
@@ -1284,14 +1271,6 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.enable_ray_tracing_pipeline_emulation = args.msl_enable_ray_tracing_pipeline_emulation;
 		msl_opts.enable_ray_tracing_position_fetch = args.msl_enable_ray_tracing_position_fetch;
-		msl_opts.ray_tracing_intersection_buffer_index = args.msl_ray_tracing_intersection_buffer_index;
-		msl_opts.ray_tracing_callable_buffer_index = args.msl_ray_tracing_callable_buffer_index;
-		msl_opts.ray_tracing_recursive_function_buffer_index = args.msl_ray_tracing_recursive_function_buffer_index;
-		msl_opts.ray_tracing_recursive_intersection_buffer_index =
-		    args.msl_ray_tracing_recursive_intersection_buffer_index;
-		msl_opts.ray_tracing_instance_metadata_buffer_index = args.msl_ray_tracing_instance_metadata_buffer_index;
-		msl_opts.ray_tracing_acceleration_structure_address_table_buffer_index =
-		    args.msl_ray_tracing_acceleration_structure_address_table_buffer_index;
 		msl_opts.ray_tracing_stage_depth = args.msl_ray_tracing_stage_depth;
 		msl_opts.ray_tracing_raygen_visible = args.msl_ray_tracing_raygen_visible;
 		msl_opts.capture_output_to_buffer = args.msl_capture_output_to_buffer;
@@ -2028,18 +2007,6 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.msl_enable_ray_tracing_pipeline_emulation = true; });
 	cbs.add("--msl-enable-ray-tracing-position-fetch",
 	        [&args](CLIParser &) { args.msl_enable_ray_tracing_position_fetch = true; });
-	cbs.add("--msl-ray-tracing-intersection-buffer-index",
-	        [&args](CLIParser &parser) { args.msl_ray_tracing_intersection_buffer_index = parser.next_uint(); });
-	cbs.add("--msl-ray-tracing-callable-buffer-index",
-	        [&args](CLIParser &parser) { args.msl_ray_tracing_callable_buffer_index = parser.next_uint(); });
-	cbs.add("--msl-ray-tracing-recursive-function-buffer-index",
-	        [&args](CLIParser &parser) { args.msl_ray_tracing_recursive_function_buffer_index = parser.next_uint(); });
-	cbs.add("--msl-ray-tracing-recursive-intersection-buffer-index", [&args](CLIParser &parser)
-	        { args.msl_ray_tracing_recursive_intersection_buffer_index = parser.next_uint(); });
-	cbs.add("--msl-ray-tracing-instance-metadata-buffer-index",
-	        [&args](CLIParser &parser) { args.msl_ray_tracing_instance_metadata_buffer_index = parser.next_uint(); });
-	cbs.add("--msl-ray-tracing-acceleration-structure-address-table-buffer-index", [&args](CLIParser &parser)
-	        { args.msl_ray_tracing_acceleration_structure_address_table_buffer_index = parser.next_uint(); });
 	cbs.add("--msl-ray-tracing-stage-depth",
 	        [&args](CLIParser &parser) { args.msl_ray_tracing_stage_depth = parser.next_uint(); });
 	cbs.add("--msl-ray-tracing-raygen-visible", [&args](CLIParser &) { args.msl_ray_tracing_raygen_visible = true; });

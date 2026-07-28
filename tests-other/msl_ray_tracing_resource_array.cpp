@@ -15,6 +15,7 @@
  */
 
 #include <spirv_cross_c.h>
+#include <spirv_msl.hpp>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,7 +60,7 @@ static std::vector<SpvId> read_file(const char *path)
 static std::string compile(const std::vector<SpvId> &spirv, bool device, bool discrete, unsigned count,
                            bool decoration = false, bool overlap = false, const char *expected_error = nullptr,
                            unsigned msl_version = SPVC_MAKE_MSL_VERSION(3, 0, 0), bool force_native_arrays = false,
-                           const char *entry = nullptr, bool address_table = false)
+                           const char *entry = nullptr)
 {
 	spvc_context context;
 	spvc_parsed_ir ir;
@@ -72,13 +73,9 @@ static std::string compile(const std::vector<SpvId> &spirv, bool device, bool di
 		check(spvc_compiler_set_entry_point(compiler, entry, SpvExecutionModelGLCompute));
 	check(spvc_compiler_create_compiler_options(compiler, &options));
 	check(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, msl_version));
-	check(spvc_compiler_options_set_uint(
-	    options, SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX, 11));
 	check(spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ARGUMENT_BUFFERS, SPVC_TRUE));
 	check(spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_FORCE_ACTIVE_ARGUMENT_BUFFER_RESOURCES,
 	                                     SPVC_TRUE));
-	check(spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE_EMULATION,
-	                                     SPVC_FALSE));
 	check(spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_FORCE_NATIVE_ARRAYS,
 	                                     force_native_arrays ? SPVC_TRUE : SPVC_FALSE));
 	if (decoration)
@@ -116,12 +113,6 @@ static std::string compile(const std::vector<SpvId> &spirv, bool device, bool di
 		return {};
 	}
 	check(compile_result);
-	if (spvc_compiler_msl_needs_acceleration_structure_address_table(compiler) !=
-	    (address_table ? SPVC_TRUE : SPVC_FALSE))
-	{
-		fprintf(stderr, "Unexpected acceleration-structure address-table requirement\n");
-		exit(EXIT_FAILURE);
-	}
 	spvc_resources resources;
 	const spvc_reflected_resource *scenes;
 	size_t scene_count;
@@ -152,7 +143,7 @@ static bool contains(const std::string &source, const char *text)
 
 int main(int argc, char **argv)
 {
-	if (argc != 15)
+	if (argc != 16)
 		return EXIT_FAILURE;
 	auto spirv = read_file(argv[1]);
 	auto multiway_phi = read_file(argv[2]);
@@ -168,11 +159,15 @@ int main(int argc, char **argv)
 	auto native_array_return_noargs = read_file(argv[12]);
 	auto multi_entry = read_file(argv[13]);
 	auto multidimensional_resource = read_file(argv[14]);
+	auto active_builtin_untyped_load = read_file(argv[15]);
 	if (spirv.empty() || multiway_phi.empty() || array_return.empty() || fixed_array.empty() ||
 	    multidimensional_array.empty() || loop_phi.empty() || array_loop_phi.empty() || phi_copy_swap.empty() ||
 	    phi_extract_snapshot.empty() || composite_insert.empty() || copy_logical.empty() ||
-	    native_array_return_noargs.empty() || multi_entry.empty() || multidimensional_resource.empty())
+	    native_array_return_noargs.empty() || multi_entry.empty() || multidimensional_resource.empty() ||
+	    active_builtin_untyped_load.empty())
 		return EXIT_FAILURE;
+	SPIRV_CROSS_NAMESPACE::Compiler active_builtin_compiler(active_builtin_untyped_load);
+	active_builtin_compiler.update_active_builtins();
 	auto constant = compile(spirv, false, false, 2, false, false, nullptr, SPVC_MAKE_MSL_VERSION(2, 4, 0));
 	auto device = compile(spirv, true, false, 2);
 	auto discrete = compile(spirv, false, true, 2);
@@ -194,7 +189,20 @@ int main(int argc, char **argv)
 	auto inserted = compile(composite_insert, false, false, 0);
 	auto copied = compile(copy_logical, false, false, 0);
 	auto native_return = compile(native_array_return_noargs, false, false, 0, false, false, nullptr,
-	                             SPVC_MAKE_MSL_VERSION(3, 1, 0), true, nullptr, true);
+	                             SPVC_MAKE_MSL_VERSION(3, 1, 0), true);
+	SPIRV_CROSS_NAMESPACE::CompilerMSL address_table_compiler(native_array_return_noargs);
+	auto address_table_options = address_table_compiler.get_msl_options();
+	address_table_options.set_msl_version(3, 1);
+	address_table_options.argument_buffers = true;
+	address_table_options.force_active_argument_buffer_resources = true;
+	address_table_options.force_native_arrays = true;
+	address_table_compiler.set_msl_options(address_table_options);
+	address_table_compiler.compile();
+	if (!address_table_compiler.needs_acceleration_structure_address_table())
+	{
+		fprintf(stderr, "Missing acceleration-structure address-table requirement\n");
+		return EXIT_FAILURE;
+	}
 	auto plain_entry =
 	    compile(multi_entry, false, false, 0, false, false, nullptr, SPVC_MAKE_MSL_VERSION(2, 3, 0), false, "plain");
 	compile(multi_entry, false, false, 0, false, false, "Ray queries require MSL 2.4 or later",
@@ -203,6 +211,47 @@ int main(int argc, char **argv)
 	        SPVC_MAKE_MSL_VERSION(2, 4, 0), false, "triangle_positions");
 	auto triangle_positions = compile(multi_entry, false, false, 0, false, false, nullptr,
 	                                  SPVC_MAKE_MSL_VERSION(3, 0, 0), false, "triangle_positions");
+	auto compile_pipeline = [&multi_entry](const char *entry, spv::ExecutionModel execution_model) {
+		SPIRV_CROSS_NAMESPACE::CompilerMSL compiler(multi_entry);
+		compiler.set_entry_point(entry, execution_model);
+		auto options = compiler.get_msl_options();
+		options.set_msl_version(3, 0);
+		options.enable_ray_tracing_pipeline_emulation = true;
+		compiler.set_msl_options(options);
+		return compiler.compile();
+	};
+	auto has_position_fetch_abi = [](const std::string &source) {
+		return contains(source, "struct spvRayTrianglePositions") &&
+		       contains(source, "float3 hitTriangleVertexPositions[3]") &&
+		       contains(source, ".get_candidate_primitive_data()") &&
+		       contains(source, "spvRayPipelineQuery");
+	};
+	auto whole_block = compile_pipeline("whole_block", spv::ExecutionModelAnyHitKHR);
+	auto copied_member = compile_pipeline("copied_member", spv::ExecutionModelAnyHitKHR);
+	if (!has_position_fetch_abi(whole_block) || !has_position_fetch_abi(copied_member))
+	{
+		fprintf(stderr, "Missing whole-block position-fetch ABI\n");
+		return EXIT_FAILURE;
+	}
+	const char *motion_error = "SPV_NV_ray_tracing_motion_blur is not supported by Metal ray tracing";
+	auto rejects_motion = [&](const char *entry, spv::ExecutionModel execution_model) {
+		try
+		{
+			compile_pipeline(entry, execution_model);
+			return false;
+		}
+		catch (const SPIRV_CROSS_NAMESPACE::CompilerError &error)
+		{
+			return strstr(error.what(), motion_error) != nullptr;
+		}
+	};
+	if (!rejects_motion("motion", spv::ExecutionModelRayGenerationKHR) ||
+	    !rejects_motion("legacy_motion", spv::ExecutionModelRayGenerationKHR) ||
+	    !rejects_motion("current_time", spv::ExecutionModelMissKHR))
+	{
+		fprintf(stderr, "Missing motion-blur rejection\n");
+		return EXIT_FAILURE;
+	}
 	const char *unsupported_ray_queries[][2] = {
 		{ "cluster_id", "OpRayQueryGetClusterIdNV" },
 		{ "sphere_position", "OpRayQueryGetIntersectionSpherePositionNV" },
@@ -287,7 +336,7 @@ int main(int argc, char **argv)
 	if (!contains(native_return,
 	              "(&spvReturnValue)[2], device const ulong2* spvAccelerationStructureAddressTable, thread "
 	              "spvUnsafeArray<device const uint2*, 2>& spvRayMetadataReturn)") ||
-	    !contains(native_return, "device const ulong2* spvAccelerationStructureAddressTable [[buffer(11)]]") ||
+	    !contains(native_return, "device const ulong2* spvAccelerationStructureAddressTable [[buffer(12)]]") ||
 	    !contains(native_return, ", spvAccelerationStructureAddressTable, spvRayMetadata_") ||
 	    !contains(native_return, "spvArrayCopyFromStackToStack(spvReturnValue") ||
 	    !contains(native_return, "spvRayMetadataIndex_Return_"))

@@ -4555,23 +4555,30 @@ void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltI
 	}
 }
 
+uint32_t Compiler::ActiveBuiltinHandler::resolve_copy_object(uint32_t id) const
+{
+	auto copy = copy_objects.find(id);
+	while (copy != end(copy_objects))
+	{
+		id = copy->second;
+		copy = copy_objects.find(id);
+	}
+	return id;
+}
+
 void Compiler::ActiveBuiltinHandler::add_if_builtin(uint32_t id, bool allow_blocks)
 {
-	// Only handle plain variables here.
-	// Builtins which are part of a block are handled in AccessChain.
-	// If allow_blocks is used however, this is to handle initializers of blocks,
-	// which implies that all members are written to.
-
+	id = resolve_copy_object(id);
 	auto *var = compiler.maybe_get<SPIRVariable>(id);
 	auto *m = compiler.ir.find_meta(id);
-	if (var && m)
+	if (var)
 	{
 		auto &type = compiler.get<SPIRType>(var->basetype);
-		auto &decorations = m->decoration;
 		auto &flags = type.storage == StorageClassInput ?
 		              compiler.active_input_builtins : compiler.active_output_builtins;
-		if (decorations.builtin)
+		if (m && m->decoration.builtin)
 		{
+			auto &decorations = m->decoration;
 			flags.set(decorations.builtin_type);
 			handle_builtin(type, decorations.builtin_type, decorations.decoration_flags);
 		}
@@ -4622,12 +4629,20 @@ bool Compiler::ActiveBuiltinHandler::handle(Op opcode, const uint32_t *args, uin
 		add_if_builtin(args[1]);
 		break;
 
-	case OpCopyObject:
 	case OpLoad:
+		if (length < 3)
+			return false;
+
+		add_if_builtin_or_block(args[2]);
+		break;
+
+	case OpCopyObject:
 	case OpCooperativeMatrixLoadKHR:
 		if (length < 3)
 			return false;
 
+		if (opcode == OpCopyObject)
+			copy_objects[args[1]] = args[2];
 		add_if_builtin(args[2]);
 		break;
 
@@ -4672,12 +4687,13 @@ bool Compiler::ActiveBuiltinHandler::handle(Op opcode, const uint32_t *args, uin
 
 		// Only consider global variables, cannot consider variables in functions yet, or other
 		// access chains as they have not been created yet.
-		auto *var = compiler.maybe_get<SPIRVariable>(args[2]);
+		uint32_t var_id = resolve_copy_object(args[2]);
+		auto *var = compiler.maybe_get<SPIRVariable>(var_id);
 		if (!var)
 			break;
 
 		// Required if we access chain into builtins like gl_GlobalInvocationID.
-		add_if_builtin(args[2]);
+		add_if_builtin(var_id);
 
 		// Start traversing type hierarchy at the proper non-pointer types.
 		auto *type = &compiler.get_variable_data_type(*var);

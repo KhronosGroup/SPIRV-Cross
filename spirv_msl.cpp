@@ -2063,6 +2063,8 @@ void CompilerMSL::preprocess_op_codes()
 	    { uses_shader_record_buffer = uses_shader_record_buffer || var.storage == StorageClassShaderRecordBufferKHR; });
 	bool uses_hit_triangle_vertex_positions = active_input_builtins.get(BuiltInHitTriangleVertexPositionsKHR);
 	uses_ray_position_fetch = uses_ray_position_fetch || uses_hit_triangle_vertex_positions;
+	if (active_input_builtins.get(BuiltInCurrentRayTimeNV))
+		SPIRV_CROSS_THROW("SPV_NV_ray_tracing_motion_blur is not supported by Metal ray tracing.");
 	if (uses_hit_triangle_vertex_positions && get_execution_model() != ExecutionModelAnyHitKHR &&
 	    get_execution_model() != ExecutionModelClosestHitKHR)
 		SPIRV_CROSS_THROW("HitTriangleVertexPositionsKHR is only supported in any-hit and closest-hit shaders.");
@@ -21555,6 +21557,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpTraceRayKHR:
 		self.uses_trace_ray = true;
 		break;
+
+	case OpTraceMotionNV:
+	case OpTraceRayMotionNV:
+		SPIRV_CROSS_THROW("SPV_NV_ray_tracing_motion_blur is not supported by Metal ray tracing.");
 
 	case OpExecuteCallableKHR:
 		self.uses_execute_callable = true;
