@@ -6441,13 +6441,14 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T, int LCols, int LRows, int RCols, int RRows>");
 			statement("[[clang::optnone]] matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)");
 			begin_scope();
+			statement("static_assert(LCols == RRows, \"column-row configuration mismatch\");");
 			statement("matrix<T, RCols, LRows> res;");
 			statement("for (uint i = 0; i < RCols; i++)");
 			begin_scope();
-			statement("vec<T, RCols> tmp(0);");
+			statement("vec<T, LRows> tmp(0);");
 			statement("for (uint j = 0; j < LCols; j++)");
 			begin_scope();
-			statement("tmp = fma(vec<T, RCols>(r[i][j]), l[j], tmp);");
+			statement("tmp = fma(vec<T, LRows>(r[i][j]), l[j], tmp);");
 			end_scope();
 			statement("res[i] = tmp;");
 			end_scope();
