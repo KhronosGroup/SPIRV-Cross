@@ -1610,7 +1610,9 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 			auto &undef = id.get<SPIRUndef>();
 			auto &type = this->get<SPIRType>(undef.basetype);
 			// OpUndef can be void for some reason ...
-			if (type.basetype == SPIRType::Void)
+			// Apparently also block types, but we don't declare those as normal types,
+			// so skip those. It's only used in some esoteric debug instructions in DXC.
+			if (type.basetype == SPIRType::Void || type_is_top_level_block(type))
 				return;
 
 			string initializer;
