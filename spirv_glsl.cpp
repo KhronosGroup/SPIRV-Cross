@@ -13002,6 +13002,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (forward && length >= 4 && (ops[3] & MemoryAccessVolatileMask) != 0)
 			forward = false;
 
+		// If trying to load raw BDA pointers, we may not be able to rely on aliasing rules, especially
+		// if that pointer came from bitcasts or similar.
+		// We won't be able to tie the loaded expression to a flushable memory declaration,
+		// so have to block forwarding early.
+		// If the BDA expression is loaded from a memory declaration, the memory declaration decides.
+		if (forward && expression_type(ptr).storage == StorageClassPhysicalStorageBuffer &&
+			!maybe_get_backing_variable(ptr) &&
+			!maybe_get_backing_buffer_pointer(ptr))
+		{
+			forward = false;
+		}
+
 		// If loading a non-native row-major matrix, mark the expression as need_transpose.
 		bool need_transpose = false;
 		bool old_need_transpose = false;
