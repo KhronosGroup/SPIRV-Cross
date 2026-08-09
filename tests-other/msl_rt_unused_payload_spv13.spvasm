@@ -1,0 +1,16 @@
+OpCapability RayTracingKHR
+OpExtension "SPV_KHR_ray_tracing"
+OpMemoryModel Logical GLSL450
+OpEntryPoint AnyHitKHR %main "main"
+OpName %Payload "Payload"
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v4float = OpTypeVector %float 4
+%Payload = OpTypeStruct %v4float
+%ptr_payload = OpTypePointer IncomingRayPayloadKHR %Payload
+%payload = OpVariable %ptr_payload IncomingRayPayloadKHR
+%main = OpFunction %void None %fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd

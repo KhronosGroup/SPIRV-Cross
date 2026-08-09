@@ -783,6 +783,18 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_FORCE_FRAGMENT_WITH_SIDE_EFFECTS_EXECUTION:
 		options->msl.force_fragment_with_side_effects_execution = value != 0;
 		break;
+	case SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_DESCRIPTOR_AS_ADDRESS:
+		options->msl.acceleration_structure_descriptor_as_address = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE:
+		options->msl.enable_ray_tracing_pipeline = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ANY_HIT_IFB:
+		options->msl.ray_tracing_any_hit_ifb = value != 0;
+		break;
+	case SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX:
+		options->msl.acceleration_structure_address_table_buffer_index = value;
+		break;
 #endif
 
 	default:
@@ -1179,6 +1191,22 @@ spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler)
 spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler)
 {
 	return spvc_compiler_msl_needs_swizzle_buffer(compiler);
+}
+
+spvc_bool spvc_compiler_msl_needs_acceleration_structure_address_table(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_FALSE;
+	}
+	return static_cast<CompilerMSL *>(compiler->compiler.get())->needs_acceleration_structure_address_table() ?
+	           SPVC_TRUE : SPVC_FALSE;
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_FALSE;
+#endif
 }
 
 spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler)

@@ -40,7 +40,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 68
+#define SPVC_C_API_VERSION_MINOR 69
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -754,6 +754,10 @@ typedef enum spvc_compiler_option
 	SPVC_COMPILER_OPTION_MSL_ENABLE_POINT_SIZE_DEFAULT = 93 | SPVC_COMPILER_OPTION_MSL_BIT,
 
 	SPVC_COMPILER_OPTION_HLSL_USER_SEMANTIC = 94 | SPVC_COMPILER_OPTION_HLSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_DESCRIPTOR_AS_ADDRESS = 95 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE = 96 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ANY_HIT_IFB = 97 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX = 98 | SPVC_COMPILER_OPTION_MSL_BIT,
 
 	SPVC_COMPILER_OPTION_INT_MAX = 0x7fffffff
 } spvc_compiler_option;
@@ -855,6 +859,7 @@ SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_rasterization_disabled(spvc_compi
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler);
+SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_acceleration_structure_address_table(spvc_compiler compiler);
 
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_patch_output_buffer(spvc_compiler compiler);
@@ -878,7 +883,6 @@ SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_output_2(spvc_compiler 
                                                                   const spvc_msl_shader_interface_var_2 *output);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_discrete_descriptor_set(spvc_compiler compiler, unsigned desc_set);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_set_argument_buffer_device_address_space(spvc_compiler compiler, unsigned desc_set, spvc_bool device_address);
-
 /* Obsolete, use is_shader_input_used. */
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_vertex_attribute_used(spvc_compiler compiler, unsigned location);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_shader_input_used(spvc_compiler compiler, unsigned location);

@@ -5267,7 +5267,8 @@ bool Compiler::is_depth_image(const SPIRType &type, uint32_t id) const
 bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
-	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor);
+	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor ||
+	                         type.basetype == SPIRType::RayQuery);
 }
 
 // Make these member functions so we can easily break on any force_recompile events.

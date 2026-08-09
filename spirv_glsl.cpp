@@ -11209,17 +11209,30 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				access_meshlet_position_y = true;
 			}
 
-			if (get<SPIRType>(type->parent_type).op == OpTypeStruct &&
-			    has_decoration(type->parent_type, DecorationArrayStride))
+			const SPIRType *layout_array = type;
+			if (physical_type)
 			{
-				uint32_t native_stride = get_decoration(type->parent_type, DecorationArrayStride);
-				uint32_t array_stride = get_decoration(type_id, DecorationArrayStride);
+				auto &candidate = get<SPIRType>(physical_type);
+				if (!candidate.array.empty())
+					layout_array = &candidate;
+			}
+			if (get<SPIRType>(layout_array->parent_type).op == OpTypeStruct &&
+			    has_decoration(layout_array->parent_type, DecorationArrayStride))
+			{
+				uint32_t native_stride = get_decoration(layout_array->parent_type, DecorationArrayStride);
+				uint32_t array_stride = get_decoration(layout_array->self, DecorationArrayStride);
 				if (native_stride != array_stride)
 					expr += ".data";
 			}
 
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
+			if (physical_type)
+			{
+				auto &physical_array = get<SPIRType>(physical_type);
+				if (!physical_array.array.empty() && physical_array.basetype == SPIRType::Struct)
+					physical_type = physical_array.parent_type;
+			}
 
 			// If the physical type has an unnatural vecsize,
 			// we must assume it's a faked struct where the .data member
@@ -11237,6 +11250,14 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
 		else if (type->basetype == SPIRType::Struct)
 		{
+			const SPIRType *physical_struct = nullptr;
+			if (physical_type)
+			{
+				auto &candidate = get<SPIRType>(physical_type);
+				if (candidate.basetype == SPIRType::Struct && candidate.member_types.size() == type->member_types.size())
+					physical_struct = &candidate;
+			}
+
 			if (!is_literal)
 				index = evaluate_constant_u32(index);
 
@@ -11296,9 +11317,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (has_member_decoration(type->self, index, DecorationRelaxedPrecision))
 				relaxed_precision = true;
 
-			is_packed = member_is_packed_physical_type(*type, index);
-			if (member_is_remapped_physical_type(*type, index))
-				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
+			auto &layout_type = physical_struct ? *physical_struct : *type;
+			is_packed = member_is_packed_physical_type(layout_type, index);
+			if (member_is_remapped_physical_type(layout_type, index))
+				physical_type = get_extended_member_decoration(layout_type.self, index,
+				                                               SPIRVCrossDecorationPhysicalTypeID);
+			else if (physical_struct && physical_struct->member_types[index] != type->member_types[index])
+				physical_type = physical_struct->member_types[index];
 			else
 				physical_type = 0;
 
@@ -19501,11 +19526,11 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	case SPIRBlock::IgnoreIntersection:
-		statement("ignoreIntersectionEXT;");
+		emit_ignore_intersection();
 		break;
 
 	case SPIRBlock::TerminateRay:
-		statement("terminateRayEXT;");
+		emit_terminate_ray();
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
@@ -21060,4 +21085,3 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 
 	return "descriptor_heap";
 }
-
