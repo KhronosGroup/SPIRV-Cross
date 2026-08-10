@@ -2745,7 +2745,6 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	            has_decoration(type->self, DecorationBufferBlock);
 
 	bool shared = storage == StorageClassWorkgroup;
-	assert(!(shared && !var));
 	if (shared)
 		require_extension_internal("GL_EXT_shared_memory_block");
 
