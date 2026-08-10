@@ -2763,8 +2763,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 		buffer_name += heap_meta_to_prefix(*heap_meta);
 	}
 
-	auto &block_namespace = ssbo ? 
-				block_ssbo_names : (shared ? block_shared_mem_names : block_ubo_names);
+	auto &block_namespace = ssbo ? block_ssbo_names : (shared ? block_shared_mem_names : block_ubo_names);
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
@@ -2814,9 +2813,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 			", ", packing_standard, ") ");
 	}
 
-	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
-	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", (ssbo ? "buffer " : (shared ? "shared " : "uniform ")),
-	          buffer_name);
+	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
+	          is_readonly ? "readonly " : "", (ssbo ? "buffer " : (shared ? "shared " : "uniform ")), buffer_name);
 
 	begin_scope();
 
@@ -4144,7 +4142,7 @@ void CompilerGLSL::emit_resources()
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
 		                        type.storage == StorageClassShaderRecordBufferKHR ||
-								type.storage == StorageClassWorkgroup;
+		                        type.storage == StorageClassWorkgroup;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
