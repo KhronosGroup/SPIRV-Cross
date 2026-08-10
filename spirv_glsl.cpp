@@ -732,10 +732,6 @@ void CompilerGLSL::find_static_extensions()
 	for (auto &ext : ir.declared_extensions)
 		if (ext == "SPV_NV_fragment_shader_barycentric")
 			barycentric_is_nv = true;
-
-	if (uses_workgroup_memory_explicit_layout) {
-		require_extension_internal("GL_EXT_shared_memory_block");
-	}
 }
 
 void CompilerGLSL::require_polyfill(Polyfill polyfill, bool relaxed)
@@ -2351,7 +2347,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
 	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
 	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
-	bool shared_block = var.storage == spv::StorageClassWorkgroup && uses_workgroup_memory_explicit_layout;
+	bool shared_block = var.storage == spv::StorageClassWorkgroup && typeflags.get(DecorationBlock);
 
 	// GL 3.0/GLSL 1.30 is not considered legacy, but it doesn't have UBOs ...
 	bool can_use_buffer_blocks = (options.es && options.version >= 300) || (!options.es && options.version >= 140);
@@ -2747,8 +2743,11 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
+
 	bool shared = storage == StorageClassWorkgroup;
 	assert(!(shared && !var));
+	if (shared)
+		require_extension_internal("GL_EXT_shared_memory_block");
 
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
@@ -4145,7 +4144,7 @@ void CompilerGLSL::emit_resources()
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
 		                        type.storage == StorageClassShaderRecordBufferKHR ||
-								(type.storage == StorageClassWorkgroup && uses_workgroup_memory_explicit_layout);
+								type.storage == StorageClassWorkgroup;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 

@@ -88,7 +88,8 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool buffer_reference = type.storage == StorageClassPhysicalStorageBuffer;
-	bool shared_block = type.storage == spv::StorageClassWorkgroup && uses_workgroup_memory_explicit_layout;
+	bool shared_block = type.storage == spv::StorageClassWorkgroup &&
+				has_decoration(type.self, Decoration::DecorationBlock);
 
 	bool is_restrict;
 	if (ssbo)
@@ -1293,10 +1294,10 @@ void Compiler::parse_fixup()
 		else if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			check_is_shared_memory_block(var);
+			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage == StorageClassPrivate ||
-				(var.storage == StorageClassWorkgroup && !uses_workgroup_memory_explicit_layout) ||
+				(var.storage == StorageClassWorkgroup && !has_decoration(type.self, spv::DecorationBlock)) ||
 			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
 			    var.storage == StorageClassOutput)
 			{
@@ -5275,21 +5276,6 @@ bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
 	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor);
-}
-
-bool Compiler::check_is_shared_memory_block(const SPIRVariable &var)
-{
-	if (var.storage != StorageClassWorkgroup)
-		return false;
-	auto &type = get<SPIRType>(var.basetype);
-	auto *type_meta = ir.find_meta(type.self);
-	if (type_meta && type_meta->decoration.decoration_flags.get(DecorationBlock)) {
-		uses_workgroup_memory_explicit_layout = true;
-		return true;
-	}
-	// If one workgroup variable is a block, then all must be
-	assert(!uses_workgroup_memory_explicit_layout);
-	return false;
 }
 
 // Make these member functions so we can easily break on any force_recompile events.
