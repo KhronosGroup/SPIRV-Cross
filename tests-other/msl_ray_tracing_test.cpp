@@ -22,7 +22,9 @@ static std::vector<uint32_t> read_spirv(const char *path)
 static std::string compile(const char *path, const char *entry = nullptr, bool native_arrays = false,
 	                       uint32_t msl_major = 4, uint32_t msl_minor = 0,
 	                       bool force_ifb = false, bool procedural_ifb = false,
-	                       const char *runtime_abi = "// Test runtime ABI.", bool constexpr_sampler = false)
+	                       const char *runtime_abi = "// Test runtime ABI.", bool constexpr_sampler = false,
+	                       uint32_t acceleration_structure_count = 0, bool argument_buffers = true,
+	                       bool device_argument_buffer = true)
 {
 	CompilerMSL compiler(read_spirv(path));
 	if (entry)
@@ -33,7 +35,7 @@ static std::string compile(const char *path, const char *entry = nullptr, bool n
 	}
 	auto options = compiler.get_msl_options();
 	options.msl_version = CompilerMSL::Options::make_msl_version(msl_major, msl_minor);
-	options.argument_buffers = true;
+	options.argument_buffers = argument_buffers;
 	options.acceleration_structure_descriptor_as_address = true;
 	options.ray_tracing_pipeline = runtime_abi;
 	options.ray_tracing_max_hit_attribute_size = 32;
@@ -42,12 +44,25 @@ static std::string compile(const char *path, const char *entry = nullptr, bool n
 	options.ray_tracing_intersection_ifb = procedural_ifb;
 	options.force_native_arrays = native_arrays;
 	compiler.set_msl_options(options);
+	if (acceleration_structure_count)
+	{
+		MSLResourceBinding binding;
+		binding.stage = spv::ExecutionModelGLCompute;
+		binding.basetype = SPIRType::AccelerationStructure;
+		binding.desc_set = 3;
+		binding.binding = 5;
+		binding.count = acceleration_structure_count;
+		compiler.add_msl_resource_binding(binding);
+	}
 	if (constexpr_sampler)
 		compiler.remap_constexpr_sampler_by_binding(8, 0, MSLConstexprSampler{});
 	auto model = compiler.get_execution_model();
 	if (model >= spv::ExecutionModelRayGenerationKHR && model <= spv::ExecutionModelCallableKHR)
 		compiler.add_header_line(runtime_abi ? runtime_abi : "");
-	compiler.set_argument_buffer_device_address_space(0, true);
+	if (device_argument_buffer)
+		compiler.set_argument_buffer_device_address_space(3, true);
+	if (device_argument_buffer)
+		compiler.set_argument_buffer_device_address_space(0, true);
 	compiler.set_argument_buffer_device_address_space(8, true);
 	return compiler.compile();
 }
@@ -115,9 +130,28 @@ int main(int argc, char **argv)
 		           { "thread & reinterpret_cast" }))
 			return 1;
 
-		auto ray_query = compile(argv[9]);
-		if (!check(ray_query, argv[9], { "spvRayQueryMetadata" },
-		           { "struct spvRayQuery {", "const device const", "thread device" }))
+		auto ray_query = compile(argv[9], nullptr, false, 4, 0, false, false,
+		                         "// Test runtime ABI.", false, 2);
+		if (!check(ray_query, argv[9],
+		           { "spvRayQueryMetadata", "template<typename spvRTASArray", "getScene(",
+		             " = getScene(", "trace(spvDescriptorSet3.scene" },
+		           { "struct spvRayQuery {", "const device const", "thread device",
+		             "spvUnsafeArray<device const ulong*, 1>" }))
+			return 1;
+		auto ray_query_compat = compile(argv[9], nullptr, false, 3, 0, false, false,
+		                                "// Test runtime ABI.", false, 2);
+		if (!check(ray_query_compat, argv[9], { "template<typename spvRTASArray", "trace(spvDescriptorSet3.scene" },
+		           { "spvUnsafeArray<device const ulong*, 1>" }))
+			return 1;
+		auto ray_query_constant = compile(argv[9], nullptr, false, 4, 0, false, false,
+		                                  "// Test runtime ABI.", false, 2, true, false);
+		if (!check(ray_query_constant, argv[9], { "template<typename spvRTASArray", "trace(spvDescriptorSet3.scene" },
+		           { "spvUnsafeArray<device const ulong*, 1>" }))
+			return 1;
+		auto ray_query_discrete = compile(argv[9], nullptr, false, 4, 0, false, false,
+		                                  "// Test runtime ABI.", false, 0, false);
+		if (!check(ray_query_discrete, argv[9], { "template<typename spvRTASArray", "trace(scene" },
+		           { "spvUnsafeArray<device const ulong*, 1>" }))
 			return 1;
 
 		auto push_constant = compile(argv[10]);

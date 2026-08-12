@@ -4,8 +4,11 @@ OpExtension "SPV_KHR_ray_query"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %main "main" %scene %query %outputData
 OpExecutionMode %main LocalSize 1 1 1
-OpDecorate %scene DescriptorSet 0
-OpDecorate %scene Binding 0
+OpName %scene "scene"
+OpName %trace "trace"
+OpName %getScene "getScene"
+OpDecorate %scene DescriptorSet 3
+OpDecorate %scene Binding 5
 OpDecorate %Output Block
 OpMemberDecorate %Output 0 Offset 0
 OpDecorate %outputData DescriptorSet 1
@@ -13,12 +16,16 @@ OpDecorate %outputData Binding 0
 %void = OpTypeVoid
 %void_fn = OpTypeFunction %void
 %uint = OpTypeInt 32 0
-%uint_fn = OpTypeFunction %uint
 %uint_0 = OpConstant %uint 0
+%uint_1 = OpConstant %uint 1
 %uint_255 = OpConstant %uint 255
 %as = OpTypeAccelerationStructureKHR
+%as_array = OpTypeArray %as %uint_1
+%ptr_uc_as_array = OpTypePointer UniformConstant %as_array
+%scene = OpVariable %ptr_uc_as_array UniformConstant
 %ptr_uc_as = OpTypePointer UniformConstant %as
-%scene = OpVariable %ptr_uc_as UniformConstant
+%trace_fn = OpTypeFunction %uint %ptr_uc_as_array
+%get_scene_fn = OpTypeFunction %as %ptr_uc_as_array %uint
 %query_t = OpTypeRayQueryKHR
 %ptr_private_query = OpTypePointer Private %query_t
 %query = OpVariable %ptr_private_query Private
@@ -37,13 +44,14 @@ OpDecorate %outputData Binding 0
 %main = OpFunction %void None %void_fn
 %main_entry = OpLabel
 %out_ptr = OpAccessChain %ptr_ssbo_uint %outputData %uint_0
-%value = OpFunctionCall %uint %trace
+%value = OpFunctionCall %uint %trace %scene
 OpStore %out_ptr %value
 OpReturn
 OpFunctionEnd
-%trace = OpFunction %uint None %uint_fn
+%trace = OpFunction %uint None %trace_fn
+%scene_param = OpFunctionParameter %ptr_uc_as_array
 %trace_entry = OpLabel
-%scene_v = OpLoad %as %scene
+%scene_v = OpFunctionCall %as %getScene %scene_param %uint_0
 OpRayQueryInitializeKHR %query %scene_v %uint_0 %uint_255 %zero %float_0 %dir %float_100
 %proceeded = OpRayQueryProceedKHR %bool %query
 OpSelectionMerge %miss None
@@ -53,4 +61,12 @@ OpBranchConditional %proceeded %hit %miss
 OpReturnValue %sbt
 %miss = OpLabel
 OpReturnValue %uint_0
+OpFunctionEnd
+%getScene = OpFunction %as None %get_scene_fn
+%scene_array = OpFunctionParameter %ptr_uc_as_array
+%scene_index = OpFunctionParameter %uint
+%get_scene_entry = OpLabel
+%scene_ptr = OpAccessChain %ptr_uc_as %scene_array %scene_index
+%loaded_scene = OpLoad %as %scene_ptr
+OpReturnValue %loaded_scene
 OpFunctionEnd

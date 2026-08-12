@@ -12370,7 +12370,26 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	// Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib.
 	if (!processing_entry_point)
+	{
+		string template_decl;
+		for (auto &arg : func.arguments)
+		{
+			auto &var = get<SPIRVariable>(arg.id);
+			auto &type = get_variable_data_type(var);
+			// The descriptor binding can override the SPIR-V array size. Let Metal preserve the caller's native type.
+			if (type.basetype == SPIRType::AccelerationStructure &&
+			    get<SPIRType>(arg.type).storage == StorageClassUniformConstant &&
+			    msl_options.acceleration_structure_descriptor_as_address && is_array(type) &&
+			    !is_var_runtime_size_array(var))
+			{
+				template_decl += template_decl.empty() ? "template<typename " : ", typename ";
+				template_decl += join("spvRTASArray", arg.id);
+			}
+		}
+		if (!template_decl.empty())
+			statement(template_decl, ">");
 		statement(force_inline);
+	}
 
 	auto &type = get<SPIRType>(func.return_type);
 	if (is_ray_tracing_ifb_stage() && incoming_ray_payload_type.empty())
@@ -16523,6 +16542,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
 	bool type_is_tlas = type.basetype == SPIRType::AccelerationStructure;
+	bool is_tlas_address_array = type_is_tlas && type_storage == StorageClassUniformConstant &&
+	                             msl_options.acceleration_structure_descriptor_as_address && is_array(type) &&
+	                             !is_var_runtime_size_array(var);
 
 	// For opaque types we handle const later due to descriptor address spaces.
 	const char *cv_qualifier = (constref && !type_is_image && !(type_is_tlas && msl_options.acceleration_structure_descriptor_as_address)) ? "const " : "";
@@ -16593,6 +16615,11 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// Mark the variable so that we can handle passing it to another function.
 		set_extended_decoration(arg.id, SPIRVCrossDecorationDynamicImageSampler);
 	}
+	else if (is_tlas_address_array)
+	{
+		decl = join("spvRTASArray", arg.id);
+		address_space.clear();
+	}
 	else
 	{
 		// The type is a pointer type we need to emit cv_qualifier late.
@@ -16659,6 +16686,11 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += to_expression(name_id);
 			}
 		}
+	}
+	else if (is_tlas_address_array)
+	{
+		decl += " ";
+		decl += to_expression(name_id);
 	}
 	else if (is_array(type) && !type_is_image)
 	{
