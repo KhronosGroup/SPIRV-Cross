@@ -1,0 +1,14 @@
+OpCapability Shader
+OpCapability RayTracingKHR
+OpCapability RayTracingPositionFetchKHR
+OpExtension "SPV_KHR_ray_tracing"
+OpExtension "SPV_KHR_ray_tracing_position_fetch"
+OpMemoryModel Logical GLSL450
+OpEntryPoint RayGenerationKHR %main "main"
+
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%main = OpFunction %void None %function
+%entry = OpLabel
+OpReturn
+OpFunctionEnd

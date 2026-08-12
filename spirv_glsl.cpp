@@ -11209,30 +11209,17 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				access_meshlet_position_y = true;
 			}
 
-			const SPIRType *layout_array = type;
-			if (physical_type)
+			if (get<SPIRType>(type->parent_type).op == OpTypeStruct &&
+			    has_decoration(type->parent_type, DecorationArrayStride))
 			{
-				auto &candidate = get<SPIRType>(physical_type);
-				if (!candidate.array.empty())
-					layout_array = &candidate;
-			}
-			if (get<SPIRType>(layout_array->parent_type).op == OpTypeStruct &&
-			    has_decoration(layout_array->parent_type, DecorationArrayStride))
-			{
-				uint32_t native_stride = get_decoration(layout_array->parent_type, DecorationArrayStride);
-				uint32_t array_stride = get_decoration(layout_array->self, DecorationArrayStride);
+				uint32_t native_stride = get_decoration(type->parent_type, DecorationArrayStride);
+				uint32_t array_stride = get_decoration(type_id, DecorationArrayStride);
 				if (native_stride != array_stride)
 					expr += ".data";
 			}
 
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
-			if (physical_type)
-			{
-				auto &physical_array = get<SPIRType>(physical_type);
-				if (!physical_array.array.empty() && physical_array.basetype == SPIRType::Struct)
-					physical_type = physical_array.parent_type;
-			}
 
 			// If the physical type has an unnatural vecsize,
 			// we must assume it's a faked struct where the .data member
@@ -11250,14 +11237,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
 		else if (type->basetype == SPIRType::Struct)
 		{
-			const SPIRType *physical_struct = nullptr;
-			if (physical_type)
-			{
-				auto &candidate = get<SPIRType>(physical_type);
-				if (candidate.basetype == SPIRType::Struct && candidate.member_types.size() == type->member_types.size())
-					physical_struct = &candidate;
-			}
-
 			if (!is_literal)
 				index = evaluate_constant_u32(index);
 
@@ -11317,13 +11296,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (has_member_decoration(type->self, index, DecorationRelaxedPrecision))
 				relaxed_precision = true;
 
-			auto &layout_type = physical_struct ? *physical_struct : *type;
-			is_packed = member_is_packed_physical_type(layout_type, index);
-			if (member_is_remapped_physical_type(layout_type, index))
-				physical_type = get_extended_member_decoration(layout_type.self, index,
-				                                               SPIRVCrossDecorationPhysicalTypeID);
-			else if (physical_struct && physical_struct->member_types[index] != type->member_types[index])
-				physical_type = physical_struct->member_types[index];
+			is_packed = member_is_packed_physical_type(*type, index);
+			if (member_is_remapped_physical_type(*type, index))
+				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
 			else
 				physical_type = 0;
 
@@ -13026,6 +13001,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];
 
 		flush_variable_declaration(ptr);
+		auto &type = get<SPIRType>(result_type);
+		if ((has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID) ||
+		     has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked)) &&
+		    (type.basetype == SPIRType::Struct || !type.array.empty()))
+		{
+			emit_uninitialized_temporary_expression(result_type, id);
+			emit_copy_logical_type(id, result_type, ptr, get_pointee_type_id(expression_type_id(ptr)), {});
+			register_read(id, ptr, false);
+			break;
+		}
 
 		// If we're loading from memory that cannot be changed by the shader,
 		// just forward the expression directly to avoid needless temporaries.
@@ -13091,7 +13076,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			expr = to_unpacked_expression(ptr);
 		}
 
-		auto &type = get<SPIRType>(result_type);
 		auto &expr_type = expression_type(ptr);
 
 		// If the expression has more vector components than the result type, insert
@@ -13302,6 +13286,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (var && var->remapped_variable && var->static_expression)
 		{
 			// Skip the write.
+		}
+		else if ((has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypeID) ||
+		          has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypePacked)) &&
+		         (expression_type(ops[1]).basetype == SPIRType::Struct || !expression_type(ops[1]).array.empty()))
+		{
+			flush_variable_declaration(ops[0]);
+			flush_variable_declaration(ops[1]);
+			emit_copy_logical_type(ops[0], get_pointee_type_id(expression_type_id(ops[0])), ops[1],
+			                       expression_type_id(ops[1]), {});
 		}
 		else if (flattened_structs.count(ops[0]))
 		{
@@ -16157,7 +16150,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ");");
 		break;
 	case OpRayQueryProceedKHR:
-		flush_variable_declaration(ops[0]);
+		flush_variable_declaration(ops[2]);
 		emit_op(ops[0], ops[1], join("rayQueryProceedEXT(", to_expression(ops[2]), ")"), false);
 		break;
 	case OpRayQueryTerminateKHR:
@@ -16284,14 +16277,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpConvertUToAccelerationStructureKHR:
 	{
-		require_extension_internal("GL_EXT_ray_tracing");
-
 		bool elide_temporary = should_forward(ops[2]) && forced_temporaries.count(ops[1]) == 0 &&
 		                       !hoisted_temporaries.count(ops[1]);
 
 		if (elide_temporary)
 		{
-			GLSL_UFOP(accelerationStructureEXT);
+			emit_op(ops[0], ops[1],
+			        to_acceleration_structure_expression(ops[2], to_unpacked_expression(ops[2])), true);
+			inherit_expression_dependencies(ops[1], ops[2]);
 		}
 		else
 		{
@@ -16303,7 +16296,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// and cast to RTAS on demand.
 			statement(declare_temporary(expression_type_id(ops[2]), ops[1]), to_unpacked_expression(ops[2]), ";");
 			// Use raw SPIRExpression interface to block all usage tracking.
-			set<SPIRExpression>(ops[1], join("accelerationStructureEXT(", to_name(ops[1]), ")"), ops[0], true);
+			set<SPIRExpression>(ops[1], to_acceleration_structure_expression(ops[2], to_name(ops[1])), ops[0], true);
 		}
 		break;
 	}

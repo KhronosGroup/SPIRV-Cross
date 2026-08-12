@@ -25,7 +25,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #define SPIRV_CROSS_MSL_ACCELERATION_STRUCTURE_DESCRIPTOR_AS_ADDRESS 1
-#define SPIRV_CROSS_MSL_COMPACT_RAY_TRACING_PIPELINE 1
+#define SPIRV_CROSS_MSL_RAY_TRACING_PIPELINE 1 /* Embedder-supplied runtime ABI version. */
 #include "spirv_glsl.hpp"
 #include <map>
 #include <set>
@@ -288,7 +288,7 @@ static const uint32_t kBufferSizeBufferBinding = ~(2u);
 // will start at max(kArgumentBufferBinding) + 1.
 static const uint32_t kArgumentBufferBinding = ~(3u);
 
-static const uint32_t kMaxArgumentBuffers = 9;
+static const uint32_t kMaxArgumentBuffers = 32;
 
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
@@ -349,8 +349,9 @@ public:
 		// MSL 2.0 must also be enabled.
 		bool argument_buffers = false;
 		bool acceleration_structure_descriptor_as_address = false;
-		bool enable_ray_tracing_pipeline = false;
-		bool ray_tracing_any_hit_ifb = false;
+		bool ray_tracing_pipeline = false;
+		uint32_t ray_tracing_max_hit_attribute_size = 0;
+		bool ray_tracing_any_hit_ifb = false, ray_tracing_intersection_ifb = false;
 
 		// Defines Metal argument buffer tier levels.
 		// Uses same values as Metal MTLArgumentBuffersTier enumeration.
@@ -943,9 +944,9 @@ protected:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
-	void emit_ignore_intersection() override;
-	void emit_terminate_ray() override;
-	void emit_ray_return();
+	void emit_ignore_intersection() override { emit_ray_return(1); }
+	void emit_terminate_ray() override { emit_ray_return(2); }
+	void emit_ray_return(uint32_t action = 0);
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
 	void emit_mesh_tasks(SPIRBlock &block) override;
@@ -970,6 +971,7 @@ protected:
 	std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
 	std::string to_zero_initialized_expression(uint32_t type_id) override;
+	std::string to_acceleration_structure_expression(uint32_t source_id, std::string expression) override;
 
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                   bool is_packed, bool row_major) override;
@@ -1005,13 +1007,15 @@ protected:
 	bool is_mesh_shader() const;
 
 	void preprocess_op_codes();
-	std::string ray_query_expression(uint32_t id);
 	std::string ray_query_metadata_expression(uint32_t id);
-	bool ray_query_needs_metadata() const;
-	void emit_ray_tracing_any_hit_ifb_wrapper();
-	std::string ray_tracing_payload_type();
-	uint32_t clone_ray_data_type(uint32_t type_id);
-	bool needs_physical_composite_copy(uint32_t id) const;
+	bool ray_query_needs_metadata() const { return uses_ray_query_flags || (uses_ray_query_sbt && msl_options.acceleration_structure_descriptor_as_address); }
+	bool is_ray_tracing_ifb_stage() const
+	{
+		auto model = get_execution_model();
+		return (model == ExecutionModelAnyHitKHR && msl_options.ray_tracing_any_hit_ifb) ||
+		       ((model == ExecutionModelAnyHitKHR || model == ExecutionModelClosestHitKHR) && msl_options.ray_tracing_intersection_ifb);
+	}
+	uint32_t clone_ray_data_type(uint32_t type_id, bool force = false);
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
 	void mark_packable_structs();
@@ -1021,8 +1025,7 @@ protected:
 	std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
 	                                            std::unordered_set<uint32_t> &global_var_ids,
-	                                            std::unordered_set<uint32_t> &processed_func_ids,
-	                                            bool add_parameters = true);
+	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(StorageClass storage, bool patch = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, StorageClass storage);
 	uint32_t add_meshlet_block(bool per_primitive);
@@ -1108,8 +1111,7 @@ protected:
 	std::string to_buffer_size_expression(uint32_t id);
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
-	bool is_ray_tracing_stage() const;
-	std::string ray_tracing_context_args();
+	bool is_ray_tracing_stage() const { return get_execution_model() >= ExecutionModelRayGenerationKHR && get_execution_model() <= ExecutionModelCallableKHR; }
 	bool is_direct_input_builtin(BuiltIn builtin);
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
@@ -1300,7 +1302,7 @@ protected:
 
 	bool has_sampled_images = false;
 	bool uses_acceleration_structure_address = false, uses_ray_query_sbt = false, uses_ray_query_flags = false;
-	uint32_t incoming_ray_payload_id = 0;
+	std::string incoming_ray_payload_type;
 	std::unordered_map<uint32_t, uint32_t> ray_data_physical_types;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 

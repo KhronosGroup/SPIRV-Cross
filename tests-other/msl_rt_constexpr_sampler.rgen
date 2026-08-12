@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform texture2D tex;
+layout(set = 8, binding = 0) uniform sampler texSampler;
+layout(set = 0, binding = 1, std430) buffer Output { vec4 value; } outputData;
+
+void main()
+{
+	outputData.value = texture(sampler2D(tex, texSampler), vec2(0.5));
+}

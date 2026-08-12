@@ -168,13 +168,6 @@ int main(int argc, char **argv)
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_cpp, &options));
 	SPVC_CHECKED_CALL(spvc_compiler_install_compiler_options(compiler_cpp, options));
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_msl, &options));
-	SPVC_CHECKED_CALL(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_DESCRIPTOR_AS_ADDRESS, 1));
-	SPVC_CHECKED_CALL(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_ENABLE_RAY_TRACING_PIPELINE, 1));
-	SPVC_CHECKED_CALL(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_RAY_TRACING_ANY_HIT_IFB, 1));
-	SPVC_CHECKED_CALL(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_ACCELERATION_STRUCTURE_ADDRESS_TABLE_BUFFER_INDEX, 12));
-	SPVC_CHECKED_CALL(spvc_compiler_add_header_line(compiler_msl, "// C API runtime"));
-	if (spvc_compiler_msl_needs_acceleration_structure_address_table(compiler_msl))
-		return 1;
 	SPVC_CHECKED_CALL(spvc_compiler_install_compiler_options(compiler_msl, options));
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_hlsl, &options));
 	SPVC_CHECKED_CALL(spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL, 50));

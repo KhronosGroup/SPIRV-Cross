@@ -681,7 +681,7 @@ bool Compiler::is_immutable(uint32_t id) const
 		return false;
 }
 
-static inline bool storage_class_is_interface(StorageClass storage)
+static inline bool storage_class_is_interface(StorageClass storage, bool include_ray_tracing = true)
 {
 	switch (storage)
 	{
@@ -693,6 +693,14 @@ static inline bool storage_class_is_interface(StorageClass storage)
 	case StorageClassPushConstant:
 	case StorageClassStorageBuffer:
 		return true;
+
+	case StorageClassRayPayloadKHR:
+	case StorageClassIncomingRayPayloadKHR:
+	case StorageClassHitAttributeKHR:
+	case StorageClassCallableDataKHR:
+	case StorageClassIncomingCallableDataKHR:
+	case StorageClassShaderRecordBufferKHR:
+		return include_ray_tracing;
 
 	default:
 		return false;
@@ -721,7 +729,7 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 		return true;
 	}
 
-	return check_active_interface_variables && storage_class_is_interface(var.storage) &&
+	return check_active_interface_variables && storage_class_is_interface(var.storage, ir.get_spirv_version() >= 0x10400) &&
 	       active_interface_variables.find(var.self) == end(active_interface_variables);
 }
 
@@ -909,6 +917,13 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 			variables.insert(args[1]);
 		break;
 	}
+
+	case OpTraceRayKHR:
+	case OpExecuteCallableKHR:
+		if (length < (opcode == OpTraceRayKHR ? 11u : 2u))
+			return false;
+		variable = args[opcode == OpTraceRayKHR ? 10 : 1];
+		break;
 
 	case OpExtInst:
 	{
@@ -3504,7 +3519,8 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 		for (auto child_id : itr->second)
 			notify_variable_access(child_id, block);
 
-	if (id_is_phi_variable(id))
+	auto *var = compiler.maybe_get<SPIRVariable>(id);
+	if (id_is_phi_variable(id) || (var && compiler.get<SPIRType>(var->basetype).basetype == SPIRType::RayQuery))
 		accessed_variables_to_block[id].insert(block);
 	else if (id_is_potential_temporary(id))
 		accessed_temporaries_to_block[id].insert(block);
@@ -5267,8 +5283,7 @@ bool Compiler::is_depth_image(const SPIRType &type, uint32_t id) const
 bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
-	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor ||
-	                         type.basetype == SPIRType::RayQuery);
+	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor);
 }
 
 // Make these member functions so we can easily break on any force_recompile events.

@@ -1,6 +1,7 @@
 #include "spirv_msl.hpp"
 #include <cstring>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <vector>
@@ -19,8 +20,9 @@ static std::vector<uint32_t> read_spirv(const char *path)
 }
 
 static std::string compile(const char *path, const char *entry = nullptr, bool native_arrays = false,
-                           bool enable_ray_tracing = true, uint32_t msl_major = 4, uint32_t msl_minor = 0,
-                           bool force_ifb = false)
+	                       uint32_t msl_major = 4, uint32_t msl_minor = 0,
+	                       bool force_ifb = false, bool procedural_ifb = false,
+	                       const char *runtime_abi = "// Test runtime ABI.", bool constexpr_sampler = false)
 {
 	CompilerMSL compiler(read_spirv(path));
 	if (entry)
@@ -33,51 +35,65 @@ static std::string compile(const char *path, const char *entry = nullptr, bool n
 	options.msl_version = CompilerMSL::Options::make_msl_version(msl_major, msl_minor);
 	options.argument_buffers = true;
 	options.acceleration_structure_descriptor_as_address = true;
-	options.enable_ray_tracing_pipeline = enable_ray_tracing;
-	options.ray_tracing_any_hit_ifb = force_ifb || compiler.get_execution_model() == spv::ExecutionModelAnyHitKHR;
+	options.ray_tracing_pipeline = runtime_abi;
+	options.ray_tracing_max_hit_attribute_size = 32;
+	options.ray_tracing_any_hit_ifb = !procedural_ifb &&
+	                                  (force_ifb || compiler.get_execution_model() == spv::ExecutionModelAnyHitKHR);
+	options.ray_tracing_intersection_ifb = procedural_ifb;
 	options.force_native_arrays = native_arrays;
 	compiler.set_msl_options(options);
+	if (constexpr_sampler)
+		compiler.remap_constexpr_sampler_by_binding(8, 0, MSLConstexprSampler{});
 	auto model = compiler.get_execution_model();
 	if (model >= spv::ExecutionModelRayGenerationKHR && model <= spv::ExecutionModelCallableKHR)
-		compiler.add_header_line("// Test runtime ABI.");
+		compiler.add_header_line(runtime_abi ? runtime_abi : "");
 	compiler.set_argument_buffer_device_address_space(0, true);
 	compiler.set_argument_buffer_device_address_space(8, true);
 	return compiler.compile();
 }
 
-static bool require(const std::string &source, const char *text, const char *test)
+static bool check(const std::string &source, const char *test, std::initializer_list<const char *> required,
+                  std::initializer_list<const char *> forbidden = {})
 {
-	if (source.find(text) != std::string::npos)
-		return true;
-	std::cerr << test << ": missing " << text << '\n';
-	return false;
-}
-
-static bool forbid(const std::string &source, const char *text, const char *test)
-{
-	if (source.find(text) == std::string::npos)
-		return true;
-	std::cerr << test << ": contains " << text << '\n';
-	return false;
+	for (auto text : required)
+		if (source.find(text) == std::string::npos)
+		{
+			std::cerr << test << ": missing " << text << '\n';
+			return false;
+		}
+	for (auto text : forbidden)
+		if (source.find(text) != std::string::npos)
+		{
+			std::cerr << test << ": contains " << text << '\n';
+			return false;
+		}
+	return true;
 }
 
 int main(int argc, char **argv)
 {
-	if (argc != 22)
+	if (argc != 25)
 		return 1;
+	try
+	{
+		compile(argv[1], nullptr, false, 4, 0, false, false, nullptr);
+		std::cerr << argv[1] << ": missing runtime ABI was accepted\n";
+		return 1;
+	}
+	catch (const CompilerError &)
+	{
+	}
 	const char *expected[] = {
-		"[[visible]]", "spvRayContext.worldRayOrigin", "if (spvRayAction != 0)",
-		"spvReportIntersection(", "spvRayData", "spvExecuteCallable("
+		"[[visible]]", "spvRay.context.WorldRayOriginKHR", "if (spvRayAction != 0)",
+		"spvReportIntersection(", "SPV_RAY_INCOMING_DATA", "spvExecuteCallable("
 	};
 	for (int i = 0; i < 6; i++)
 	{
 		try
 		{
 			auto source = compile(argv[i + 1]);
-			if (!require(source, expected[i], argv[i + 1]) ||
-			    !require(source, "Test runtime ABI", argv[i + 1]) ||
-			    (i == 2 && (!require(source, "spvRayTmax [[distance]]", argv[i + 1]) ||
-			                !forbid(source, "spvRayTmax [[max_distance]]", argv[i + 1]))))
+			if (!check(source, argv[i + 1], { expected[i], "Test runtime ABI" }) ||
+			    (i == 2 && !check(source, argv[i + 1], { "SPV_RAY_IFB_ENTRY_POINT(" })))
 				return 1;
 		}
 		catch (const std::exception &error)
@@ -88,100 +104,120 @@ int main(int argc, char **argv)
 	}
 	try
 	{
-		auto multi13 = compile(argv[7], "a");
-		auto multi14a = compile(argv[8], "a");
-		auto multi14b = compile(argv[8], "b");
-		if (!require(multi13, "spvIFBPayload<float>", argv[7]) ||
-		    !forbid(multi13, "spvIFBPayload<float4>", argv[7]) ||
-		    !require(multi14a, "spvIFBPayload<float>", argv[8]) ||
-		    !require(multi14b, "spvIFBPayload<float4>", argv[8]))
+		auto multi14a = compile(argv[7], "a");
+		auto multi14b = compile(argv[7], "b");
+		if (!check(multi14a, argv[7], { "SPV_RAY_CONTEXT_ARGS(float)" }) ||
+		    !check(multi14b, argv[7], { "SPV_RAY_CONTEXT_ARGS(float4)" }))
 			return 1;
 
-		auto native_array = compile(argv[9], nullptr, true);
-		if (!require(native_array, "accelerationStructureAddressTableAddress", argv[9]) ||
-		    !forbid(native_array, "thread & reinterpret_cast", argv[9]))
+		auto native_array = compile(argv[8], nullptr, true);
+		if (!check(native_array, argv[8], { "spvRuntimeBuffer<3>(spvRayState)" },
+		           { "thread & reinterpret_cast" }))
 			return 1;
 
-		auto ray_query = compile(argv[10]);
-		if (!require(ray_query, "spvRayQueryMetadata", argv[10]) ||
-		    !forbid(ray_query, "struct spvRayQuery {", argv[10]) ||
-		    !forbid(ray_query, "const device const", argv[10]) ||
-		    !forbid(ray_query, "thread device", argv[10]))
+		auto ray_query = compile(argv[9]);
+		if (!check(ray_query, argv[9], { "spvRayQueryMetadata" },
+		           { "struct spvRayQuery {", "const device const", "thread device" }))
 			return 1;
 
-		auto push_constant = compile(argv[11]);
-		if (!require(push_constant, "pushConstantsAddress", argv[11]) ||
-		    !forbid(push_constant, "constant Registers& (*reinterpret_cast", argv[11]))
+		auto push_constant = compile(argv[10]);
+		if (!check(push_constant, argv[10], { "spvPushConstant<Registers>(spvRayState)" },
+		           { "constant Registers& (*reinterpret_cast" }))
 			return 1;
 
-		auto set_8 = compile(argv[12], nullptr, false, false);
-		if (!require(set_8, "[[buffer(8)]]", argv[12]))
+		auto set_8 = compile(argv[11]);
+		if (!check(set_8, argv[11], { "[[buffer(8)]]" }))
 			return 1;
 
-		auto ray_set_8 = compile(argv[13]);
-		if (!require(ray_set_8, "spvRayState.dispatch->descriptorSetAddresses[8]", argv[13]))
+		auto ray_set_8 = compile(argv[12]);
+		if (!check(ray_set_8, argv[12], { "spvRayState.dispatch->descriptorSetAddresses[8]" }))
+			return 1;
+		auto hit_attribute = compile(argv[13]);
+		if (!check(hit_attribute, argv[13], { "packed_float3 a", "packed_float3 b" }))
 			return 1;
 
-		auto hit_attribute = compile(argv[14]);
-		if (!require(hit_attribute, "packed_float3 a", argv[14]) ||
-		    !require(hit_attribute, "packed_float3 b", argv[14]))
+		auto procedural_ifb = compile(argv[3], nullptr, false, 4, 0, false, true);
+		if (!check(procedural_ifb, argv[3],
+		           { "SPV_RAY_IFB_ENTRY_POINT(" }))
 			return 1;
 
-		auto ray_query_array = compile(argv[20]);
-		if (!require(ray_query_array, "spvRayQueryMetadata queriesMetadata[2][3]", argv[20]) ||
-		    !require(ray_query_array, "thread spvRayQueryMetadata (&queriesMetadata)[2][3]", argv[20]) ||
-		    !require(ray_query_array, "queriesMetadata[i][j]", argv[20]) ||
-		    !forbid(ray_query_array, "queries[i][j]Metadata", argv[20]) ||
-		    !forbid(ray_query_array, "thread spvRayQueryMetadata& queriesMetadata", argv[20]))
+		auto ray_query_array = compile(argv[18]);
+		if (!check(ray_query_array, argv[18],
+		           { "spvRayQueryMetadata queriesMetadata[2][3]",
+		             "thread spvRayQueryMetadata (&queriesMetadata)[2][3]", "queriesMetadata[i][j]" },
+		           { "queries[i][j]Metadata", "thread spvRayQueryMetadata& queriesMetadata" }))
 			return 1;
 
-		auto ordinary_rt = compile(argv[21], nullptr, false, true, 4, 0, true);
-		auto ordinary = compile(argv[21], nullptr, false, false);
-		if (ordinary_rt != ordinary || !forbid(ordinary_rt, "spvRayState", argv[21]) ||
-		    !forbid(ordinary_rt, "Test runtime ABI", argv[21]))
+		auto unused_position_fetch = compile(argv[19]);
+		if (!check(unused_position_fetch, argv[19], { "[[visible]]" }))
+			return 1;
+
+		try
 		{
-			std::cerr << argv[21] << ": ray profile changed a non-ray shader\n";
+			compile(argv[20]);
+			std::cerr << argv[20] << ": active position fetch was accepted\n";
+			return 1;
+		}
+		catch (const CompilerError &error)
+		{
+			if (std::string(error.what()).find("position fetch is not supported") == std::string::npos)
+				throw;
+		}
+
+		auto constexpr_source = compile(argv[21], nullptr, false, 4, 0, false, false,
+		                                "// Test runtime ABI.", true);
+		if (!check(constexpr_source, argv[21], { "constexpr sampler" }, { "descriptorSetAddresses[8]" }))
+			return 1;
+
+		auto subgroup_helper = compile(argv[22]);
+		if (!check(subgroup_helper, argv[22],
+		           { "simd_ballot", "spvRayState.SubgroupSize", "spvRayState.SubgroupLocalInvocationId" },
+		           { "spvRay.context.Subgroup" }))
+			return 1;
+
+		auto branch_query = compile(argv[23]);
+		if (!check(branch_query, argv[23],
+		           { "\n    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;" },
+		           { "\n        raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> query;" }))
+			return 1;
+
+		auto ordinary = compile(argv[24]);
+		if (!check(ordinary, argv[24], {}, { "spvRayState", "Test runtime ABI" }))
+		{
+			std::cerr << argv[24] << ": ray profile changed a non-ray shader\n";
 			return 1;
 		}
 
 		try
 		{
-			compile(argv[15]);
-			std::cerr << argv[15] << ": oversized Boolean hit attribute was accepted\n";
+			compile(argv[14]);
+			std::cerr << argv[14] << ": oversized Boolean hit attribute was accepted\n";
 			return 1;
 		}
 		catch (const CompilerError &error)
 		{
-			if (std::string(error.what()).find("cannot exceed 32") == std::string::npos)
+			if (std::string(error.what()).find("runtime ABI limit") == std::string::npos)
 				throw;
 		}
 
-		auto vector_array = compile(argv[16]);
-		if (!require(vector_array, "packed_float3 samples[2]", argv[16]) ||
-		    !require(vector_array, "[0] = float3((*reinterpret_cast<thread HitData*>", argv[16]) ||
-		    !require(vector_array, "[1] = float3((*reinterpret_cast<thread HitData*>", argv[16]) ||
-		    !forbid(vector_array, "struct HitData_", argv[16]) ||
-		    !forbid(vector_array, "packed_spvUnsafeArray", argv[16]))
+		auto vector_array = compile(argv[15]);
+		if (!check(vector_array, argv[15],
+		           { "packed_float3 samples[2]", "[0] = float3(spvHitAttribute<HitData>(spvRay.context)",
+		             "[1] = float3(spvHitAttribute<HitData>(spvRay.context)" },
+		           { "struct HitData_", "packed_spvUnsafeArray" }))
 			return 1;
 
-		auto unused_payload = compile(argv[17]);
-		if (!require(unused_payload, "spvIFBPayload<Payload>", argv[17]) ||
-		    !forbid(unused_payload, "spvIFBPayload<uint>", argv[17]))
+		auto unused_payload = compile(argv[16]);
+		if (!check(unused_payload, argv[16], { "SPV_RAY_CONTEXT_ARGS(Payload)" }, { "SPV_RAY_CONTEXT_ARGS(uint)" }))
 			return 1;
-		auto unused_payload_spv13 = compile(argv[18]);
-		if (!require(unused_payload_spv13, "spvIFBPayload<Payload>", argv[18]) ||
-		    !forbid(unused_payload_spv13, "spvIFBPayload<uint>", argv[18]))
-			return 1;
-		auto shared_type = compile(argv[19]);
-		if (!require(shared_type, "struct spvRayData_", argv[19]) ||
-		    !require(shared_type, "packed_float3 _m0", argv[19]) ||
-		    !require(shared_type, "packed_rm_float3x2 _m2", argv[19]) ||
-		    !require(shared_type, "._m0 = (*spvDescriptorSet0", argv[19]) ||
-		    !forbid(shared_type, "_2 = *spvDescriptorSet0", argv[19]) ||
-		    !forbid(shared_type, "spvRayData._m3[0].data", argv[19]))
+		auto shared_type = compile(argv[17]);
+		if (!check(shared_type, argv[17],
+		           { "struct spvRayData_", "packed_float3 _m0", "packed_rm_float3x2 _m2",
+		             "._m0 = (*spvDescriptorSet0" },
+		           { "_2 = *spvDescriptorSet0", "spvRayData._m3[0].data" }))
 			return 1;
 
-		try { compile(argv[1], nullptr, false, true, 2, 4); }
+		try { compile(argv[1], nullptr, false, 2, 4); }
 		catch (const CompilerError &error) {
 			if (std::string(error.what()).find("require MSL 3.0") != std::string::npos) return 0;
 		}
