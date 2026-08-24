@@ -1793,6 +1793,7 @@ string CompilerMSL::compile()
 	// Do output first to ensure out. is declared at top of entry function.
 	qual_pos_var_name = "";
 	qual_viewport_idx_var_name = "";
+	qual_frag_depth_var_name = "";
 	if (is_mesh_shader())
 	{
 		fixup_implicit_builtin_block_names(get_execution_model());
@@ -2989,6 +2990,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			qual_pos_var_name = qual_var_name;
 		if (builtin == BuiltInViewportIndex && storage == StorageClassOutput)
 			qual_viewport_idx_var_name = qual_var_name;
+		if (builtin == BuiltInFragDepth && storage == StorageClassOutput)
+			qual_frag_depth_var_name = qual_var_name;
 	}
 
 	// Copy interpolation decorations if needed
@@ -3619,6 +3622,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			qual_pos_var_name = qual_var_name;
 		if (builtin == BuiltInViewportIndex && storage == StorageClassOutput)
 			qual_viewport_idx_var_name = qual_var_name;
+		if (builtin == BuiltInFragDepth && storage == StorageClassOutput)
+			qual_frag_depth_var_name = qual_var_name;
 	}
 
 	const SPIRConstant *c = nullptr;
@@ -8441,6 +8446,17 @@ void CompilerMSL::emit_resources()
 // Emit declarations for the specialization Metal function constants
 void CompilerMSL::emit_specialization_constants_and_structs()
 {
+	if (needs_depth_clip_state_buffer())
+	{
+		statement("struct spvDepthClipState");
+		begin_scope();
+		statement("uint emulateViewportZ;");
+		statement("uint emulateDepthClamp;");
+		statement("float2 viewportDepthRanges[16];");
+		end_scope_decl();
+		statement("");
+	}
+
 	SpecializationConstant wg_x, wg_y, wg_z;
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 	if (workgroup_size_id == 0 && is_mesh_shader())
@@ -13549,6 +13565,23 @@ void CompilerMSL::emit_fixup()
 
 		if (is_vertex_like_shader() && !qual_pos_var_name.empty())
 		{
+			if (options.vertex.fixup_clipspace)
+				statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
+				          ".w) * 0.5;       // Adjust clip-space for Metal");
+
+			if (msl_options.emulate_depth_clip_enable)
+			{
+				string viewport_idx =
+				    qual_viewport_idx_var_name.empty() ? "0" : join("uint(", qual_viewport_idx_var_name, ")");
+				statement("if (spvDepthClipState.emulateViewportZ != 0u)");
+				begin_scope();
+				statement("float2 spvViewportDepthRange = spvDepthClipState.viewportDepthRanges[", viewport_idx, "];");
+				statement(qual_pos_var_name, ".z = ", qual_pos_var_name,
+				          ".z * (spvViewportDepthRange.y - spvViewportDepthRange.x) + ", qual_pos_var_name,
+				          ".w * spvViewportDepthRange.x;    // Emulate viewport Z transform");
+				end_scope();
+			}
+
 			if (msl_options.emulate_reversed_depth_viewport)
 			{
 				if (qual_viewport_idx_var_name.empty())
@@ -13563,12 +13596,23 @@ void CompilerMSL::emit_fixup()
 				end_scope();
 			}
 
-			if (options.vertex.fixup_clipspace)
-				statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
-						  ".w) * 0.5;       // Adjust clip-space for Metal");
+			if (msl_options.use_opengl_mode)
+				statement(qual_pos_var_name, ".z = ", qual_pos_var_name, ".z * 2.0 - ", qual_pos_var_name,
+				          ".w;    // Adjust clip-space for Metal OpenGL mode");
 
 			if (options.vertex.flip_vert_y)
 				statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
+		}
+		else if (get_execution_model() == ExecutionModelFragment && !qual_frag_depth_var_name.empty() &&
+		         msl_options.emulate_depth_clip_enable)
+		{
+			string viewport_idx = depth_clip_viewport_idx_var_name.empty() ? "0" : depth_clip_viewport_idx_var_name;
+			statement("if (spvDepthClipState.emulateDepthClamp != 0u)");
+			begin_scope();
+			statement("float2 spvViewportDepthRange = spvDepthClipState.viewportDepthRanges[", viewport_idx, "];");
+			statement(qual_frag_depth_var_name, " = clamp(", qual_frag_depth_var_name,
+			          ", spvViewportDepthRange.x, spvViewportDepthRange.y);");
+			end_scope();
 		}
 	}
 }
@@ -14727,6 +14771,8 @@ bool CompilerMSL::is_intersection_query() const
 
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
+	depth_clip_viewport_idx_var_name = "";
+
 	// Builtin variables
 	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
@@ -14751,6 +14797,9 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 			if (is_direct_input_builtin(bi_type))
 			{
+				if (bi_type == BuiltInViewportIndex)
+					depth_clip_viewport_idx_var_name = to_expression(var_id);
+
 				if (!ep_args.empty())
 					ep_args += ", ";
 
@@ -14814,6 +14863,23 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 	if (needs_base_instance_arg == TriState::Yes)
 		ep_args += built_in_func_arg(BuiltInBaseInstance, !ep_args.empty());
+
+	if (needs_depth_clip_state_buffer())
+	{
+		if (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 0) &&
+		    depth_clip_viewport_idx_var_name.empty())
+		{
+			if (!ep_args.empty())
+				ep_args += ", ";
+			depth_clip_viewport_idx_var_name = "spvDepthClipViewportIndex";
+			ep_args += "uint spvDepthClipViewportIndex [[viewport_array_index]]";
+		}
+
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("constant spvDepthClipState& spvDepthClipState [[buffer(",
+		                msl_options.depth_clip_state_buffer_index, ")]]");
+	}
 
 	if (msl_options.emulate_reversed_depth_viewport && stage_out_var_id && !capture_output_to_buffer &&
 	    is_vertex_like_shader() && !qual_pos_var_name.empty())

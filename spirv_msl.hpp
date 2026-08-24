@@ -319,6 +319,7 @@ public:
 		uint32_t shader_patch_input_buffer_index = 20;
         uint32_t draw_id_buffer_index = 19;
 		uint32_t reversed_depth_viewport_buffer_index = 18;
+		uint32_t depth_clip_state_buffer_index = 17;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -341,6 +342,8 @@ public:
 		bool dispatch_base = false;
 		bool texture_1D_as_2D = false;
 		bool emulate_reversed_depth_viewport = false;
+		bool emulate_depth_clip_enable = false;
+		bool use_opengl_mode = false;
 
 		// Enable use of Metal argument buffers.
 		// MSL 2.0 must also be enabled.
@@ -632,6 +635,17 @@ public:
 	bool needs_view_mask_buffer() const
 	{
 		return msl_options.multiview && !msl_options.view_index_from_device_index;
+	}
+
+	// Provide feedback to calling API to allow it to pass depth clip
+	// emulation state.
+	bool needs_depth_clip_state_buffer() const
+	{
+		if (!msl_options.emulate_depth_clip_enable || !stage_out_var_id || capture_output_to_buffer)
+			return false;
+
+		return (is_vertex_like_shader() && !qual_pos_var_name.empty()) ||
+		       (get_execution_model() == ExecutionModelFragment && !qual_frag_depth_var_name.empty());
 	}
 
 	// Provide feedback to calling API to allow it to pass a buffer
@@ -1299,6 +1313,8 @@ protected:
 	bool writes_to_point_size = false;
 	std::string qual_pos_var_name;
 	std::string qual_viewport_idx_var_name;
+	std::string qual_frag_depth_var_name;
+	std::string depth_clip_viewport_idx_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string patch_stage_in_var_name = "patchIn";
