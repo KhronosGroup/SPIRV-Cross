@@ -28,7 +28,7 @@ float Samp2(thread const float3& uv, depth2d<float> uSampler, sampler uSamplerSm
 }
 
 static inline __attribute__((always_inline))
-float Samp3(depth2d<float> uT, sampler uS, thread const float3& uv, thread float3& vUV)
+float Samp3(texture2d<float> uT, sampler uS, thread const float3& uv, thread float3& vUV)
 {
     return uT.sample_compare(uS, vUV.xy, vUV.z);
 }

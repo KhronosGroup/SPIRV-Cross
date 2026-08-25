@@ -8274,6 +8274,33 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplDepthCast:
+			statement("template <typename T>");
+			statement("static inline depth2d<T> spvDepthCast(texture2d<T> t)");
+			begin_scope();
+			statement("return *reinterpret_cast<thread depth2d<T> *>(&t);");
+			end_scope();
+			statement("");
+			statement("template <typename T>");
+			statement("static inline depthcube<T> spvDepthCast(texturecube<T> t)");
+			begin_scope();
+			statement("return *reinterpret_cast<thread depthcube<T> *>(&t);");
+			end_scope();
+			statement("");
+			statement("template <typename T>");
+			statement("static inline depth2d_array<T> spvDepthCast(texture2d_array<T> t)");
+			begin_scope();
+			statement("return *reinterpret_cast<thread depth2d_array<T> *>(&t);");
+			end_scope();
+			statement("");
+			statement("template <typename T>");
+			statement("static inline depthcube_array<T> spvDepthCast(texturecube_array<T> t)");
+			begin_scope();
+			statement("return *reinterpret_cast<thread depthcube_array<T> *>(&t);");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplMulExtended:
 			// Compiler may hit an internal error with mulhi, but doesn't when encapsulated for some reason.
 			statement("template<typename T, typename U, typename V>");
@@ -12417,7 +12444,24 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 	}
 	else
 	{
-		fname = to_expression(combined ? combined->image : img) + ".";
+		string img_expr = to_expression(combined ? combined->image : img);
+
+		// Redesign per review: a resource whose only reason for being "depth" is dynamic
+		// Dref/comparison usage (comparison_ids) is declared texture2d<T> (see image_type_glsl),
+		// so a Dref instruction against it casts to the matching depth type at the call site
+		// instead of relying on the resource's declared type. A resource that's genuinely,
+		// statically declared depth in SPIR-V keeps its direct depth2d<T> declaration and needs
+		// no cast - wrapping it in spvDepthCast would pass a depth2d<T> where the helper's
+		// overloads all expect a plain textureXXX<T>, which doesn't compile.
+		bool statically_typed_depth =
+		    args.base.imgtype && args.base.imgtype->image.depth && args.base.imgtype->image.format == ImageFormatUnknown;
+		if (args.has_dref && !statically_typed_depth)
+		{
+			add_spv_func_and_recompile(SPVFuncImplDepthCast);
+			img_expr = join("spvDepthCast(", img_expr, ")");
+		}
+
+		fname = img_expr + ".";
 
 		// Texture function and sampler
 		if (args.base.is_fetch)
@@ -12977,18 +13021,13 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		{
 			forward = forward && should_forward(args.component);
 
-			uint32_t image_var = 0;
-			if (const auto *combined = maybe_get<SPIRCombinedImageSampler>(img))
-			{
-				if (const auto *img_var = maybe_get_backing_variable(combined->image))
-					image_var = img_var->self;
-			}
-			else if (const auto *var = maybe_get_backing_variable(img))
-			{
-				image_var = var->self;
-			}
-
-			if (image_var == 0 || !is_depth_image(expression_type(image_var), image_var))
+			// gather_compare (Dref) takes no component argument, and neither does plain gather()
+			// on a resource that's genuinely depth-typed at this call site - either statically
+			// declared depth in SPIR-V, or (redesign) cast to a depthXXX<T> via spvDepthCast
+			// because this specific call has a Dref. A resource that's only comparison_ids-tracked
+			// but has no Dref on THIS call stays texture2d<T> here and does take a component.
+			bool statically_typed_depth = imgtype.image.depth && imgtype.image.format == ImageFormatUnknown;
+			if (!args.dref && !statically_typed_depth)
 				farg_str += ", " + to_component_argument(args.component);
 		}
 	}
@@ -17426,7 +17465,15 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 
 	auto &img_type = type.image;
 
-	if (is_depth_image(type, id))
+	// Redesign per review (Hans's spvDepthCast alternative to PR #2655): a resource whose only
+	// reason for being "depth" is dynamic Dref/comparison usage (comparison_ids) is declared as a
+	// plain texture; a Dref instruction casts to the matching depth type via spvDepthCast at the
+	// call site instead (see to_function_name). A resource that's genuinely, statically declared
+	// as a depth image in SPIR-V (type.image.depth, e.g. real depth attachments/render targets/
+	// subpass inputs) keeps its depth2d<T>/depthcube<T>/etc. declaration exactly as before -
+	// is_depth_image()'s comparison_ids half is the only part this redesign replaces.
+	bool statically_typed_depth = type.image.depth && type.image.format == ImageFormatUnknown;
+	if (statically_typed_depth)
 	{
 		switch (img_type.dim)
 		{

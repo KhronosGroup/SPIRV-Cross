@@ -901,6 +901,7 @@ protected:
 		SPVFuncImplReduceAdd,
 		SPVFuncImplImageFence,
 		SPVFuncImplTextureCast,
+		SPVFuncImplDepthCast,
 		SPVFuncImplMulExtended,
 		SPVFuncImplSetMeshOutputsEXT,
 		SPVFuncImplAssume,

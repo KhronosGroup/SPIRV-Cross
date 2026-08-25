@@ -29,32 +29,32 @@ static inline depthcube_array<T> spvDepthCast(texturecube_array<T> t)
     return *reinterpret_cast<thread depthcube_array<T> *>(&t);
 }
 
+constant uint _10_tmp [[function_constant(0)]];
+constant uint _10 = is_function_constant_defined(_10_tmp) ? _10_tmp : 0u;
+
 struct main0_out
 {
-    float FragColor [[color(0)]];
+    float4 out_var_SV_Target0 [[color(0)]];
 };
 
 struct main0_in
 {
-    float3 vUV [[user(locn0)]];
+    float3 in_var_TEXCOORD0 [[user(locn0)]];
 };
 
 static inline __attribute__((always_inline))
-float sample_combined(thread float3& vUV, texture2d<float> uShadow, sampler uShadowSmplr)
+uint get_sampler_type()
 {
-    return spvDepthCast(uShadow).sample_compare(uShadowSmplr, vUV.xy, vUV.z);
+    return _10;
 }
 
-static inline __attribute__((always_inline))
-float sample_separate(thread float3& vUV, texture2d<float> uTexture, sampler uSampler)
-{
-    return spvDepthCast(uTexture).sample_compare(uSampler, vUV.xy, vUV.z);
-}
-
-fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> uShadow [[texture(0)]], texture2d<float> uTexture [[texture(1)]], sampler uShadowSmplr [[sampler(0)]], sampler uSampler [[sampler(1)]])
+fragment main0_out main0(main0_in in [[stage_in]], texture2d_array<float> ShadowMapArray [[texture(0)]], sampler Sampler [[sampler(0)]])
 {
     main0_out out = {};
-    out.FragColor = sample_combined(in.vUV, uShadow, uShadowSmplr) + sample_separate(in.vUV, uTexture, uSampler);
+    if (get_sampler_type() == 3u)
+    {
+    }
+    out.out_var_SV_Target0 = float4(ShadowMapArray.sample(Sampler, in.in_var_TEXCOORD0.xy, uint(rint(in.in_var_TEXCOORD0.z))));
     return out;
 }
 
