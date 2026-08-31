@@ -1,0 +1,47 @@
+OpCapability RayTracingKHR
+OpExtension "SPV_KHR_ray_tracing"
+OpMemoryModel Logical GLSL450
+OpEntryPoint RayGenerationKHR %main "main" %payload %buffer
+OpMemberDecorate %Inner 0 Offset 0
+OpMemberDecorate %Shared 0 Offset 0
+OpMemberDecorate %Shared 1 Offset 16
+OpMemberDecorate %Shared 2 Offset 32
+OpMemberDecorate %Shared 2 RowMajor
+OpMemberDecorate %Shared 2 MatrixStride 16
+OpMemberDecorate %Shared 3 Offset 64
+OpMemberDecorate %Element 0 Offset 0
+OpDecorate %Elements ArrayStride 16
+OpDecorate %Block Block
+OpMemberDecorate %Block 0 Offset 0
+OpDecorate %buffer DescriptorSet 0
+OpDecorate %buffer Binding 0
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+%zero = OpConstant %uint 0
+%two = OpConstant %uint 2
+%three = OpConstant %uint 3
+%float = OpTypeFloat 32
+%v2float = OpTypeVector %float 2
+%v3float = OpTypeVector %float 3
+%m3x2 = OpTypeMatrix %v2float 3
+%Inner = OpTypeStruct %v3float
+%Element = OpTypeStruct %float
+%Elements = OpTypeArray %Element %two
+%Shared = OpTypeStruct %Inner %float %m3x2 %Elements
+%Block = OpTypeStruct %Shared
+%ptr_payload = OpTypePointer RayPayloadKHR %Shared
+%ptr_buffer = OpTypePointer StorageBuffer %Block
+%ptr_buffer_shared = OpTypePointer StorageBuffer %Shared
+%ptr_payload_float = OpTypePointer RayPayloadKHR %float
+%payload = OpVariable %ptr_payload RayPayloadKHR
+%buffer = OpVariable %ptr_buffer StorageBuffer
+%main = OpFunction %void None %fn
+%entry = OpLabel
+%source = OpAccessChain %ptr_buffer_shared %buffer %zero
+%value = OpLoad %Shared %source
+OpStore %payload %value
+%element = OpAccessChain %ptr_payload_float %payload %three %zero %zero
+%loaded = OpLoad %float %element
+OpReturn
+OpFunctionEnd

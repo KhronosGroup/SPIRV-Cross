@@ -1,0 +1,49 @@
+OpCapability Shader
+OpCapability RayQueryKHR
+OpExtension "SPV_KHR_ray_query"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main" %scene %global_id
+OpExecutionMode %main LocalSize 1 1 1
+OpName %query "query"
+OpName %condition "condition"
+OpDecorate %scene DescriptorSet 0
+OpDecorate %scene Binding 0
+OpDecorate %global_id BuiltIn GlobalInvocationId
+%void = OpTypeVoid
+%void_fn = OpTypeFunction %void
+%bool = OpTypeBool
+%uint = OpTypeInt 32 0
+%float = OpTypeFloat 32
+%v3uint = OpTypeVector %uint 3
+%v3float = OpTypeVector %float 3
+%uint_0 = OpConstant %uint 0
+%uint_255 = OpConstant %uint 255
+%float_0 = OpConstant %float 0
+%float_100 = OpConstant %float 100
+%zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+%as = OpTypeAccelerationStructureKHR
+%ptr_uc_as = OpTypePointer UniformConstant %as
+%scene = OpVariable %ptr_uc_as UniformConstant
+%ptr_input_v3uint = OpTypePointer Input %v3uint
+%global_id = OpVariable %ptr_input_v3uint Input
+%query_t = OpTypeRayQueryKHR
+%ptr_function_query = OpTypePointer Function %query_t
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%query = OpVariable %ptr_function_query Function
+%scene_v = OpLoad %as %scene
+%gid = OpLoad %v3uint %global_id
+%x = OpCompositeExtract %uint %gid 0
+%condition = OpIEqual %bool %x %uint_0
+OpSelectionMerge %merge None
+OpBranchConditional %condition %then %else
+%then = OpLabel
+OpRayQueryInitializeKHR %query %scene_v %uint_0 %uint_255 %zero %float_0 %zero %float_100
+OpBranch %merge
+%else = OpLabel
+OpRayQueryInitializeKHR %query %scene_v %uint_0 %uint_255 %zero %float_0 %zero %float_100
+OpBranch %merge
+%merge = OpLabel
+%proceeded = OpRayQueryProceedKHR %bool %query
+OpReturn
+OpFunctionEnd

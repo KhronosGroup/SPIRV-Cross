@@ -1,0 +1,72 @@
+OpCapability Shader
+OpCapability RayQueryKHR
+OpExtension "SPV_KHR_ray_query"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main" %scene %query %outputData
+OpExecutionMode %main LocalSize 1 1 1
+OpName %scene "scene"
+OpName %trace "trace"
+OpName %getScene "getScene"
+OpDecorate %scene DescriptorSet 3
+OpDecorate %scene Binding 5
+OpDecorate %Output Block
+OpMemberDecorate %Output 0 Offset 0
+OpDecorate %outputData DescriptorSet 1
+OpDecorate %outputData Binding 0
+%void = OpTypeVoid
+%void_fn = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+%uint_0 = OpConstant %uint 0
+%uint_1 = OpConstant %uint 1
+%uint_255 = OpConstant %uint 255
+%as = OpTypeAccelerationStructureKHR
+%as_array = OpTypeArray %as %uint_1
+%ptr_uc_as_array = OpTypePointer UniformConstant %as_array
+%scene = OpVariable %ptr_uc_as_array UniformConstant
+%ptr_uc_as = OpTypePointer UniformConstant %as
+%trace_fn = OpTypeFunction %uint %ptr_uc_as_array
+%get_scene_fn = OpTypeFunction %as %ptr_uc_as_array %uint
+%query_t = OpTypeRayQueryKHR
+%ptr_private_query = OpTypePointer Private %query_t
+%query = OpVariable %ptr_private_query Private
+%float = OpTypeFloat 32
+%v3float = OpTypeVector %float 3
+%float_0 = OpConstant %float 0
+%float_n1 = OpConstant %float -1
+%float_100 = OpConstant %float 100
+%zero = OpConstantComposite %v3float %float_0 %float_0 %float_0
+%dir = OpConstantComposite %v3float %float_0 %float_0 %float_n1
+%bool = OpTypeBool
+%Output = OpTypeStruct %uint
+%ptr_ssbo_output = OpTypePointer StorageBuffer %Output
+%outputData = OpVariable %ptr_ssbo_output StorageBuffer
+%ptr_ssbo_uint = OpTypePointer StorageBuffer %uint
+%main = OpFunction %void None %void_fn
+%main_entry = OpLabel
+%out_ptr = OpAccessChain %ptr_ssbo_uint %outputData %uint_0
+%value = OpFunctionCall %uint %trace %scene
+OpStore %out_ptr %value
+OpReturn
+OpFunctionEnd
+%trace = OpFunction %uint None %trace_fn
+%scene_param = OpFunctionParameter %ptr_uc_as_array
+%trace_entry = OpLabel
+%scene_v = OpFunctionCall %as %getScene %scene_param %uint_0
+OpRayQueryInitializeKHR %query %scene_v %uint_0 %uint_255 %zero %float_0 %dir %float_100
+%proceeded = OpRayQueryProceedKHR %bool %query
+OpSelectionMerge %miss None
+OpBranchConditional %proceeded %hit %miss
+%hit = OpLabel
+%sbt = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR %uint %query %uint_0
+OpReturnValue %sbt
+%miss = OpLabel
+OpReturnValue %uint_0
+OpFunctionEnd
+%getScene = OpFunction %as None %get_scene_fn
+%scene_array = OpFunctionParameter %ptr_uc_as_array
+%scene_index = OpFunctionParameter %uint
+%get_scene_entry = OpLabel
+%scene_ptr = OpAccessChain %ptr_uc_as %scene_array %scene_index
+%loaded_scene = OpLoad %as %scene_ptr
+OpReturnValue %loaded_scene
+OpFunctionEnd

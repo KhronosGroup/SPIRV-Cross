@@ -13006,6 +13006,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];
 
 		flush_variable_declaration(ptr);
+		auto &type = get<SPIRType>(result_type);
+		if ((has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID) ||
+		     has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked)) &&
+		    (type.basetype == SPIRType::Struct || !type.array.empty()))
+		{
+			emit_uninitialized_temporary_expression(result_type, id);
+			emit_copy_logical_type(id, result_type, ptr, get_pointee_type_id(expression_type_id(ptr)), {});
+			register_read(id, ptr, false);
+			break;
+		}
 
 		// If we're loading from memory that cannot be changed by the shader,
 		// just forward the expression directly to avoid needless temporaries.
@@ -13071,7 +13081,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			expr = to_unpacked_expression(ptr);
 		}
 
-		auto &type = get<SPIRType>(result_type);
 		auto &expr_type = expression_type(ptr);
 
 		// If the expression has more vector components than the result type, insert
@@ -13282,6 +13291,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (var && var->remapped_variable && var->static_expression)
 		{
 			// Skip the write.
+		}
+		else if ((has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypeID) ||
+		          has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypePacked)) &&
+		         (expression_type(ops[1]).basetype == SPIRType::Struct || !expression_type(ops[1]).array.empty()))
+		{
+			flush_variable_declaration(ops[0]);
+			flush_variable_declaration(ops[1]);
+			emit_copy_logical_type(ops[0], get_pointee_type_id(expression_type_id(ops[0])), ops[1],
+			                       expression_type_id(ops[1]), {});
 		}
 		else if (flattened_structs.count(ops[0]))
 		{
@@ -16137,7 +16155,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ");");
 		break;
 	case OpRayQueryProceedKHR:
-		flush_variable_declaration(ops[0]);
+		flush_variable_declaration(ops[2]);
 		emit_op(ops[0], ops[1], join("rayQueryProceedEXT(", to_expression(ops[2]), ")"), false);
 		break;
 	case OpRayQueryTerminateKHR:
@@ -16264,14 +16282,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpConvertUToAccelerationStructureKHR:
 	{
-		require_extension_internal("GL_EXT_ray_tracing");
-
 		bool elide_temporary = should_forward(ops[2]) && forced_temporaries.count(ops[1]) == 0 &&
 		                       !hoisted_temporaries.count(ops[1]);
 
 		if (elide_temporary)
 		{
-			GLSL_UFOP(accelerationStructureEXT);
+			emit_op(ops[0], ops[1],
+			        to_acceleration_structure_expression(ops[2], to_unpacked_expression(ops[2])), true);
+			inherit_expression_dependencies(ops[1], ops[2]);
 		}
 		else
 		{
@@ -16283,7 +16301,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// and cast to RTAS on demand.
 			statement(declare_temporary(expression_type_id(ops[2]), ops[1]), to_unpacked_expression(ops[2]), ";");
 			// Use raw SPIRExpression interface to block all usage tracking.
-			set<SPIRExpression>(ops[1], join("accelerationStructureEXT(", to_name(ops[1]), ")"), ops[0], true);
+			set<SPIRExpression>(ops[1], to_acceleration_structure_expression(ops[2], to_name(ops[1])), ops[0], true);
 		}
 		break;
 	}
@@ -19506,11 +19524,11 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	case SPIRBlock::IgnoreIntersection:
-		statement("ignoreIntersectionEXT;");
+		emit_ignore_intersection();
 		break;
 
 	case SPIRBlock::TerminateRay:
-		statement("terminateRayEXT;");
+		emit_terminate_ray();
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
@@ -21066,4 +21084,3 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 
 	return "descriptor_heap";
 }
-

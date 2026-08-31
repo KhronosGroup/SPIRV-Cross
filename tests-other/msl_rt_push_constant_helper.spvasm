@@ -1,0 +1,46 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 25
+; Schema: 0
+               OpCapability RayTracingKHR
+               OpExtension "SPV_KHR_ray_tracing"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint ClosestHitKHR %main "main" %_ %payload
+               OpSource GLSL 460
+               OpSourceExtension "GL_EXT_ray_tracing"
+               OpName %main "main"
+               OpName %read_pc_ "read_pc("
+               OpName %Registers "Registers"
+               OpMemberName %Registers 0 "value"
+               OpName %_ ""
+               OpName %payload "payload"
+               OpDecorate %Registers Block
+               OpMemberDecorate %Registers 0 Offset 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+          %7 = OpTypeFunction %uint
+  %Registers = OpTypeStruct %uint
+%_ptr_PushConstant_Registers = OpTypePointer PushConstant %Registers
+          %_ = OpVariable %_ptr_PushConstant_Registers PushConstant
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_PushConstant_uint = OpTypePointer PushConstant %uint
+      %float = OpTypeFloat 32
+%_ptr_IncomingRayPayloadKHR_float = OpTypePointer IncomingRayPayloadKHR %float
+    %payload = OpVariable %_ptr_IncomingRayPayloadKHR_float IncomingRayPayloadKHR
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %23 = OpFunctionCall %uint %read_pc_
+         %24 = OpConvertUToF %float %23
+               OpStore %payload %24
+               OpReturn
+               OpFunctionEnd
+   %read_pc_ = OpFunction %uint None %7
+          %9 = OpLabel
+         %16 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %17 = OpLoad %uint %16
+               OpReturnValue %17
+               OpFunctionEnd

@@ -547,6 +547,59 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-msl-ycbcr-conversion-test spirv-cross-c)
 				set_target_properties(spirv-cross-msl-ycbcr-conversion-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				set(spirv-cross-rt-test-spirv)
+				macro(spirv_cross_rt_compile shader)
+					get_filename_component(shader-name ${shader} NAME)
+					set(shader-spirv ${CMAKE_CURRENT_BINARY_DIR}/rt-${shader-name}.spv)
+					add_custom_command(OUTPUT ${shader-spirv}
+							COMMAND ${spirv-cross-glslang} --target-env vulkan1.2 -V ${CMAKE_CURRENT_SOURCE_DIR}/${shader} -o ${shader-spirv}
+							DEPENDS ${shader})
+					list(APPEND spirv-cross-rt-test-spirv ${shader-spirv})
+				endmacro()
+				macro(spirv_cross_rt_assemble shader env)
+					get_filename_component(shader-name ${shader} NAME)
+					set(shader-spirv ${CMAKE_CURRENT_BINARY_DIR}/rt-${shader-name}.spv)
+					add_custom_command(OUTPUT ${shader-spirv}
+							COMMAND ${spirv-cross-spirv-as} --target-env ${env} ${CMAKE_CURRENT_SOURCE_DIR}/${shader} -o ${shader-spirv}
+							COMMAND ${spirv-cross-spirv-val} --target-env ${env} ${shader-spirv}
+							DEPENDS ${shader})
+					list(APPEND spirv-cross-rt-test-spirv ${shader-spirv})
+				endmacro()
+				foreach(shader
+						shaders/vulkan/rgen/launch_id.nocompat.vk.rgen
+						shaders/vulkan/rchit/world_ray_origin.khr.spv14.nocompat.vk.rchit
+						shaders/vulkan/rahit/terminators.khr.spv14.nocompat.vk.rahit
+						shaders/vulkan/rint/report-intersection.khr.spv14.nocompat.vk.rint
+						shaders/vulkan/rmiss/ray_tracing.khr.spv14.nocompat.vk.rmiss
+						shaders/vulkan/rcall/incoming-callable.khr.spv14.nocompat.vk.rcall)
+					spirv_cross_rt_compile(${shader})
+				endforeach()
+				spirv_cross_rt_assemble(tests-other/msl_rt_multi_entry_spv14.spvasm spv1.4)
+				spirv_cross_rt_assemble(tests-other/msl_rt_native_array_return.spvasm spv1.4)
+				spirv_cross_rt_assemble(tests-other/msl_ray_query_helper_sbt.spvasm vulkan1.2)
+				spirv_cross_rt_assemble(tests-other/msl_rt_push_constant_helper.spvasm vulkan1.2)
+				foreach(shader
+						tests-other/msl_descriptor_set_8.comp
+						tests-other/msl_descriptor_set_8.rgen
+						tests-other/msl_rt_hit_attribute_scalar_layout.rint
+						tests-other/msl_rt_hit_attribute_bool_array.rint
+						tests-other/msl_rt_hit_attribute_vector_array.rint
+						tests-other/msl_rt_unused_payload.rahit)
+					spirv_cross_rt_compile(${shader})
+				endforeach()
+				spirv_cross_rt_assemble(tests-other/msl_rt_shared_buffer_type.spvasm vulkan1.2)
+				spirv_cross_rt_assemble(tests-other/msl_ray_query_array_helper.spvasm vulkan1.2)
+				spirv_cross_rt_assemble(tests-other/msl_rt_unused_position_fetch_capability.spvasm spv1.4)
+				spirv_cross_rt_compile(shaders/vulkan/rchit/position_fetch.spv14.nocompat.vk.rchit)
+				spirv_cross_rt_compile(tests-other/msl_rt_constexpr_sampler.rgen)
+				spirv_cross_rt_compile(tests-other/msl_rt_subgroup_helper.rchit)
+				spirv_cross_rt_assemble(tests-other/msl_ray_query_branch_local.spvasm vulkan1.2)
+				add_custom_target(spirv-cross-msl-ray-tracing-shaders DEPENDS ${spirv-cross-rt-test-spirv})
+				add_executable(spirv-cross-msl-ray-tracing-test tests-other/msl_ray_tracing_test.cpp)
+				target_link_libraries(spirv-cross-msl-ray-tracing-test spirv-cross-msl)
+				add_dependencies(spirv-cross-msl-ray-tracing-test spirv-cross-msl-ray-tracing-shaders)
+				set_target_properties(spirv-cross-msl-ray-tracing-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				add_executable(spirv-cross-typed-id-test tests-other/typed_id_test.cpp)
 				target_link_libraries(spirv-cross-typed-id-test spirv-cross-core)
 				set_target_properties(spirv-cross-typed-id-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
@@ -579,6 +632,9 @@ if (SPIRV_CROSS_CLI)
 						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test.spv)
 				add_test(NAME spirv-cross-msl-ycbcr-conversion-test-2
 						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test_2.spv)
+				add_test(NAME spirv-cross-msl-ray-tracing-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-ray-tracing-test> ${spirv-cross-rt-test-spirv}
+						${CMAKE_CURRENT_SOURCE_DIR}/tests-other/hlsl_resource_binding.spv)
 				add_test(NAME spirv-cross-typed-id-test
 						COMMAND $<TARGET_FILE:spirv-cross-typed-id-test>)
 				add_test(NAME spirv-cross-debug-lines-test

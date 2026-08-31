@@ -1,0 +1,11 @@
+#version 450
+
+layout(local_size_x = 1) in;
+layout(set = 8, binding = 0, std430) buffer Data {
+	uint value;
+} dataBuffer;
+
+void main()
+{
+	dataBuffer.value = 0x12345678u;
+}

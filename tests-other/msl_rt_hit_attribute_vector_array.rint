@@ -1,0 +1,22 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+struct HitData
+{
+	vec3 samples[2];
+};
+
+layout(set = 0, binding = 0) readonly buffer Inputs
+{
+	float scale;
+} inputs;
+
+hitAttributeEXT HitData hit;
+
+void main()
+{
+	hit.samples[1] = inputs.scale * vec3(1.0, 2.0, 3.0);
+	vec3 samples[2] = hit.samples;
+	hit.samples = samples;
+	reportIntersectionEXT(1.0, 1);
+}

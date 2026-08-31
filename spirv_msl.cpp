@@ -101,6 +101,7 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 		case SPIRType::Half:
 		case SPIRType::Float:
 		case SPIRType::Double:
+		case SPIRType::AccelerationStructure:
 			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(buffer);
 			break;
 		case SPIRType::Image:
@@ -1063,6 +1064,15 @@ void CompilerMSL::build_implicit_builtins()
 		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, msl_options.buffer_size_buffer_index);
 		buffer_size_buffer_id = var_id;
 	}
+	if (uses_acceleration_structure_address)
+	{
+		acceleration_structure_address_table_id = build_constant_uint_array_pointer();
+		set_name(acceleration_structure_address_table_id, "spvAccelerationStructureAddressTable");
+		set_decoration(acceleration_structure_address_table_id, DecorationDescriptorSet, ~(5u));
+		set_decoration(acceleration_structure_address_table_id, DecorationBinding, msl_options.acceleration_structure_address_table_buffer_index);
+		set_extended_decoration(acceleration_structure_address_table_id, SPIRVCrossDecorationResourceIndexPrimary,
+		                        msl_options.acceleration_structure_address_table_buffer_index);
+	}
 
 	if (needs_view_mask_buffer())
 	{
@@ -1371,6 +1381,21 @@ uint32_t CompilerMSL::get_uint_type_id()
 
 void CompilerMSL::emit_entry_point_declarations()
 {
+	if (is_ray_tracing_stage())
+	{
+		for (uint32_t i = 0; i < kMaxArgumentBuffers; i++)
+		{
+			uint32_t id = argument_buffer_ids[i];
+			if (!id)
+				continue;
+			auto &var = get<SPIRVariable>(id);
+			auto address_space = get_variable_address_space(var);
+			auto type = type_to_glsl(get_variable_data_type(var));
+			statement(address_space, " ", type, "& ", to_name(id), " = *reinterpret_cast<", address_space,
+			          " ", type, "*>(spvRayState.dispatch->descriptorSetAddresses[", i, "]);");
+		}
+	}
+
 	// FIXME: Get test coverage here ...
 	// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 	declare_complex_constant_arrays();
@@ -1614,11 +1639,16 @@ void CompilerMSL::emit_entry_point_declarations()
 			}
 			has_runtime_array_declaration = true;
 		}
-		else if (!type.array.empty() && type.basetype == SPIRType::Struct)
+		else if (!type.array.empty() &&
+		         (type.basetype == SPIRType::Struct ||
+		          (type.basetype == SPIRType::AccelerationStructure &&
+		           msl_options.acceleration_structure_descriptor_as_address)))
 		{
-			// Emit only buffer arrays here.
-			statement(get_variable_address_space(var), " ", type_to_glsl(buffer_type), "* ",
-			          to_restrict(var.self, true), name, "[] =");
+			if (type.basetype == SPIRType::AccelerationStructure)
+				statement("device const ulong* ", to_restrict(var.self, true), name, "[] =");
+			else
+				statement(get_variable_address_space(var), " ", type_to_glsl(buffer_type), "* ",
+				          to_restrict(var.self, true), name, "[] =");
 			begin_scope();
 			uint32_t array_size = get_resource_array_size(type, var.self);
 			for (uint32_t i = 0; i < array_size; ++i)
@@ -1774,6 +1804,8 @@ string CompilerMSL::compile()
 		add_active_interface_variable(swizzle_buffer_id);
 	if (buffer_size_buffer_id)
 		add_active_interface_variable(buffer_size_buffer_id);
+	if (acceleration_structure_address_table_id)
+		add_active_interface_variable(acceleration_structure_address_table_id);
 	if (view_mask_buffer_id)
 		add_active_interface_variable(view_mask_buffer_id);
 	if (dynamic_offsets_buffer_id)
@@ -1864,6 +1896,8 @@ string CompilerMSL::compile()
 		emit_specialization_constants_and_structs();
 		emit_resources();
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
+		if (is_ray_tracing_ifb_stage())
+			statement("SPV_RAY_IFB_ENTRY_POINT(", to_name(ir.default_entry_point), ", ", incoming_ray_payload_type, ")");
 
 		pass_count++;
 	} while (is_forcing_recompilation());
@@ -1876,7 +1910,18 @@ void CompilerMSL::preprocess_op_codes()
 {
 	OpCodePreprocessor preproc(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), preproc);
-
+	if (is_ray_tracing_stage())
+	{
+		if (!msl_options.ray_tracing_pipeline)
+			SPIRV_CROSS_THROW("Ray tracing pipeline stages require an external runtime ABI.");
+		if (!msl_options.supports_msl_version(3, 0) || !msl_options.argument_buffers)
+			SPIRV_CROSS_THROW("Ray tracing pipelines require MSL 3.0 and argument buffers.");
+		if (msl_options.ray_tracing_any_hit_ifb && msl_options.ray_tracing_intersection_ifb)
+			SPIRV_CROSS_THROW("Triangle and procedural intersection-function-buffer modes cannot be combined.");
+		if ((msl_options.ray_tracing_any_hit_ifb || msl_options.ray_tracing_intersection_ifb) &&
+		    (!msl_options.supports_msl_version(4, 0) || !is_ray_tracing_ifb_stage()))
+			SPIRV_CROSS_THROW("Intersection-function-buffer mode requires an MSL 4.0 compatible hit shader.");
+	}
 	suppress_missing_prototypes = preproc.suppress_missing_prototypes;
 
 	if (preproc.uses_atomics)
@@ -1938,13 +1983,15 @@ void CompilerMSL::preprocess_op_codes()
 		msl_options.manual_helper_invocation_updates |= should_enable;
 	}
 
-	if (is_intersection_query())
+	if (is_intersection_query() || is_ray_tracing_stage())
 	{
 		add_header_line("#if __METAL_VERSION__ >= 230");
 		add_header_line("#include <metal_raytracing>");
 		add_header_line("using namespace metal::raytracing;");
 		add_header_line("#endif");
 	}
+	if (ray_query_needs_metadata())
+		add_typedef_line("struct spvRayQueryMetadata { device const ulong* accelerationStructure; uint flags; };");
 
 	if (preproc.uses_cooperative_matrix)
 	{
@@ -1954,11 +2001,122 @@ void CompilerMSL::preprocess_op_codes()
 	}
 }
 
+uint32_t CompilerMSL::clone_ray_data_type(uint32_t type_id, bool force)
+{
+	auto itr = ray_data_physical_types.find(type_id);
+	if (itr != ray_data_physical_types.end())
+		return itr->second;
+	auto type = get<SPIRType>(type_id);
+	if (type.pointer || (type.array.empty() && type.basetype != SPIRType::Struct))
+		return type_id;
+	bool force_children = force || (type.array.empty() && type_is_explicit_layout(type));
+	bool changed = force_children;
+	auto clone_child = [&](TypeID &child) {
+		auto logical = child;
+		child = clone_ray_data_type(child, force_children);
+		changed |= child != logical;
+	};
+	if (type.array.empty())
+		for (auto &member : type.member_types)
+			clone_child(member);
+	else
+		clone_child(type.parent_type);
+
+	if (!changed)
+	{
+		mark_struct_members_packed(type);
+		return type_id;
+	}
+	uint32_t clone_id = ir.increase_bound_by(1);
+	ray_data_physical_types[type_id] = clone_id;
+	auto &clone = set<SPIRType>(clone_id, type);
+	clone.type_alias = 0;
+	if (!type.array.empty())
+		return clone_id;
+	clone.member_name_cache.clear();
+	auto name = get_name(type_id);
+	set_name(clone_id, join(name.empty() ? "spvRayData" : name, "_", type_id));
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+	{
+		if (has_member_decoration(type_id, i, DecorationRowMajor))
+			set_member_decoration(clone_id, i, DecorationRowMajor);
+	}
+	mark_struct_members_packed(clone);
+	return clone_id;
+}
+
+string CompilerMSL::ray_query_metadata_expression(uint32_t id)
+{
+	auto expression = to_expression(id);
+	return expression.insert(min(expression.find('['), expression.size()), "Metadata");
+}
+
 // Move the Private and Workgroup global variables to the entry function.
 // Non-constant variables cannot have global scope in Metal.
 void CompilerMSL::localize_global_variables()
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+	if (is_ray_tracing_stage())
+	{
+		if (swizzle_buffer_id) set_qualified_name(swizzle_buffer_id, "spvRuntimeBuffer<0>(spvRayState)");
+		if (buffer_size_buffer_id) set_qualified_name(buffer_size_buffer_id, "spvRuntimeBuffer<1>(spvRayState)");
+		if (dynamic_offsets_buffer_id) set_qualified_name(dynamic_offsets_buffer_id, "spvRuntimeBuffer<2>(spvRayState)");
+		if (acceleration_structure_address_table_id) set_qualified_name(acceleration_structure_address_table_id, "spvRuntimeBuffer<3>(spvRayState)");
+		for (auto id : ir.ids_for_constant_or_variable)
+		{
+			auto *variable = maybe_get<SPIRVariable>(id);
+			if (!variable || (variable->storage != StorageClassRayPayloadKHR &&
+			                  variable->storage != StorageClassIncomingRayPayloadKHR &&
+			                  variable->storage != StorageClassCallableDataKHR &&
+			                  variable->storage != StorageClassIncomingCallableDataKHR &&
+			                  variable->storage != StorageClassHitAttributeKHR &&
+			                  variable->storage != StorageClassShaderRecordBufferKHR &&
+			                  variable->storage != StorageClassPushConstant))
+				continue;
+			auto &var = *variable;
+			bool ray_data = var.storage != StorageClassShaderRecordBufferKHR && var.storage != StorageClassPushConstant;
+			auto type_id = get_variable_data_type_id(var);
+			auto physical_type = ray_data && get<SPIRType>(type_id).basetype == SPIRType::Struct ?
+			                         clone_ray_data_type(type_id) : type_id;
+			if (type_id != physical_type)
+				set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID, physical_type);
+			type_id = physical_type;
+			if (var.storage == StorageClassIncomingRayPayloadKHR &&
+			    (ir.get_spirv_version() < 0x10400 || interface_variable_exists_in_entry_point(id)))
+				incoming_ray_payload_type = type_to_glsl(get<SPIRType>(type_id), id);
+			if (is_hidden_variable(var))
+				continue;
+			if (var.storage == StorageClassRayPayloadKHR || var.storage == StorageClassCallableDataKHR)
+			{
+				entry_func.add_local_variable(id);
+				var.storage = StorageClassPrivate;
+			}
+			else
+			{
+				auto &type = get<SPIRType>(type_id);
+				auto type_name = type_to_glsl(type, id);
+				string expression;
+				if (var.storage == StorageClassIncomingRayPayloadKHR ||
+				    var.storage == StorageClassIncomingCallableDataKHR)
+					expression = join("spvRayData<", type_name, ">(SPV_RAY_INCOMING_DATA)");
+				else if (var.storage == StorageClassPushConstant)
+					expression = join("spvPushConstant<", type_name, ">(spvRayState)");
+				else if (var.storage == StorageClassHitAttributeKHR)
+				{
+					if (msl_options.ray_tracing_max_hit_attribute_size &&
+					    get_declared_type_size_msl(0, &type, false, false) > msl_options.ray_tracing_max_hit_attribute_size)
+						SPIRV_CROSS_THROW("Hit attribute exceeds the runtime ABI limit.");
+					expression = join(get_execution_model() == ExecutionModelIntersectionKHR ? "spvHitAttribute<" :
+					                                                                    "spvReadHitAttribute<",
+					                  type_name, ">(", is_ray_tracing_ifb_stage() ? "spvRayContext" : "spvRay.context", ")");
+				}
+				else
+					expression = join("spvShaderRecord<", type_name, ">(SPV_RAY_SHADER_RECORD_ARGS(",
+					                  get_execution_model() == ExecutionModelMissKHR ? "true" : "false", "))");
+				set_qualified_name(id, expression);
+			}
+		}
+	}
 	auto iter = global_variables.begin();
 	while (iter != global_variables.end())
 	{
@@ -2011,10 +2169,13 @@ void CompilerMSL::extract_global_variables_from_functions()
 				                                    { statement(to_name(var.self), " = simd_is_helper_thread();"); });
 			}
 		}
+		if (var.storage == StorageClassInput && is_ray_tracing_stage() &&
+		    get_execution_model() != ExecutionModelRayGenerationKHR && is_builtin_variable(var))
+			return;
 
 		if (var.storage == StorageClassInput || var.storage == StorageClassOutput ||
 		    var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-		    var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer)
+		    (var.storage == StorageClassPushConstant && !is_ray_tracing_stage()) || var.storage == StorageClassStorageBuffer)
 		{
 			global_var_ids.insert(var.self);
 		}
@@ -2061,6 +2222,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 			switch (op)
 			{
+			case OpCopyObject:
 			case OpLoad:
 			case OpInBoundsAccessChain:
 			case OpAccessChain:
@@ -2095,6 +2257,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 				break;
 			}
+			case OpConvertUToAccelerationStructureKHR:
+				if (!is_ray_tracing_stage())
+					added_arg_ids.insert(acceleration_structure_address_table_id);
+				break;
 
 			case OpFunctionCall:
 			{
@@ -2114,7 +2280,12 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				added_arg_ids.insert(inner_func_args.begin(), inner_func_args.end());
 				break;
 			}
-
+			case OpTraceRayKHR:
+			case OpExecuteCallableKHR:
+				for (uint32_t arg_idx = op == OpTraceRayKHR ? 0 : 1; arg_idx < i.length; arg_idx++)
+					if (global_var_ids.count(ops[arg_idx]))
+						added_arg_ids.insert(ops[arg_idx]);
+				break;
 			case OpStore:
 			{
 				uint32_t base_id = ops[0];
@@ -2305,7 +2476,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 
 			case OpRayQueryInitializeKHR:
-			case OpRayQueryProceedKHR:
 			case OpRayQueryTerminateKHR:
 			case OpRayQueryGenerateIntersectionKHR:
 			case OpRayQueryConfirmIntersectionKHR:
@@ -2316,6 +2486,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(base_id);
 				break;
 			}
+			case OpRayQueryProceedKHR:
 
 			case OpRayQueryGetRayTMinKHR:
 			case OpRayQueryGetRayFlagsKHR:
@@ -2335,6 +2506,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpRayQueryGetIntersectionObjectRayOriginKHR:
 			case OpRayQueryGetIntersectionObjectToWorldKHR:
 			case OpRayQueryGetIntersectionWorldToObjectKHR:
+			case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
 			{
 				// Ray query accesses memory directly, need check pass down object if using Private storage class.
 				uint32_t base_id = ops[2];
@@ -2368,7 +2540,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 		if (b.terminator == SPIRBlock::EmitMeshTasks && builtin_task_grid_id != 0)
 			added_arg_ids.insert(builtin_task_grid_id);
 	}
-
 	function_global_vars[func_id] = added_arg_ids;
 
 	// Add the global variables as arguments to the function
@@ -2531,7 +2702,8 @@ void CompilerMSL::mark_packable_structs()
 			auto &type = this->get<SPIRType>(var.basetype);
 			if (type.pointer &&
 			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-			     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer) &&
+			     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer ||
+			     type.storage == StorageClassShaderRecordBufferKHR) &&
 			    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
 				mark_as_packable(type);
 		}
@@ -2817,6 +2989,9 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 {
 	bool is_builtin = is_builtin_variable(var);
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+	if (storage == StorageClassInput && is_builtin && is_ray_tracing_stage() &&
+	    get_execution_model() != ExecutionModelRayGenerationKHR)
+		return;
 	bool is_flat = has_decoration(var.self, DecorationFlat);
 	bool is_noperspective = has_decoration(var.self, DecorationNoPerspective);
 	bool is_centroid = has_decoration(var.self, DecorationCentroid);
@@ -5004,6 +5179,8 @@ void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+		if (mbr_type.pointer)
+			continue;
 		if (mbr_type.basetype == SPIRType::Struct)
 		{
 			// Recursively mark structs as packed.
@@ -5815,7 +5992,6 @@ void CompilerMSL::emit_header()
 
 	for (auto &header : header_lines)
 		statement(header);
-
 	statement("");
 	statement("using namespace metal;");
 	statement("");
@@ -9512,6 +9688,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 	case OpLoad:
 	{
+		auto &load_type = get<SPIRType>(ops[0]);
+		if (!load_type.pointer && load_type.basetype == SPIRType::RayQuery)
+			SPIRV_CROSS_THROW("MSL cannot copy ray query objects.");
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
 		if (is_tessellation_shader())
@@ -10169,6 +10348,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpStore:
 	{
+		auto &value_type = expression_type(ops[1]);
+		if (!value_type.pointer && value_type.basetype == SPIRType::RayQuery)
+			SPIRV_CROSS_THROW("MSL cannot copy ray query objects.");
 		const auto &type = expression_type(ops[0]);
 
 		if (is_out_of_bounds_tessellation_level(ops[0]))
@@ -10467,25 +10649,53 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Raster order groups require MSL 2.0.");
 		break; // Nothing to do in the body
 
-	case OpConvertUToAccelerationStructureKHR:
-		SPIRV_CROSS_THROW("ConvertUToAccelerationStructure is not supported in MSL.");
+	case OpFunctionCall:
+	{
+		CompilerGLSL::emit_instruction(instruction);
+		auto model = get_execution_model();
+		if (model == ExecutionModelAnyHitKHR || model == ExecutionModelIntersectionKHR)
+		{
+			const char *action = is_ray_tracing_ifb_stage() ? "spvRayAction" : "spvRay.action";
+			statement("if (", action, model == ExecutionModelAnyHitKHR ? " != 0)" : " == 2)");
+			emit_ray_return();
+		}
+		break;
+	}
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
-		SPIRV_CROSS_THROW("BindingTableRecordOffset is not supported in MSL.");
+	{
+		if (!msl_options.acceleration_structure_descriptor_as_address)
+			SPIRV_CROSS_THROW("BindingTableRecordOffset is not supported in MSL.");
+		const char *intersection = get<SPIRConstant>(ops[3]).scalar_i32() == 0 ? "candidate" : "committed";
+		emit_op(ops[0], ops[1], join("((device const uint*)",
+		                           ray_query_metadata_expression(ops[2]), ".accelerationStructure[1])[",
+		                           to_expression(ops[2]), ".get_", intersection,
+		                           "_instance_id()] & 0x00ffffffu"), false);
+		break;
+	}
 
 	case OpRayQueryInitializeKHR:
 	{
 		flush_variable_declaration(ops[0]);
 		register_write(ops[0]);
 		add_spv_func_and_recompile(SPVFuncImplRayQueryIntersectionParams);
+		if (uses_ray_query_sbt && msl_options.acceleration_structure_descriptor_as_address)
+			statement(ray_query_metadata_expression(ops[0]), ".accelerationStructure = ",
+			          to_expression(ops[1]), ";");
+		if (uses_ray_query_flags)
+			statement(ray_query_metadata_expression(ops[0]), ".flags = ", to_expression(ops[2]), ";");
 
 		statement(to_expression(ops[0]), ".reset(", "ray(", to_expression(ops[4]), ", ", to_expression(ops[6]), ", ",
-		          to_expression(ops[5]), ", ", to_expression(ops[7]), "), ", to_expression(ops[1]), ", ", to_expression(ops[3]),
+		          to_expression(ops[5]), ", ", to_expression(ops[7]),
+		          "), ", msl_options.acceleration_structure_descriptor_as_address ?
+		                       "*(device const raytracing::acceleration_structure<raytracing::instancing>*)" : "",
+		          to_expression(ops[1]),
+		          ", (", to_expression(ops[3]), " & 0xffu)",
 		          ", spvMakeIntersectionParams(", to_expression(ops[2]), "));");
 		break;
 	}
 	case OpRayQueryProceedKHR:
 	{
-		flush_variable_declaration(ops[0]);
+		flush_variable_declaration(ops[2]);
 		register_write(ops[2]);
 		emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".next()"), false);
 		break;
@@ -10511,6 +10721,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 #define MSL_RAY_QUERY_IS_OP2(op, msl_op) MSL_RAY_QUERY_OP_INNER2(op, .is, msl_op)
 
 		MSL_RAY_QUERY_GET_OP(RayTMin, ray_min_distance);
+	case OpRayQueryGetRayFlagsKHR:
+		flush_variable_declaration(ops[2]);
+		emit_op(ops[0], ops[1], join(ray_query_metadata_expression(ops[2]), ".flags"), false);
+		break;
 		MSL_RAY_QUERY_GET_OP(WorldRayOrigin, world_space_ray_origin);
 		MSL_RAY_QUERY_GET_OP(WorldRayDirection, world_space_ray_direction);
 		MSL_RAY_QUERY_GET_OP2(IntersectionInstanceId, instance_id);
@@ -10540,11 +10754,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".get_committed_distance()"), false);
 		break;
 	case OpRayQueryGetIntersectionCandidateAABBOpaqueKHR:
-	{
-		flush_variable_declaration(ops[0]);
-		emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".is_candidate_non_opaque_bounding_box()"), false);
+		flush_variable_declaration(ops[2]);
+		emit_op(ops[0], ops[1], join("!", to_expression(ops[2]), ".is_candidate_non_opaque_bounding_box()"), false);
 		break;
-	}
+	case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
+		SPIRV_CROSS_THROW("Triangle vertex positions are not exposed by Metal ray queries.");
 	case OpRayQueryConfirmIntersectionKHR:
 		flush_variable_declaration(ops[0]);
 		register_write(ops[0]);
@@ -10559,6 +10773,27 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		flush_variable_declaration(ops[0]);
 		register_write(ops[0]);
 		statement(to_expression(ops[0]), ".abort();");
+		break;
+	case OpTraceRayKHR:
+	{
+		flush_variable_declaration(ops[10]);
+		register_write(ops[10]);
+		string arguments = to_expression(ops[0]);
+		for (uint32_t i = 1; i <= 10; i++)
+			arguments += join(", ", to_expression(ops[i]));
+		statement("spvTraceRay(", arguments, ", spvRayState);");
+		break;
+	}
+	case OpExecuteCallableKHR:
+		flush_variable_declaration(ops[1]);
+		register_write(ops[1]);
+		statement("spvExecuteCallable(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", spvRayState);");
+		break;
+	case OpReportIntersectionKHR:
+		emit_op(ops[0], ops[1], join("spvReportIntersection(", to_expression(ops[2]), ", ",
+		                                to_expression(ops[3]), ", spvRay, spvRayState)"), false);
+		statement("if (spvRay.action == 2)");
+		emit_ray_return();
 		break;
 #undef MSL_RAY_QUERY_GET_OP
 #undef MSL_RAY_QUERY_IS_CANDIDATE
@@ -11034,10 +11269,12 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	auto model = get_execution_model();
 
 	if (model != ExecutionModelGLCompute && model != ExecutionModelTaskEXT &&
-	    model != ExecutionModelMeshEXT && !is_tesc_shader())
+	    model != ExecutionModelMeshEXT && !is_tesc_shader() && !is_ray_tracing_stage())
 	{
 		return;
 	}
+	if (is_ray_tracing_stage() && (id_exe_scope || !msl_options.supports_msl_version(3, 2)))
+		SPIRV_CROSS_THROW("Ray tracing memory barriers require MSL 3.2 and cannot be control barriers.");
 
 	uint32_t exe_scope = id_exe_scope ? evaluate_constant_u32(id_exe_scope) : uint32_t(ScopeInvocation);
 	uint32_t mem_scope = id_mem_scope ? evaluate_constant_u32(id_mem_scope) : uint32_t(ScopeInvocation);
@@ -11179,6 +11416,9 @@ static bool storage_class_array_is_thread(StorageClass storage)
 	case StorageClassGeneric:
 	case StorageClassFunction:
 	case StorageClassPrivate:
+	case StorageClassIncomingRayPayloadKHR:
+	case StorageClassIncomingCallableDataKHR:
+	case StorageClassHitAttributeKHR:
 		return true;
 
 	default:
@@ -11333,6 +11573,9 @@ uint32_t CompilerMSL::get_physical_tess_level_array_size(BuiltIn builtin) const
 // Returns whether the struct assignment was emitted.
 bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 {
+	if (has_extended_decoration(id_lhs, SPIRVCrossDecorationPhysicalTypeID) ||
+	    has_extended_decoration(id_lhs, SPIRVCrossDecorationPhysicalTypePacked))
+		return false;
 	// We only care about assignments of an entire array
 	auto &type = expression_type(id_lhs);
 	if (!is_array(get_pointee_type(type)))
@@ -12158,9 +12401,32 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	// Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib.
 	if (!processing_entry_point)
+	{
+		string template_decl;
+		for (auto &arg : func.arguments)
+		{
+			auto &var = get<SPIRVariable>(arg.id);
+			auto &type = get_variable_data_type(var);
+			// The descriptor binding can override the SPIR-V array size. Let Metal preserve the caller's native type.
+			if (type.basetype == SPIRType::AccelerationStructure &&
+			    get<SPIRType>(arg.type).storage == StorageClassUniformConstant &&
+			    msl_options.acceleration_structure_descriptor_as_address && is_array(type) &&
+			    !is_var_runtime_size_array(var))
+			{
+				template_decl += template_decl.empty() ? "template<typename " : ", typename ";
+				template_decl += join("spvRTASArray", arg.id);
+			}
+		}
+		if (!template_decl.empty())
+			statement(template_decl, ">");
 		statement(force_inline);
+	}
 
 	auto &type = get<SPIRType>(func.return_type);
+	if (is_ray_tracing_ifb_stage() && incoming_ray_payload_type.empty())
+		SPIRV_CROSS_THROW("Intersection-function-buffer mode requires an incoming ray payload.");
+	string ray_args = is_ray_tracing_stage() ?
+	                      join("SPV_RAY_CONTEXT_ARGS(", incoming_ray_payload_type.empty() ? "void" : incoming_ray_payload_type, ")") : "";
 
 	if (!type.array.empty() && msl_options.force_native_arrays)
 	{
@@ -12174,6 +12440,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	decl += " ";
 	decl += to_name(func.self);
+	if (processing_entry_point && is_ray_tracing_ifb_stage())
+		decl += "_ifb_impl";
 	decl += "(";
 
 	if (!type.array.empty() && msl_options.force_native_arrays)
@@ -12189,7 +12457,15 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	if (processing_entry_point)
 	{
-		if (msl_options.argument_buffers)
+		if (!ray_args.empty())
+		{
+			if (get_execution_model() == ExecutionModelRayGenerationKHR)
+				decl += "uint3 spvLaunchId, uint3 spvLaunchSize, ";
+			decl += ray_args;
+			if (!func.arguments.empty())
+				decl += ", ";
+		}
+		else if (msl_options.argument_buffers)
 			decl += entry_point_args_argument_buffer(!func.arguments.empty());
 		else
 			decl += entry_point_args_classic(!func.arguments.empty());
@@ -12297,6 +12573,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		if (&arg != &func.arguments.back())
 			decl += ", ";
 	}
+	if (!processing_entry_point && !ray_args.empty())
+		decl += join(!func.arguments.empty() || (!type.array.empty() && msl_options.force_native_arrays) ? ", " : "", ray_args);
 
 	decl += ")";
 	statement(decl);
@@ -13442,7 +13720,8 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 	{
 		arg_str += ", " + to_expression(var_id) + "_atomic";
 	}
-
+	if (type.basetype == SPIRType::RayQuery && ray_query_needs_metadata())
+		arg_str += join(", ", ray_query_metadata_expression(var_id ? var_id : id));
 	return arg_str;
 }
 
@@ -13665,6 +13944,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 
 	if (member_is_packed_physical_type(type, index))
 	{
+		if (!physical_type.array.empty())
+			is_using_builtin_array = true;
 		// If we're packing a matrix, output an appropriate typedef
 		if (physical_type.basetype == SPIRType::Struct)
 		{
@@ -14399,6 +14680,8 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	string return_type = type_to_glsl(type) + type_to_array_glsl(type, 0);
 	if (!processing_entry_point)
 		return return_type;
+	if (is_ray_tracing_ifb_stage())
+		return "static inline " + return_type;
 
 	// If an outgoing interface block has been defined, and it should be returned, override the entry point return type
 	if (entry_point_returns_stage_output())
@@ -14445,7 +14728,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		entry_type = "[[object]]";
 		break;
 	default:
-		entry_type = "unknown";
+		entry_type = is_ray_tracing_stage() ? "[[visible]]" : "unknown";
 		break;
 	}
 
@@ -14780,6 +15063,13 @@ bool CompilerMSL::is_intersection_query() const
 	return std::find(caps.begin(), caps.end(), CapabilityRayQueryKHR) != caps.end();
 }
 
+void CompilerMSL::append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<string> &arglist)
+{
+	CompilerGLSL::append_global_func_args(func, index, arglist);
+	if (is_ray_tracing_stage())
+		arglist.push_back("SPV_RAY_CONTEXT_NAMES");
+}
+
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
@@ -14789,7 +15079,6 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			return;
 
 		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
-
 		// Don't emit SamplePosition as a separate parameter. In the entry
 		// point, we get that by calling get_sample_position() on the sample ID.
 		if (is_builtin_variable(var) &&
@@ -15440,10 +15729,16 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		}
 		case SPIRType::AccelerationStructure:
 		{
-			if (!ep_args.empty())
-				ep_args += ", ";
-			ep_args += type_to_glsl(type, var_id) + " " + r.name;
-			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			bool address_array = msl_options.acceleration_structure_descriptor_as_address && !type.array.empty();
+			uint32_t count = address_array ? get_resource_array_size(type, var_id) : 1;
+			for (uint32_t i = 0; i < count; i++)
+			{
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += address_array ? "device const ulong* " + r.name + "_" + convert_to_string(i) :
+				                           type_to_glsl(type, var_id) + " " + r.name;
+				ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")]]";
+			}
 			break;
 		}
 		default:
@@ -15589,6 +15884,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 
 		if (var.storage == StorageClassInput && is_builtin_variable(var) && active_input_builtins.get(bi_type))
 		{
+			if (is_ray_tracing_stage() && (bi_type == BuiltInSubgroupSize || bi_type == BuiltInSubgroupLocalInvocationId))
+				return;
 			switch (bi_type)
 			{
 			case BuiltInSamplePosition:
@@ -15704,7 +16001,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					break;
 				// For subgroup emulation, assume subgroups of size 1.
 				entry_func.fixup_hooks_in.push_back(
-				    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
+					[=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
 				break;
 			case BuiltInSubgroupSize:
 				if (msl_options.emulate_subgroups)
@@ -16300,9 +16597,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
 	bool type_is_tlas = type.basetype == SPIRType::AccelerationStructure;
+	bool is_tlas_address_array = type_is_tlas && type_storage == StorageClassUniformConstant &&
+	                             msl_options.acceleration_structure_descriptor_as_address && is_array(type) &&
+	                             !is_var_runtime_size_array(var);
 
 	// For opaque types we handle const later due to descriptor address spaces.
-	const char *cv_qualifier = (constref && !type_is_image) ? "const " : "";
+	const char *cv_qualifier = (constref && !type_is_image && !(type_is_tlas && msl_options.acceleration_structure_descriptor_as_address)) ? "const " : "";
 	string decl;
 
 	// If this is a combined image-sampler for a 2D image with floating-point type,
@@ -16370,6 +16670,11 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// Mark the variable so that we can handle passing it to another function.
 		set_extended_decoration(arg.id, SPIRVCrossDecorationDynamicImageSampler);
 	}
+	else if (is_tlas_address_array)
+	{
+		decl = join("spvRTASArray", arg.id);
+		address_space.clear();
+	}
 	else
 	{
 		// The type is a pointer type we need to emit cv_qualifier late.
@@ -16436,6 +16741,11 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += to_expression(name_id);
 			}
 		}
+	}
+	else if (is_tlas_address_array)
+	{
+		decl += " ";
+		decl += to_expression(name_id);
 	}
 	else if (is_array(type) && !type_is_image)
 	{
@@ -16563,7 +16873,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += join(", ", cv_flags, "device atomic_", type_to_glsl(get<SPIRType>(var_type.image.type), 0));
 		decl += "* " + to_expression(name_id) + "_atomic";
 	}
-
+	if (type.basetype == SPIRType::RayQuery && ray_query_needs_metadata())
+	{
+		auto array = type_to_array_glsl(type, name_id);
+		decl += array.empty() ?
+		            join(", thread spvRayQueryMetadata& ", to_expression(name_id), "Metadata") :
+		            join(", thread spvRayQueryMetadata (&", to_expression(name_id), "Metadata)", array);
+	}
 	is_using_builtin_array = false;
 
 	return decl;
@@ -16573,7 +16889,14 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 // has a qualified name, use it, otherwise use the standard name.
 string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 {
-	if (current_function && (current_function->self == ir.default_entry_point))
+	auto *var = maybe_get<SPIRVariable>(id);
+	bool ray_alias = var && (var->storage == StorageClassIncomingRayPayloadKHR ||
+	                         var->storage == StorageClassIncomingCallableDataKHR ||
+	                         var->storage == StorageClassHitAttributeKHR ||
+	                         var->storage == StorageClassShaderRecordBufferKHR ||
+	                         (is_ray_tracing_stage() && var->storage == StorageClassPushConstant));
+	ray_alias |= is_ray_tracing_stage() && (id == swizzle_buffer_id || id == buffer_size_buffer_id || id == dynamic_offsets_buffer_id || id == acceleration_structure_address_table_id);
+	if ((current_function && current_function->self == ir.default_entry_point) || ray_alias)
 	{
 		auto *m = ir.find_meta(id);
 		if (m && !m->decoration.qualified_alias_explicit_override && !m->decoration.qualified_alias.empty())
@@ -17241,7 +17564,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		type_name = "bfloat";
 		break;
 	case SPIRType::AccelerationStructure:
-		if (msl_options.supports_msl_version(2, 4))
+		if (msl_options.acceleration_structure_descriptor_as_address && !msl_options.supports_msl_version(2, 4))
+			SPIRV_CROSS_THROW("Acceleration structure addresses require MSL 2.4 or later.");
+		if (msl_options.acceleration_structure_descriptor_as_address)
+			type_name = "device const ulong*";
+		else if (msl_options.supports_msl_version(2, 4))
 			type_name = "raytracing::acceleration_structure<raytracing::instancing>";
 		else if (msl_options.supports_msl_version(2, 3))
 			type_name = "raytracing::instance_acceleration_structure";
@@ -17249,6 +17576,8 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 			SPIRV_CROSS_THROW("Acceleration Structure Type is supported in MSL 2.3 and above.");
 		break;
 	case SPIRType::RayQuery:
+		if (member)
+			SPIRV_CROSS_THROW("MSL does not allow intersection_query as a structure or union member.");
 		return "raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>";
 	case SPIRType::MeshGridProperties:
 		return "mesh_grid_properties";
@@ -17320,6 +17649,10 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type, uint32_t variable_i
 	case SPIRType::ControlPointArray:
 	case SPIRType::RayQuery:
 		return CompilerGLSL::type_to_array_glsl(type, variable_id);
+	case SPIRType::AccelerationStructure:
+		if (msl_options.acceleration_structure_descriptor_as_address && variable_id && !type.array.empty())
+			return join("[", get_resource_array_size(type, variable_id), "]");
+		// Fall through to the native acceleration-structure declaration.
 
 	default:
 		if (type_is_array_of_pointers(type) || using_builtin_array())
@@ -17400,7 +17733,13 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 // GCC workaround of lambdas calling protected funcs
 std::string CompilerMSL::variable_decl(const SPIRType &type, const std::string &name, uint32_t id)
 {
-	return CompilerGLSL::variable_decl(type, name, id);
+	if (has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID))
+		return CompilerGLSL::variable_decl(
+		    get<SPIRType>(get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID)), name, id);
+	auto declaration = CompilerGLSL::variable_decl(type, name, id);
+	if (type.basetype == SPIRType::RayQuery && ray_query_needs_metadata())
+		declaration += join("; spvRayQueryMetadata ", name, "Metadata", type_to_array_glsl(type, id));
+	return declaration;
 }
 
 std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id, bool member)
@@ -18093,6 +18432,26 @@ bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
 // Output builtins are qualified with the name of the stage out structure.
 string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
+	if (builtin == BuiltInHitTriangleVertexPositionsKHR)
+		SPIRV_CROSS_THROW("Ray-tracing position fetch is not supported in MSL.");
+	bool subgroup_builtin = builtin == BuiltInSubgroupSize || builtin == BuiltInSubgroupLocalInvocationId;
+	bool ray_builtin = builtin == BuiltInPrimitiveId || builtin == BuiltInInstanceId || subgroup_builtin ||
+	                   (builtin >= BuiltInLaunchIdKHR && builtin <= BuiltInHitKindKHR && builtin != BuiltInHitTNV) ||
+	                   builtin == BuiltInIncomingRayFlagsKHR || builtin == BuiltInRayGeometryIndexKHR ||
+	                   builtin == BuiltInCullMaskKHR;
+	if (storage != StorageClassOutput && is_ray_tracing_stage() && ray_builtin)
+	{
+		auto model = get_execution_model();
+		if (subgroup_builtin)
+			return join("spvRayState.", BuiltInToString(builtin));
+		if (model == ExecutionModelRayGenerationKHR)
+		{
+			if (builtin == BuiltInLaunchIdKHR) return "spvLaunchId";
+			if (builtin == BuiltInLaunchSizeKHR) return "spvLaunchSize";
+		}
+		return join(model == ExecutionModelRayGenerationKHR || model == ExecutionModelCallableKHR ? "spvRayState." :
+			            is_ray_tracing_ifb_stage() ? "spvRayContext." : "spvRay.context.", BuiltInToString(builtin));
+	}
 	switch (builtin)
 	{
 	// Handle HLSL-style 0-based vertex/instance index.
@@ -18789,14 +19148,19 @@ uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type) 
 	uint32_t mbr_cnt = uint32_t(struct_type.member_types.size());
 
 	// In MSL, a struct's alignment is equal to the maximum alignment of any of its members.
-	uint32_t alignment = 1;
+	uint32_t alignment = 1, size = 0;
+	bool natural_layout = is_ray_tracing_stage() && !has_member_decoration(struct_type.self, 0, DecorationOffset);
 
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
 		uint32_t mbr_alignment = get_declared_struct_member_alignment_msl(struct_type, i);
 		alignment = max(alignment, mbr_alignment);
+		if (natural_layout)
+			size = ((size + mbr_alignment - 1) & ~(mbr_alignment - 1)) +
+			       get_declared_struct_member_size_msl(struct_type, i);
 	}
-
+	if (natural_layout)
+		return (size + alignment - 1) & ~(alignment - 1);
 	// Last member will always be matched to the final Offset decoration, but size of struct in MSL now depends
 	// on physical size in MSL, and the size of the struct itself is then aligned to struct alignment.
 	uint32_t spirv_offset = type_struct_member_offset(struct_type, mbr_cnt - 1);
@@ -18876,9 +19240,10 @@ uint32_t CompilerMSL::get_declared_type_size_msl(TypeID type_id, const SPIRType 
 		if (type.basetype == SPIRType::Struct)
 			return get_declared_struct_size_msl(type);
 
+		uint32_t component_size = type.basetype == SPIRType::Boolean && is_ray_tracing_stage() ? 2 : type.width / 8;
 		if (is_packed)
 		{
-			return type.vecsize * type.columns * (type.width / 8);
+			return type.vecsize * type.columns * component_size;
 		}
 		else
 		{
@@ -18892,7 +19257,7 @@ uint32_t CompilerMSL::get_declared_type_size_msl(TypeID type_id, const SPIRType 
 			if (vecsize == 3)
 				vecsize = 4;
 
-			return vecsize * columns * (type.width / 8);
+			return vecsize * columns * component_size;
 		}
 	}
 	}
@@ -18954,16 +19319,17 @@ uint32_t CompilerMSL::get_declared_type_alignment_msl(TypeID type_id, const SPIR
 		// Alignment of packed type is the same as the underlying component or column size.
 		// Alignment of unpacked type is the same as the vector size.
 		// Alignment of 3-elements vector is the same as 4-elements (including packed using column).
+		uint32_t component_size = type.basetype == SPIRType::Boolean && is_ray_tracing_stage() ? 2 : type.width / 8;
 		if (is_packed)
 		{
 			// If we have packed_T and friends, the alignment is always scalar.
-			return type.width / 8;
+			return component_size;
 		}
 		else
 		{
 			// This is the general rule for MSL. Size == alignment.
 			uint32_t vecsize = (row_major && type.columns > 1) ? type.columns : type.vecsize;
-			return (type.width / 8) * (vecsize == 3 ? 4 : vecsize);
+			return component_size * (vecsize == 3 ? 4 : vecsize);
 		}
 	}
 	}
@@ -19087,6 +19453,14 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpFunctionCall:
 		suppress_missing_prototypes = true;
 		break;
+	case OpConvertUToAccelerationStructureKHR: self.uses_acceleration_structure_address = true; break;
+	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR: self.uses_ray_query_sbt = true; break;
+	case OpRayQueryGetRayFlagsKHR: self.uses_ray_query_flags = true; break;
+	case OpIgnoreIntersectionNV:
+	case OpTerminateRayNV:
+	case OpTraceNV:
+	case OpExecuteCallableNV:
+		SPIRV_CROSS_THROW("Legacy SPV_NV_ray_tracing pipeline instructions are not supported in MSL.");
 
 	case OpDemoteToHelperInvocationEXT:
 		uses_discard = true;
@@ -19944,6 +20318,17 @@ string CompilerMSL::to_zero_initialized_expression(uint32_t)
 	return "{}";
 }
 
+string CompilerMSL::to_acceleration_structure_expression(uint32_t source_id, string expression)
+{
+	if (!msl_options.acceleration_structure_descriptor_as_address)
+		SPIRV_CROSS_THROW("ConvertUToAccelerationStructure is not supported in MSL.");
+	if (expression_type(source_id).vecsize == 2)
+		expression = join("as_type<ulong>(", expression, ")");
+	return join("spvAccelerationStructureFromAddress(", expression, ", reinterpret_cast<",
+	            is_ray_tracing_stage() ? "device" : "constant", " const ulong2*>(",
+	            to_name(acceleration_structure_address_table_id), "))");
+}
+
 bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
 {
 	if (!msl_options.argument_buffers)
@@ -20104,16 +20489,21 @@ void CompilerMSL::analyze_argument_buffers()
 		    !is_hidden_variable(var))
 		{
 			uint32_t desc_set = get_decoration(self, DecorationDescriptorSet);
+			auto &type = get_variable_data_type(var);
+			auto *discrete_sampler = type.basetype == SPIRType::Sampler ? find_constexpr_sampler(var.self) : nullptr;
+			bool argument_buffer = descriptor_set_is_argument_buffer(desc_set);
+			bool runtime_buffer = self == swizzle_buffer_id || self == buffer_size_buffer_id ||
+			                      self == dynamic_offsets_buffer_id || self == acceleration_structure_address_table_id;
+			if (is_ray_tracing_stage() && !runtime_buffer && !discrete_sampler &&
+			    (!argument_buffer || !is_supported_argument_buffer_type(type)))
+				SPIRV_CROSS_THROW("Ray tracing pipeline resources must use argument buffers.");
+			if (!argument_buffer && discrete_sampler)
+				constexpr_samplers_by_id[var.self] = *discrete_sampler;
 			// Ignore if it's part of a push descriptor set.
-			if (!descriptor_set_is_argument_buffer(desc_set))
+			if (!argument_buffer)
 				return;
 
 			uint32_t var_id = var.self;
-			auto &type = get_variable_data_type(var);
-
-			if (desc_set >= kMaxArgumentBuffers)
-				SPIRV_CROSS_THROW("Descriptor set index is out of range.");
-
 			const MSLConstexprSampler *constexpr_sampler = nullptr;
 			if (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Sampler)
 			{
@@ -20342,6 +20732,7 @@ void CompilerMSL::analyze_argument_buffers()
 					case SPIRType::Half:
 					case SPIRType::Float:
 					case SPIRType::Double:
+					case SPIRType::AccelerationStructure:
 						add_argument_buffer_padding_buffer_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
 						break;
 					case SPIRType::Image:
@@ -20547,7 +20938,7 @@ void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type,
 	{
 		uint32_t buff_type_id = ir.increase_bound_by(2);
 		auto &buff_type = set<SPIRType>(buff_type_id, OpNop);
-		buff_type.basetype = rez_bind.basetype;
+		buff_type.basetype = rez_bind.basetype == SPIRType::AccelerationStructure ? SPIRType::Void : rez_bind.basetype;
 		buff_type.storage = StorageClassUniformConstant;
 
 		uint32_t ptr_type_id = buff_type_id + 1;
@@ -20698,6 +21089,13 @@ void CompilerMSL::emit_block_hints(const SPIRBlock &)
 {
 }
 
+void CompilerMSL::emit_ray_return(uint32_t action)
+{
+	if (action)
+		statement(is_ray_tracing_ifb_stage() ? "spvRayAction = " : "spvRay.action = ", action, ";");
+	auto &type = get<SPIRType>(current_function->return_type);
+	statement(type.basetype == SPIRType::Void || (!type.array.empty() && msl_options.force_native_arrays) ? "return;" : "return {};");
+}
 void CompilerMSL::emit_mesh_entry_point()
 {
 	auto &ep = get_entry_point();
