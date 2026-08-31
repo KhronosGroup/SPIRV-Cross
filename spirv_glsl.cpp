@@ -2347,6 +2347,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
 	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
 	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
+	bool shared_block = var.storage == StorageClassWorkgroup && typeflags.get(DecorationBlock);
 
 	// GL 3.0/GLSL 1.30 is not considered legacy, but it doesn't have UBOs ...
 	bool can_use_buffer_blocks = (options.es && options.version >= 300) || (!options.es && options.version >= 140);
@@ -2380,7 +2381,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	{
 		attr.push_back(buffer_to_packing_standard(type, false, true));
 	}
-	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block))
+	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block || shared_block))
 	{
 		attr.push_back(buffer_to_packing_standard(type, true, true));
 	}
@@ -2743,6 +2744,10 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
 
+	bool shared = storage == StorageClassWorkgroup;
+	if (shared)
+		require_extension_internal("GL_EXT_shared_memory_block");
+
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
 	bool is_readonly = ssbo && flags.get(DecorationNonWritable);
@@ -2757,7 +2762,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 		buffer_name += heap_meta_to_prefix(*heap_meta);
 	}
 
-	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
+	auto &block_namespace = ssbo ? block_ssbo_names : (shared ? block_shared_mem_names : block_ubo_names);
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
@@ -2807,9 +2812,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 			", ", packing_standard, ") ");
 	}
 
-	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
-	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
-	          buffer_name);
+	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
+	          is_readonly ? "readonly " : "", (ssbo ? "buffer " : (shared ? "shared " : "uniform ")), buffer_name);
 
 	begin_scope();
 
@@ -4131,12 +4135,13 @@ void CompilerGLSL::emit_resources()
 		});
 	}
 
-	// Output UBOs and SSBOs
+	// Output UBOs, SSBOs, and shared memory blocks using explicit layout
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
-		                        type.storage == StorageClassShaderRecordBufferKHR;
+		                        type.storage == StorageClassShaderRecordBufferKHR ||
+		                        type.storage == StorageClassWorkgroup;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
@@ -20040,6 +20045,7 @@ void CompilerGLSL::reset_name_caches()
 	block_output_names.clear();
 	block_ubo_names.clear();
 	block_ssbo_names.clear();
+	block_shared_mem_names.clear();
 	block_names.clear();
 	function_overloads.clear();
 }
