@@ -719,6 +719,15 @@ void CompilerGLSL::find_static_extensions()
 		require_extension_internal("GL_EXT_shader_quad_control");
 	}
 
+	if (execution.flags.get(ExecutionModeDepthGreater) ||
+		execution.flags.get(ExecutionModeDepthLess))
+	{
+		if (!options.es)
+			require_extension_internal("GL_ARB_conservative_depth");
+		else if (options.version >= 300)
+			require_extension_internal("GL_EXT_conservative_depth");
+	}
+
 	// KHR one is likely to get promoted at some point, so if we don't see an explicit SPIR-V extension, assume KHR.
 	for (auto &ext : ir.declared_extensions)
 		if (ext == "SPV_NV_fragment_shader_barycentric")
@@ -1359,10 +1368,14 @@ void CompilerGLSL::emit_header()
 			statement("#endif");
 		}
 
-		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
-			statement("layout(depth_greater) out float gl_FragDepth;");
-		else if (!options.es && execution.flags.get(ExecutionModeDepthLess))
-			statement("layout(depth_less) out float gl_FragDepth;");
+		if (!options.es || options.version >= 300)
+		{
+			const char *prec = options.es ? "highp " : "";
+			if (execution.flags.get(ExecutionModeDepthGreater))
+				statement("layout(depth_greater) out ", prec, "float gl_FragDepth;");
+			else if (execution.flags.get(ExecutionModeDepthLess))
+				statement("layout(depth_less) out ", prec, "float gl_FragDepth;");
+		}
 
 		if (execution.flags.get(ExecutionModeRequireFullQuadsKHR))
 			statement("layout(full_quads) in;");
@@ -2334,6 +2347,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
 	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
 	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
+	bool shared_block = var.storage == StorageClassWorkgroup && typeflags.get(DecorationBlock);
 
 	// GL 3.0/GLSL 1.30 is not considered legacy, but it doesn't have UBOs ...
 	bool can_use_buffer_blocks = (options.es && options.version >= 300) || (!options.es && options.version >= 140);
@@ -2367,7 +2381,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	{
 		attr.push_back(buffer_to_packing_standard(type, false, true));
 	}
-	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block))
+	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block || shared_block))
 	{
 		attr.push_back(buffer_to_packing_standard(type, true, true));
 	}
@@ -2730,6 +2744,10 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
 
+	bool shared = storage == StorageClassWorkgroup;
+	if (shared)
+		require_extension_internal("GL_EXT_shared_memory_block");
+
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
 	bool is_readonly = ssbo && flags.get(DecorationNonWritable);
@@ -2744,7 +2762,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 		buffer_name += heap_meta_to_prefix(*heap_meta);
 	}
 
-	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
+	auto &block_namespace = ssbo ? block_ssbo_names : (shared ? block_shared_mem_names : block_ubo_names);
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
@@ -2794,9 +2812,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 			", ", packing_standard, ") ");
 	}
 
-	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
-	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
-	          buffer_name);
+	statement(layout, is_coherent ? "coherent " : "", is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
+	          is_readonly ? "readonly " : "", (ssbo ? "buffer " : (shared ? "shared " : "uniform ")), buffer_name);
 
 	begin_scope();
 
@@ -4118,12 +4135,13 @@ void CompilerGLSL::emit_resources()
 		});
 	}
 
-	// Output UBOs and SSBOs
+	// Output UBOs, SSBOs, and shared memory blocks using explicit layout
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
-		                        type.storage == StorageClassShaderRecordBufferKHR;
+		                        type.storage == StorageClassShaderRecordBufferKHR ||
+		                        type.storage == StorageClassWorkgroup;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
@@ -13002,6 +13020,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (forward && length >= 4 && (ops[3] & MemoryAccessVolatileMask) != 0)
 			forward = false;
 
+		// If trying to load raw BDA pointers, we may not be able to rely on aliasing rules, especially
+		// if that pointer came from bitcasts or similar.
+		// We won't be able to tie the loaded expression to a flushable memory declaration,
+		// so have to block forwarding early.
+		// If the BDA expression is loaded from a memory declaration, the memory declaration decides.
+		if (forward && expression_type(ptr).storage == StorageClassPhysicalStorageBuffer &&
+			!maybe_get_backing_variable(ptr) &&
+			!maybe_get_backing_buffer_pointer(ptr))
+		{
+			forward = false;
+		}
+
 		// If loading a non-native row-major matrix, mark the expression as need_transpose.
 		bool need_transpose = false;
 		bool old_need_transpose = false;
@@ -20015,6 +20045,7 @@ void CompilerGLSL::reset_name_caches()
 	block_output_names.clear();
 	block_ubo_names.clear();
 	block_ssbo_names.clear();
+	block_shared_mem_names.clear();
 	block_names.clear();
 	function_overloads.clear();
 }

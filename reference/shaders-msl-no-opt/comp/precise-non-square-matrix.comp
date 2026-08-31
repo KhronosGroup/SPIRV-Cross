@@ -55,39 +55,20 @@ template<typename T, int LCols, int LRows, int RCols, int RRows>
     return res;
 }
 
-template<typename T>
-[[clang::optnone]] T spvFAdd(T l, T r)
+struct SSBO
 {
-    return fma(T(1), l, r);
-}
-
-template<typename T>
-[[clang::optnone]] T spvFSub(T l, T r)
-{
-    return fma(T(-1), r, l);
-}
-
-struct main0_out
-{
-    float4 gl_Position [[position]];
+    float3x4 A;
+    float4x3 B;
+    float3x3 C;
+    float4x4 D;
 };
 
-struct main0_in
+kernel void main0(const device SSBO& _17 [[buffer(0)]])
 {
-    float4 vA [[attribute(0)]];
-    float4 vB [[attribute(1)]];
-    float4 vC [[attribute(2)]];
-};
-
-vertex main0_out main0(main0_in in [[stage_in]])
-{
-    main0_out out = {};
-    float4 mul = spvFMul(in.vA, in.vB);
-    float4 add = spvFAdd(in.vA, in.vB);
-    float4 sub = spvFSub(in.vA, in.vB);
-    float4 mad = spvFAdd(spvFMul(in.vA, in.vB), in.vC);
-    float4 summed = spvFAdd(spvFAdd(spvFAdd(mul, add), sub), mad);
-    out.gl_Position = summed;
-    return out;
+    float4x4 tmp0 = spvFMulMatrixMatrix(_17.A, _17.B);
+    float3x3 tmp1 = spvFMulMatrixMatrix(_17.B, _17.A);
+    float3x4 tmp2 = spvFMulMatrixMatrix(_17.A, _17.C);
+    float3x4 tmp3 = spvFMulMatrixMatrix(_17.D, _17.A);
+    float4x3 tmp4 = spvFMulMatrixMatrix(_17.B, _17.D);
 }
 

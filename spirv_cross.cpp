@@ -88,14 +88,19 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool buffer_reference = type.storage == StorageClassPhysicalStorageBuffer;
+	bool shared_block =
+	    type.storage == StorageClassWorkgroup && has_decoration(type.self, Decoration::DecorationBlock);
 
 	bool is_restrict;
 	if (ssbo)
 		is_restrict = ir.get_buffer_block_flags(v).get(DecorationRestrict);
+	else if (shared_block)
+		// When more than one shared block is present, all shared blocks must be decorated Aliased
+		is_restrict = !has_decoration(v.self, DecorationAliased);
 	else
 		is_restrict = has_decoration(v.self, DecorationRestrict);
 
-	return !is_restrict && (ssbo || image || counter || buffer_reference);
+	return !is_restrict && (ssbo || image || counter || buffer_reference || shared_block);
 }
 
 bool Compiler::block_is_control_dependent(const SPIRBlock &block)
@@ -497,6 +502,10 @@ void Compiler::register_write(uint32_t chain)
 		// If our variable is in a storage class which can alias with other buffers,
 		// invalidate all variables which depend on aliased variables. And if this is a
 		// variable pointer, then invalidate all variables regardless.
+		// For BDA, this is overly conservative, since BDA pointers are usually restrict
+		// depending on how that BDA pointer is loaded, but being overly conservative
+		// is better than risking bad aliasing which is very hard to diagnose.
+		// The only real cost is slightly less pretty code, which is an acceptable compromise.
 		if (get_variable_data_type(*var).pointer)
 		{
 			flush_all_active_variables();
@@ -1285,9 +1294,11 @@ void Compiler::parse_fixup()
 		else if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
-			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
-			    var.storage == StorageClassOutput)
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (var.storage == StorageClassPrivate ||
+			    (var.storage == StorageClassWorkgroup && !has_decoration(type.self, DecorationBlock)) ||
+			    var.storage == StorageClassTaskPayloadWorkgroupEXT || var.storage == StorageClassOutput)
 			{
 				global_variables.push_back(var.self);
 			}
