@@ -203,7 +203,7 @@ float4 do_samples(texture1d<float> t1, sampler t1Smplr, constant uint& t1Swzl, t
     return c;
 }
 
-fragment main0_out main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d<float> tex1d [[texture(0)]], texture2d<float> tex2d [[texture(1)]], texture3d<float> tex3d [[texture(2)]], texturecube<float> texCube [[texture(3)]], texture2d_array<float> tex2dArray [[texture(4)]], texturecube_array<float> texCubeArray [[texture(5)]], texture2d<float> texBuffer [[texture(6)]], texture2d<float> depth2d [[texture(7)]], texturecube<float> depthCube [[texture(8)]], texture2d_array<float> depth2dArray [[texture(9)]], texturecube_array<float> depthCubeArray [[texture(10)]], sampler defaultSampler [[sampler(0)]], sampler shadowSampler [[sampler(1)]], sampler tex1dSmplr [[sampler(2)]], sampler tex3dSmplr [[sampler(3)]], sampler tex2dArraySmplr [[sampler(4)]], sampler texCubeArraySmplr [[sampler(5)]], sampler depth2dSmplr [[sampler(6)]], sampler depthCubeSmplr [[sampler(7)]], sampler depthCubeArraySmplr [[sampler(8)]])
+fragment main0_out main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d<float> tex1d [[texture(0)]], texture2d<float> tex2d [[texture(1)]], texture3d<float> tex3d [[texture(2)]], texturecube<float> texCube [[texture(3)]], texture2d_array<float> tex2dArray [[texture(4)]], texturecube_array<float> texCubeArray [[texture(5)]], texture2d<float> texBuffer [[texture(6)]], texture2d<float> depth2d0 [[texture(7)]], texturecube<float> depthCube [[texture(8)]], texture2d_array<float> depth2dArray [[texture(9)]], texturecube_array<float> depthCubeArray [[texture(10)]], sampler defaultSampler [[sampler(0)]], sampler shadowSampler [[sampler(1)]], sampler tex1dSmplr [[sampler(2)]], sampler tex3dSmplr [[sampler(3)]], sampler tex2dArraySmplr [[sampler(4)]], sampler texCubeArraySmplr [[sampler(5)]], sampler depth2d0Smplr [[sampler(6)]], sampler depthCubeSmplr [[sampler(7)]], sampler depthCubeArraySmplr [[sampler(8)]])
 {
     main0_out out = {};
     constant uint& tex1dSwzl = spvSwizzleConstants[0];
@@ -212,11 +212,11 @@ fragment main0_out main0(constant uint* spvSwizzleConstants [[buffer(30)]], text
     constant uint& texCubeSwzl = spvSwizzleConstants[3];
     constant uint& tex2dArraySwzl = spvSwizzleConstants[4];
     constant uint& texCubeArraySwzl = spvSwizzleConstants[5];
-    constant uint& depth2dSwzl = spvSwizzleConstants[7];
+    constant uint& depth2d0Swzl = spvSwizzleConstants[7];
     constant uint& depthCubeSwzl = spvSwizzleConstants[8];
     constant uint& depth2dArraySwzl = spvSwizzleConstants[9];
     constant uint& depthCubeArraySwzl = spvSwizzleConstants[10];
-    out.fragColor = do_samples(tex1d, tex1dSmplr, tex1dSwzl, tex2d, tex2dSwzl, tex3d, tex3dSmplr, tex3dSwzl, texCube, texCubeSwzl, tex2dArray, tex2dArraySmplr, tex2dArraySwzl, texCubeArray, texCubeArraySmplr, texCubeArraySwzl, texBuffer, depth2d, depth2dSmplr, depth2dSwzl, depthCube, depthCubeSmplr, depthCubeSwzl, depth2dArray, depth2dArraySwzl, depthCubeArray, depthCubeArraySmplr, depthCubeArraySwzl, defaultSampler, shadowSampler);
+    out.fragColor = do_samples(tex1d, tex1dSmplr, tex1dSwzl, tex2d, tex2dSwzl, tex3d, tex3dSmplr, tex3dSwzl, texCube, texCubeSwzl, tex2dArray, tex2dArraySmplr, tex2dArraySwzl, texCubeArray, texCubeArraySmplr, texCubeArraySwzl, texBuffer, depth2d0, depth2d0Smplr, depth2d0Swzl, depthCube, depthCubeSmplr, depthCubeSwzl, depth2dArray, depth2dArraySwzl, depthCubeArray, depthCubeArraySmplr, depthCubeArraySwzl, defaultSampler, shadowSampler);
     return out;
 }
 
