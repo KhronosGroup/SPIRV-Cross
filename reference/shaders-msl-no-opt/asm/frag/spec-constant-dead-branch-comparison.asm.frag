@@ -8,25 +8,25 @@ using namespace metal;
 template <typename T>
 static inline depth2d<T> spvDepthCast(texture2d<T> t)
 {
-    return *reinterpret_cast<thread depth2d<T> *>(&t);
-}
-
-template <typename T>
-static inline depthcube<T> spvDepthCast(texturecube<T> t)
-{
-    return *reinterpret_cast<thread depthcube<T> *>(&t);
+    return reinterpret_cast<thread const depth2d<T> &>(t);
 }
 
 template <typename T>
 static inline depth2d_array<T> spvDepthCast(texture2d_array<T> t)
 {
-    return *reinterpret_cast<thread depth2d_array<T> *>(&t);
+    return reinterpret_cast<thread const depth2d_array<T> &>(t);
+}
+
+template <typename T>
+static inline depthcube<T> spvDepthCast(texturecube<T> t)
+{
+    return reinterpret_cast<thread const depthcube<T> &>(t);
 }
 
 template <typename T>
 static inline depthcube_array<T> spvDepthCast(texturecube_array<T> t)
 {
-    return *reinterpret_cast<thread depthcube_array<T> *>(&t);
+    return reinterpret_cast<thread const depthcube_array<T> &>(t);
 }
 
 constant uint _10_tmp [[function_constant(0)]];

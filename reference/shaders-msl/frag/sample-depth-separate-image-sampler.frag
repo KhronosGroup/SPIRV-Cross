@@ -5,6 +5,30 @@
 
 using namespace metal;
 
+template <typename T>
+static inline depth2d<T> spvDepthCast(texture2d<T> t)
+{
+    return reinterpret_cast<thread const depth2d<T> &>(t);
+}
+
+template <typename T>
+static inline depth2d_array<T> spvDepthCast(texture2d_array<T> t)
+{
+    return reinterpret_cast<thread const depth2d_array<T> &>(t);
+}
+
+template <typename T>
+static inline depthcube<T> spvDepthCast(texturecube<T> t)
+{
+    return reinterpret_cast<thread const depthcube<T> &>(t);
+}
+
+template <typename T>
+static inline depthcube_array<T> spvDepthCast(texturecube_array<T> t)
+{
+    return reinterpret_cast<thread const depthcube_array<T> &>(t);
+}
+
 struct main0_out
 {
     float FragColor [[color(0)]];
@@ -13,7 +37,7 @@ struct main0_out
 static inline __attribute__((always_inline))
 float sample_depth_from_function(texture2d<float> uT, sampler uS)
 {
-    return uT.sample_compare(uS, float3(0.5).xy, 0.5);
+    return spvDepthCast(uT).sample_compare(uS, float3(0.5).xy, 0.5);
 }
 
 static inline __attribute__((always_inline))
