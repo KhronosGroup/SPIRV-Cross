@@ -89,7 +89,7 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool buffer_reference = type.storage == StorageClassPhysicalStorageBuffer;
 	bool shared_block =
-	    type.storage == spv::StorageClassWorkgroup && has_decoration(type.self, Decoration::DecorationBlock);
+	    type.storage == StorageClassWorkgroup && has_decoration(type.self, Decoration::DecorationBlock);
 
 	bool is_restrict;
 	if (ssbo)
@@ -1297,7 +1297,7 @@ void Compiler::parse_fixup()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage == StorageClassPrivate ||
-			    (var.storage == StorageClassWorkgroup && !has_decoration(type.self, spv::DecorationBlock)) ||
+			    (var.storage == StorageClassWorkgroup && !has_decoration(type.self, DecorationBlock)) ||
 			    var.storage == StorageClassTaskPayloadWorkgroupEXT || var.storage == StorageClassOutput)
 			{
 				global_variables.push_back(var.self);
