@@ -10542,7 +10542,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpRayQueryGetIntersectionCandidateAABBOpaqueKHR:
 	{
 		flush_variable_declaration(ops[0]);
-		emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".is_candidate_non_opaque_bounding_box()"), false);
+		emit_op(ops[0], ops[1], join("(!", to_expression(ops[2]), ".is_candidate_non_opaque_bounding_box())"), false);
 		break;
 	}
 	case OpRayQueryConfirmIntersectionKHR:
