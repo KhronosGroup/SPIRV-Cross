@@ -286,7 +286,8 @@ static const uint32_t kBufferSizeBufferBinding = ~(2u);
 // will start at max(kArgumentBufferBinding) + 1.
 static const uint32_t kArgumentBufferBinding = ~(3u);
 
-static const uint32_t kMaxArgumentBuffers = 8;
+// Somewhat arbitrary. Can't be too large or it starts eating into builtin magic buffers, etc.
+static const uint32_t kMaxArgumentBuffers = 16;
 
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
