@@ -18702,6 +18702,10 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		{
 			block.disable_block_optimization = true;
 			force_recompile();
+			// We're skipping the emission of the continue block, so this is kinda redundant.
+			// However, it's important that we run the codegen part, since we might need to do fixups for a future pass.
+			// This avoids a potentially "unbounded" number of recompilation chains.
+			emit_continue_block(block.continue_block, false, false);
 			begin_scope(); // We'll see an end_scope() later.
 			return false;
 		}
