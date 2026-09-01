@@ -485,12 +485,16 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
     if test_glslang:
         subprocess.check_call(hlsl_args)
 
+    # FXC cannot compile shaders above shader model 5
+    shader_model = shader_model_hlsl(shader)
+    is_valid_fxc_shader_model = shader_model and len(shader_model) >= 3 and int(shader_model[-3]) <= 5
+
     is_no_fxc = '.nofxc.' in shader
     global ignore_fxc
-    if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc):
+    if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc) and is_valid_fxc_shader_model:
         try:
             win_path = shader_to_win_path(shader)
-            args = ['fxc', '-nologo', shader_model_hlsl(shader), win_path]
+            args = ['fxc', '-nologo', shader_model, win_path]
             if '.nonuniformresource.' in shader:
                 args.append('/enable_unbounded_descriptor_tables')
             subprocess.check_call(args)
