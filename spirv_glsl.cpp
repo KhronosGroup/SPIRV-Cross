@@ -16636,12 +16636,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			// HLSL needs to emit scalar-to-vector constructors as C-style type casts, e.g. `(float4)1.0` vs. `vec4(1.0)`.
-			const std::string ops_expr = to_expression(ops[2]);
 			if (!backend.use_constructor_splatting &&
 				type.vecsize > 1 && type.columns == 1 && is_scalar(get<SPIRType>(expression_type_id(ops[2]))))
-				rhs = join("(", type_to_glsl(type), ")", ops_expr);
+				rhs = join("(", type_to_glsl(type), ")", to_enclosed_expression(ops[2]));
 			else
-				rhs = join(type_to_glsl(type), "(", ops_expr, ")");
+				rhs = join(type_to_glsl(type), "(", to_expression(ops[2]), ")");
 		}
 		emit_op(result_type, id, rhs, true);
 		break;
