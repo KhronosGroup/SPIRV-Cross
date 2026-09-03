@@ -604,7 +604,7 @@ protected:
 	void add_function_overload(const SPIRFunction &func);
 
 	virtual bool is_non_native_row_major_matrix(uint32_t id);
-	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
+	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index, bool is_layout_disabled = false);
 	bool member_is_remapped_physical_type(const SPIRType &type, uint32_t index) const;
 	bool member_is_packed_physical_type(const SPIRType &type, uint32_t index) const;
 	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type,
