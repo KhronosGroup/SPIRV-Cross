@@ -6391,7 +6391,13 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		}
 		else
 		{
-			return join(type_to_glsl(type), "(", to_expression(c.subconstants[0]), ")");
+			// HLSL needs to emit scalar-to-vector constructors as C-style type casts, e.g. `(float4)1.0` vs. `vec4(1.0)`.
+			std::string subconst_expr = to_expression(c.subconstants[0]);
+			if (!backend.use_constructor_splatting &&
+				type.vecsize > 1 && type.columns == 1 && is_scalar(get<SPIRType>(expression_type_id(c.subconstants[0]))))
+				return join("(", type_to_glsl(type), ")", subconst_expr);
+			else
+				return join(type_to_glsl(type), "(", subconst_expr, ")");
 		}
 	}
 	else if (!c.subconstants.empty())
@@ -16635,7 +16641,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			rhs = join(type_to_glsl(type), "(", to_expression(ops[2]), ")");
+			// HLSL needs to emit scalar-to-vector constructors as C-style type casts, e.g. `(float4)1.0` vs. `vec4(1.0)`.
+			if (!backend.use_constructor_splatting &&
+				type.vecsize > 1 && type.columns == 1 && is_scalar(get<SPIRType>(expression_type_id(ops[2]))))
+				rhs = join("(", type_to_glsl(type), ")", to_enclosed_expression(ops[2]));
+			else
+				rhs = join(type_to_glsl(type), "(", to_expression(ops[2]), ")");
 		}
 		emit_op(result_type, id, rhs, true);
 		break;
