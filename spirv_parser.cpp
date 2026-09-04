@@ -1151,20 +1151,17 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t type = ops[0];
 
 		auto &ctype = get<SPIRType>(type);
+		uint32_t elements = length - 2;
 
 		// We can have constants which are structs and arrays.
 		// In this case, our SPIRConstant will be a list of other SPIRConstant ids which we
 		// can refer to.
-		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty())
+		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty() || elements > 4)
 		{
 			set<SPIRConstant>(id, type, ops + 2, length - 2, op == OpSpecConstantComposite);
 		}
 		else
 		{
-			uint32_t elements = length - 2;
-			if (elements > 4)
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 elements.");
-
 			SPIRConstant remapped_constant_ops[4];
 			const SPIRConstant *c[4];
 			for (uint32_t i = 0; i < elements; i++)

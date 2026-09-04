@@ -1790,6 +1790,10 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		if ((type.vecsize == 2 || type.vecsize == 4) && type.columns == 1)
 			return type.vecsize * base_alignment;
 
+		// Special long-vector rule.
+		if (type.vecsize > 4)
+			return 4 * base_alignment;
+
 		// Rule 3
 		if (type.vecsize == 3 && type.columns == 1)
 			return 4 * base_alignment;
@@ -5686,8 +5690,9 @@ string CompilerGLSL::to_enclosed_pointer_expression(uint32_t id, bool register_e
 
 string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index)
 {
+	auto &type = expression_type(id);
 	auto expr = to_enclosed_expression(id);
-	if (has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked))
+	if (has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked) || type.vecsize > 4)
 		return join(expr, "[", index, "]");
 	else
 		return join(expr, ".", index_to_swizzle(index));
@@ -6178,6 +6183,9 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		string left_arg = to_enclosed_expression(cop.arguments[0]);
 		string right_arg = to_enclosed_expression(cop.arguments[1]);
 
+		auto &left_type = expression_type(cop.arguments[0]);
+		auto &right_type = expression_type(cop.arguments[1]);
+
 		for (uint32_t i = 2; i < uint32_t(cop.arguments.size()); i++)
 		{
 			uint32_t index = cop.arguments[i];
@@ -6190,11 +6198,17 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 			}
 			else if (index >= left_components)
 			{
-				expr += right_arg + "." + "xyzw"[index - left_components];
+				if (right_type.vecsize <= 4)
+					expr += right_arg + "." + "xyzw"[index - left_components];
+				else
+					expr += join(right_arg, "[", index - left_components, "]");
 			}
 			else
 			{
-				expr += left_arg + "." + "xyzw"[index];
+				if (left_type.vecsize <= 4)
+					expr += left_arg + "." + "xyzw"[index];
+				else
+					expr += join(left_arg, "[", index, "]");
 			}
 
 			if (i + 1 < uint32_t(cop.arguments.size()))
@@ -6402,7 +6416,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 	}
 	else if (!c.subconstants.empty())
 	{
-		// Handles Arrays and structures.
+		// Handles Arrays, structures and long vectors.
 		string res;
 
 		// Only consider the decay if we are inside a struct scope where we are emitting a member with Offset decoration.
@@ -11415,7 +11429,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			{
 				bool out_of_bounds = index >= type->vecsize && type->op != OpTypeCooperativeMatrixKHR;
 
-				if (!is_packed && !row_major_matrix_needs_conversion && type->op != OpTypeCooperativeMatrixKHR)
+				if (!is_packed && !row_major_matrix_needs_conversion && type->op != OpTypeCooperativeMatrixKHR &&
+				    type->vecsize <= 4)
 				{
 					expr += ".";
 					expr += index_to_swizzle(out_of_bounds ? 0 : index);
@@ -11431,9 +11446,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				auto &c = get<SPIRConstant>(index);
 				bool out_of_bounds = (c.scalar() >= type->vecsize);
 
-				if (c.specialization)
+				if (c.specialization || type->vecsize > 4)
 				{
-					// If the index is a spec constant, we cannot turn extract into a swizzle.
+					// If the index is a spec constant or long vector, we cannot turn extract into a swizzle.
 					expr += join("[", out_of_bounds ? "0" : to_expression(index), "]");
 				}
 				else
@@ -13648,8 +13663,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool allow_base_expression = forced_temporaries.find(id) == end(forced_temporaries);
 
 		// Do not allow base expression for struct members. We risk doing "swizzle" optimizations in this case.
+		// Long vector or arrays are complex too.
 		auto &composite_type = expression_type(ops[2]);
-		bool composite_type_is_complex = composite_type.basetype == SPIRType::Struct || !composite_type.array.empty();
+		bool composite_type_is_complex = composite_type.basetype == SPIRType::Struct ||
+		                                 !composite_type.array.empty() ||
+		                                 composite_type.vecsize > 4;
 		if (composite_type_is_complex)
 			allow_base_expression = false;
 
@@ -17576,6 +17594,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 		std::string component_type_str = type_to_glsl(get<SPIRType>(type.ext.coopVecNV.component_type_id));
 
+		// There's two options. This is an alias of VectorTypeIdEXT.
+		// Just use NV_coopvec for now ...
 		return join("coopvecNV<", component_type_str, ", ", to_expression(type.ext.coopVecNV.component_count_id), ">");
 	}
 
@@ -17682,6 +17702,16 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		default:
 			return "???";
 		}
+	}
+	else if (type.vecsize > 4)
+	{
+		// Long vector
+		auto tmptype = type;
+		tmptype.vecsize = 1;
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
+		require_extension_internal("GL_EXT_long_vector");
+		return join("vector<", type_to_glsl(tmptype), ", ", type.vecsize, ">");
 	}
 	else if (type.vecsize > 1 && type.columns == 1) // Vector builtin
 	{
