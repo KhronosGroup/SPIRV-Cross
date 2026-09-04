@@ -31,6 +31,7 @@
        %s430 = OpVariable %_ptr_StorageBuffer_SSBO430 StorageBuffer
         %int = OpTypeInt 32 1
       %int_0 = OpConstant %int 0
+	  %null = OpConstantNull %v5float
 	  %float_2 = OpConstant %float 2.0
 %_ptr_StorageBuffer_v5float = OpTypePointer StorageBuffer %v5float
        %uint = OpTypeInt 32 0
@@ -49,18 +50,26 @@
 		 ; Test various SSA-based vector things.
 		 %shuf0 = OpVectorShuffle %v5float %18 %mul 0 5 9 4 3
 		 %shuf1 = OpVectorShuffle %v5float %18 %mul 0 1 2 3 4
+		 %shuf2 = OpVectorShuffle %v5float %18 %null 0 5 2 6 4
 		 %inst0 = OpCompositeInsert %v5float %float_2 %mul 0
 		 %inst1 = OpCompositeInsert %v5float %float_2 %inst0 4
 		 %ext0 = OpCompositeExtract %float %18 0 
 		 %ext1 = OpCompositeExtract %float %18 4
+
+		 ; Try extracting from null constant long-vector. Edge cases!
 		 %extadd = OpFAdd %float %ext0 %ext1
-		 %inst2 = OpCompositeInsert %v5float %extadd %inst0 3
+		 %extnull = OpCompositeExtract %float %null 2
+		 %extadd2 = OpFAdd %float %extadd %extnull
+
+		 %inst2 = OpCompositeInsert %v5float %extadd2 %inst0 3
+
 
 		 ; VectorInsertDynamic/ExtractDynamic impl go via common access chain, so leave it as-is.
 
          %19 = OpAccessChain %_ptr_StorageBuffer_v5float %s430 %int_0
                OpStore %19 %shuf0
                OpStore %19 %shuf1
+               OpStore %19 %shuf2
                OpStore %19 %inst2
                OpReturn
                OpFunctionEnd

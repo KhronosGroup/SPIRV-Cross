@@ -10,15 +10,16 @@ layout(set = 0, binding = 0, std430) buffer SSBO430
 void main()
 {
     vector<float, 5> v5 = s430.v5;
-    vector<float, 5> _25 = v5 * v5;
-    vector<float, 5> _28 = _25;
-    _28[0] = 2.0;
-    vector<float, 5> _29 = _28;
-    _29[4] = 2.0;
-    vector<float, 5> _33 = _28;
-    _33[3] = v5[0] + v5[4];
-    s430.v5 = vector<float, 5>(v5[0], _25[0], _25[4], v5[4], v5[3]);
+    vector<float, 5> _26 = v5 * v5;
+    vector<float, 5> _30 = _26;
+    _30[0] = 2.0;
+    vector<float, 5> _31 = _30;
+    _31[4] = 2.0;
+    vector<float, 5> _37 = _30;
+    _37[3] = (v5[0] + v5[4]) + (vector<float, 5>(0))[2];
+    s430.v5 = vector<float, 5>(v5[0], _26[0], _26[4], v5[4], v5[3]);
     s430.v5 = vector<float, 5>(v5[0], v5[1], v5[2], v5[3], v5[4]);
-    s430.v5 = _33;
+    s430.v5 = vector<float, 5>(v5[0], (vector<float, 5>(0))[0], v5[2], (vector<float, 5>(0))[1], v5[4]);
+    s430.v5 = _37;
 }
 

@@ -6414,6 +6414,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 				return join(type_to_glsl(type), "(", subconst_expr, ")");
 		}
 	}
+	else if (c.subconstants.empty() && type.vecsize > 4)
+	{
+		// Null long-vector
+		return join(type_to_glsl(type), "(0)");
+	}
 	else if (!c.subconstants.empty())
 	{
 		// Handles Arrays, structures and long vectors.
