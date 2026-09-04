@@ -1337,36 +1337,50 @@ struct SPIRConstant : IVariant
 
 	inline uint32_t specialization_constant_id(uint32_t col, uint32_t row) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].id[row];
 	}
 
 	inline uint32_t specialization_constant_id(uint32_t col) const
 	{
+		if (col >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.id[col];
 	}
 
 	inline uint32_t scalar(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].u32;
 	}
 
 	inline int16_t scalar_i16(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return int16_t(m.c[col].r[row].u32 & 0xffffu);
 	}
 
 	inline uint16_t scalar_u16(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return uint16_t(m.c[col].r[row].u32 & 0xffffu);
 	}
 
 	inline int8_t scalar_i8(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return int8_t(m.c[col].r[row].u32 & 0xffu);
 	}
 
 	inline uint8_t scalar_u8(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return uint8_t(m.c[col].r[row].u32 & 0xffu);
 	}
 
@@ -1395,26 +1409,36 @@ struct SPIRConstant : IVariant
 
 	inline float scalar_f32(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].f32;
 	}
 
 	inline int32_t scalar_i32(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].i32;
 	}
 
 	inline double scalar_f64(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].f64;
 	}
 
 	inline int64_t scalar_i64(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].i64;
 	}
 
 	inline uint64_t scalar_u64(uint32_t col = 0, uint32_t row = 0) const
 	{
+		if (col >= 4 || row >= 4)
+			SPIRV_CROSS_THROW("Out of bounds col/row. Long vector bug.");
 		return m.c[col].r[row].u64;
 	}
 
@@ -1447,6 +1471,9 @@ struct SPIRConstant : IVariant
 			return false;
 		if (!subconstants.empty())
 			return false;
+
+		// Only used in contexts where we consume normal vectors.
+		// Don't need to consider long vector or composites.
 
 		for (uint32_t col = 0; col < columns(); col++)
 			for (uint32_t row = 0; row < vector_size(); row++)
@@ -1502,6 +1529,9 @@ struct SPIRConstant : IVariant
 	{
 		bool matrix = vector_elements[0]->m.c[0].vecsize > 1;
 
+		if (num_elements > 4)
+			SPIRV_CROSS_THROW("Invalid constant. Long vector bug.");
+
 		if (matrix)
 		{
 			m.columns = num_elements;
@@ -1543,6 +1573,7 @@ struct SPIRConstant : IVariant
 	bool is_null_array_specialized_length = false;
 
 	// For composites which are constant arrays, etc.
+	// Also used by long vectors where N > 4 or N is unknown.
 	SmallVector<ConstantID> subconstants;
 
 	// Whether the subconstants are intended to be replicated (e.g. OpConstantCompositeReplicateEXT)
