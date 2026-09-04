@@ -13937,6 +13937,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!shuffle && has_extended_decoration(vec0, SPIRVCrossDecorationPhysicalTypePacked))
 			shuffle = true;
 
+		// Long vector, force shuffle path since we cannot use swizzles.
+		if (type0.vecsize > 4)
+			shuffle = true;
+
 		string expr;
 		bool should_fwd, trivial_forward;
 
