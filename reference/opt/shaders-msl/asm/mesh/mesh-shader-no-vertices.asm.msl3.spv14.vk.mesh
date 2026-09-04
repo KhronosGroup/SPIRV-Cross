@@ -64,12 +64,17 @@ void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMe
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(128u, 1u, 1u);
 
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+};
+
 struct spvPerPrimitive
 {
     float4 m_17 [[user(locn0)]];
 };
 
-using spvMesh_t = mesh<float4, spvPerPrimitive, 256, 256, topology::triangle>;
+using spvMesh_t = mesh<spvPerVertex, spvPerPrimitive, 256, 256, topology::triangle>;
 
 static inline __attribute__((always_inline))
 void _4(thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
@@ -90,6 +95,12 @@ void _4(thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
     }
     spvMesh.set_primitive_count(spvMeshSizes.y);
     const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
+    {
+        spvPerVertex spvV = {};
+        spvV.gl_Position = float4(0.0, 0.0, 0.0, 1.0);
+        spvMesh.set_vertex(spvVI, spvV);
+    }
     for (uint spvPI = gl_LocalInvocationIndex; spvPI < spvMeshSizes.y; spvPI += spvThreadCount)
     {
         spvPerPrimitive spvP = {};

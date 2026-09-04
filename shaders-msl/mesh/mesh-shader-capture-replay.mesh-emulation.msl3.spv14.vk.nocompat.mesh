@@ -1,0 +1,88 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 4) in;
+layout(triangles, max_vertices = 4, max_primitives = 2) out;
+
+out gl_MeshPerVertexEXT
+{
+	vec4 gl_Position;
+	float gl_PointSize;
+	float gl_ClipDistance[2];
+} gl_MeshVerticesEXT[];
+
+layout(location = 0) out VertexData
+{
+	vec4 color;
+	vec2 uv[2];
+} vertices[];
+
+layout(location = 3) perprimitiveEXT out PrimitiveData
+{
+	vec4 tint[2];
+	uvec2 flags;
+} primitives[];
+
+layout(location = 6) out mat2 vertex_basis[];
+layout(location = 8) perprimitiveEXT out mat2 primitive_basis[];
+layout(location = 10) out vec2 vertex_pair[][2];
+layout(location = 12) perprimitiveEXT out vec2 primitive_pair[][2];
+
+void write_vertex(uint vertex)
+{
+	vec3 logical_id = vec3(gl_GlobalInvocationID);
+	vertices[vertex].color.xy = vec2(gl_WorkGroupID.xy);
+	vertices[vertex].color.z = float(gl_NumWorkGroups.x);
+	vertices[vertex].color.w = float(gl_DrawID);
+	vertices[vertex].uv[0].x = float(gl_LocalInvocationID.x);
+	vertices[vertex].uv[0].y = float(gl_WorkGroupSize.x);
+	vertices[vertex].uv[1] = logical_id.xy;
+
+	gl_MeshVerticesEXT[vertex].gl_Position.xyz = logical_id;
+	gl_MeshVerticesEXT[vertex].gl_Position.w = 1.0;
+	gl_MeshVerticesEXT[vertex].gl_PointSize = float(vertex + 1u);
+	gl_MeshVerticesEXT[vertex].gl_ClipDistance[0] = float(vertex);
+	gl_MeshVerticesEXT[vertex].gl_ClipDistance[1] = -float(vertex);
+	vertex_basis[vertex][0] = vec2(vertex, gl_LocalInvocationIndex);
+	vertex_basis[vertex][1].x = float(gl_WorkGroupID.x);
+	vertex_basis[vertex][1].y = float(gl_NumWorkGroups.x);
+	vertex_pair[vertex][0] = vec2(vertex, gl_LocalInvocationIndex);
+	vertex_pair[vertex][1] = vec2(gl_GlobalInvocationID.xy);
+}
+
+void write_primitive(uint primitive)
+{
+	primitives[primitive].tint[0].xy = vec2(gl_WorkGroupID.xy);
+	primitives[primitive].tint[0].zw = vec2(gl_NumWorkGroups.xy);
+	primitives[primitive].tint[1] = vec4(gl_GlobalInvocationID, 1.0);
+	primitives[primitive].flags.x = primitive;
+	primitives[primitive].flags.y = gl_LocalInvocationIndex;
+
+	gl_MeshPrimitivesEXT[primitive].gl_PrimitiveID = int(gl_DrawID + primitive);
+	gl_MeshPrimitivesEXT[primitive].gl_Layer = int(gl_WorkGroupID.z);
+	gl_MeshPrimitivesEXT[primitive].gl_ViewportIndex = int(gl_NumWorkGroups.z - 1u);
+	gl_MeshPrimitivesEXT[primitive].gl_CullPrimitiveEXT = primitive == 1u;
+	primitive_basis[primitive][0] = vec2(primitive, gl_LocalInvocationIndex);
+	primitive_basis[primitive][1].x = float(gl_WorkGroupID.y);
+	primitive_basis[primitive][1].y = float(gl_NumWorkGroups.y);
+	primitive_pair[primitive][0] = vec2(primitive, gl_LocalInvocationIndex);
+	primitive_pair[primitive][1] = vec2(gl_GlobalInvocationID.xy);
+}
+
+void main()
+{
+	SetMeshOutputsEXT(4, 2);
+
+	uint vertex = (gl_LocalInvocationIndex + 1u) & 3u;
+	write_vertex(vertex);
+
+	if (gl_LocalInvocationIndex < 2u)
+	{
+		uint primitive = gl_LocalInvocationIndex;
+		write_primitive(primitive);
+		gl_PrimitiveTriangleIndicesEXT[primitive] = primitive == 0u ? uvec3(0, 1, 2) : uvec3(2, 3, 0);
+	}
+
+	memoryBarrier();
+	barrier();
+}

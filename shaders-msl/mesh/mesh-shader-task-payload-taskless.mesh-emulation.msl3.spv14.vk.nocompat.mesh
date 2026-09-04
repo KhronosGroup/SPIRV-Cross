@@ -1,0 +1,27 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+taskPayloadSharedEXT float payload;
+
+layout(push_constant) uniform PushConstants
+{
+	uint read_payload;
+} pc;
+
+float read_task_payload()
+{
+	return pc.read_payload != 0u ? payload : 3.0;
+}
+
+void main()
+{
+	float extent = read_task_payload();
+	SetMeshOutputsEXT(3, 1);
+	gl_MeshVerticesEXT[0].gl_Position = vec4(-1.0, -1.0, 0.0, 1.0);
+	gl_MeshVerticesEXT[1].gl_Position = vec4(-1.0, extent, 0.0, 1.0);
+	gl_MeshVerticesEXT[2].gl_Position = vec4(extent, -1.0, 0.0, 1.0);
+	gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+}
