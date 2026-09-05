@@ -381,6 +381,12 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-force-frag-with-side-effects-execution')
     if '.emulate-reversed-depth-viewport.' in shader:
         msl_args.append('--msl-emulate-reversed-depth-viewport')
+    if '.emulate-depth-clip-enable.' in shader:
+        msl_args.append('--msl-emulate-depth-clip-enable')
+    if '.fixup-clipspace.' in shader:
+        msl_args.append('--fixup-clipspace')
+    if '.msl-opengl-mode.' in shader:
+        msl_args.append('--msl-opengl-mode')
     if '.lod-as-grad.' in shader:
         msl_args.append('--msl-sample-dref-lod-array-as-grad')
     if '.agx-cube-grad.' in shader:
