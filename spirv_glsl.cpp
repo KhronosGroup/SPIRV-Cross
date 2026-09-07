@@ -6808,17 +6808,26 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 
 string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t vector)
 {
-	auto type = get<SPIRType>(c.constant_type);
-	type.columns = 1;
+	const auto &composite_type = get<SPIRType>(c.constant_type);
 
-	auto scalar_type = type;
-	scalar_type.vecsize = 1;
+	if (composite_type.op != OpTypeMatrix && composite_type.op != OpTypeVector &&
+		composite_type.op != OpTypeInt && composite_type.op != OpTypeFloat &&
+		composite_type.op != OpTypeBool && composite_type.op != OpTypeCooperativeMatrixKHR)
+		SPIRV_CROSS_THROW("Unexpected constant expression vector type.");
+
+	const auto *vector_type = &composite_type;
+	if (vector_type->op == OpTypeMatrix)
+		vector_type = &get<SPIRType>(vector_type->parent_type);
+
+	const auto *scalar_type = vector_type;
+	if (scalar_type->op == OpTypeVector || scalar_type->op == OpTypeCooperativeMatrixKHR)
+		scalar_type = &get<SPIRType>(scalar_type->parent_type);
 
 	string res;
 	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
 	bool swizzle_splat = backend.can_swizzle_scalar && c.vector_size() > 1;
 
-	if (!type_is_floating_point(type))
+	if (!type_is_floating_point(*scalar_type))
 	{
 		// Cannot swizzle literal integers as a special case.
 		swizzle_splat = false;
@@ -6840,7 +6849,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 
 	if (splat || swizzle_splat)
 	{
-		if (type.width == 64)
+		if (scalar_type->width == 64)
 		{
 			uint64_t ident = c.scalar_u64(vector, 0);
 			for (uint32_t i = 1; i < c.vector_size(); i++)
@@ -6868,16 +6877,16 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	}
 
 	if (c.vector_size() > 1 && !swizzle_splat)
-		res += type_to_glsl(type) + "(";
+		res += type_to_glsl(*vector_type) + "(";
 
-	switch (type.basetype)
+	switch (scalar_type->basetype)
 	{
 	case SPIRType::FloatE4M3:
 		if (splat || swizzle_splat)
 		{
 			res += convert_floate4m3_to_string(c, vector, 0);
 			if (swizzle_splat)
-				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
+				res = remap_swizzle(composite_type, 1, res);
 		}
 		else
 		{
@@ -6900,7 +6909,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			res += convert_half_to_string(c, vector, 0);
 			if (swizzle_splat)
-				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
+				res = remap_swizzle(composite_type, 1, res);
 		}
 		else
 		{
@@ -6923,7 +6932,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			res += convert_float_to_string(c, vector, 0);
 			if (swizzle_splat)
-				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
+				res = remap_swizzle(composite_type, 1, res);
 		}
 		else
 		{
@@ -6945,7 +6954,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			res += convert_double_to_string(c, vector, 0);
 			if (swizzle_splat)
-				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
+				res = remap_swizzle(composite_type, 1, res);
 		}
 		else
 		{
@@ -6964,14 +6973,9 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 
 	case SPIRType::Int64:
 	{
-		auto tmp = type;
-		tmp.vecsize = 1;
-		tmp.columns = 1;
-		auto int64_type = type_to_glsl(tmp);
-
 		if (splat)
 		{
-			res += convert_to_string(c.scalar_i64(vector, 0), int64_type, backend.long_long_literal_suffix);
+			res += convert_to_string(c.scalar_i64(vector, 0), type_to_glsl(*scalar_type), backend.long_long_literal_suffix);
 		}
 		else
 		{
@@ -6980,7 +6984,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_expression(c.specialization_constant_id(vector, i));
 				else
-					res += convert_to_string(c.scalar_i64(vector, i), int64_type, backend.long_long_literal_suffix);
+					res += convert_to_string(c.scalar_i64(vector, i), type_to_glsl(*scalar_type), backend.long_long_literal_suffix);
 
 				if (i + 1 < c.vector_size())
 					res += ", ";
@@ -7098,7 +7102,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					else
 					{
 						// If backend doesn't have a literal suffix, we need to value cast.
-						res += type_to_glsl(scalar_type);
+						res += type_to_glsl(*scalar_type);
 						res += "(";
 						res += convert_to_string(c.scalar_u16(vector, i));
 						res += ")";
@@ -7132,7 +7136,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					else
 					{
 						// If backend doesn't have a literal suffix, we need to value cast.
-						res += type_to_glsl(scalar_type);
+						res += type_to_glsl(*scalar_type);
 						res += "(";
 						res += convert_to_string(c.scalar_i16(vector, i));
 						res += ")";
@@ -7158,7 +7162,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_expression(c.specialization_constant_id(vector, i));
 				else
 				{
-					res += type_to_glsl(scalar_type);
+					res += type_to_glsl(*scalar_type);
 					res += "(";
 					res += convert_to_string(c.scalar_u8(vector, i));
 					res += ")";
@@ -7183,7 +7187,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_expression(c.specialization_constant_id(vector, i));
 				else
 				{
-					res += type_to_glsl(scalar_type);
+					res += type_to_glsl(*scalar_type);
 					res += "(";
 					res += convert_to_string(c.scalar_i8(vector, i));
 					res += ")";
@@ -7703,6 +7707,7 @@ void CompilerGLSL::emit_trinary_func_op_bitextract(uint32_t result_type, uint32_
 	auto op2_expr = to_unpacked_expression(op2);
 
 	// Use value casts here instead. Input must be exactly int or uint, but SPIR-V might be 16-bit.
+	expected_type.op = OpTypeInt;
 	expected_type.basetype = input_type1;
 	expected_type.vecsize = 1;
 	string cast_op1 = expression_type(op1).basetype != input_type1 ?
@@ -11370,7 +11375,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			type = &get<SPIRType>(type_id);
 		}
 		// Vector -> Scalar
-		else if (type->op == OpTypeCooperativeMatrixKHR || type->vecsize > 1)
+		else if (type->op == OpTypeCooperativeMatrixKHR || type->op == OpTypeVector)
 		{
 			string deferred_index;
 			if (row_major_matrix_needs_conversion)
@@ -17663,9 +17668,22 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		            to_expression(coop_type->ext.cooperative.columns_id), ", ", use, ">");
 	}
 
-	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
+	// Array types are resolved in type_to_array_glsl.
+	const auto *non_array_type = &type;
+	while (is_array(*non_array_type))
+		non_array_type = &get<SPIRType>(non_array_type->parent_type);
+
+	if (non_array_type->vecsize > 4 || (non_array_type->vecsize == 1 && non_array_type->op == OpTypeVector))
 	{
-		switch (type.basetype)
+		// Long vector. It also supports "smol vector" of just 1 element.
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
+		require_extension_internal("GL_EXT_long_vector");
+		return join("vector<", type_to_glsl(get<SPIRType>(non_array_type->parent_type)), ", ", non_array_type->vecsize, ">");
+	}
+	else if (non_array_type->vecsize == 1 && non_array_type->columns == 1) // Scalar builtin
+	{
+		switch (non_array_type->basetype)
 		{
 		case SPIRType::Boolean:
 			return "bool";
@@ -17712,79 +17730,69 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return "???";
 		}
 	}
-	else if (type.vecsize > 4)
+	else if (non_array_type->vecsize > 1 && non_array_type->columns == 1) // Vector builtin
 	{
-		// Long vector
-		auto tmptype = type;
-		tmptype.vecsize = 1;
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
-		require_extension_internal("GL_EXT_long_vector");
-		return join("vector<", type_to_glsl(tmptype), ", ", type.vecsize, ">");
-	}
-	else if (type.vecsize > 1 && type.columns == 1) // Vector builtin
-	{
-		switch (type.basetype)
+		switch (non_array_type->basetype)
 		{
 		case SPIRType::Boolean:
-			return join("bvec", type.vecsize);
+			return join("bvec", non_array_type->vecsize);
 		case SPIRType::SByte:
-			return join("i8vec", type.vecsize);
+			return join("i8vec", non_array_type->vecsize);
 		case SPIRType::UByte:
-			return join("u8vec", type.vecsize);
+			return join("u8vec", non_array_type->vecsize);
 		case SPIRType::Short:
-			return join("i16vec", type.vecsize);
+			return join("i16vec", non_array_type->vecsize);
 		case SPIRType::UShort:
-			return join("u16vec", type.vecsize);
+			return join("u16vec", non_array_type->vecsize);
 		case SPIRType::Int:
-			return join("ivec", type.vecsize);
+			return join("ivec", non_array_type->vecsize);
 		case SPIRType::UInt:
-			return join("uvec", type.vecsize);
+			return join("uvec", non_array_type->vecsize);
 		case SPIRType::Half:
-			return join("f16vec", type.vecsize);
+			return join("f16vec", non_array_type->vecsize);
 		case SPIRType::BFloat16:
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("bfloat16 requires Vulkan semantics.");
 			require_extension_internal("GL_EXT_bfloat16");
-			return join("bf16vec", type.vecsize);
+			return join("bf16vec", non_array_type->vecsize);
 		case SPIRType::FloatE4M3:
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("floate4m3_t requires Vulkan semantics.");
 			require_extension_internal("GL_EXT_float_e4m3");
-			return join("fe4m3vec", type.vecsize);
+			return join("fe4m3vec", non_array_type->vecsize);
 		case SPIRType::FloatE5M2:
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("floate5m2_t requires Vulkan semantics.");
 			require_extension_internal("GL_EXT_float_e5m2");
-			return join("fe5m2vec", type.vecsize);
+			return join("fe5m2vec", non_array_type->vecsize);
 		case SPIRType::Float:
-			return join("vec", type.vecsize);
+			return join("vec", non_array_type->vecsize);
 		case SPIRType::Double:
-			return join("dvec", type.vecsize);
+			return join("dvec", non_array_type->vecsize);
 		case SPIRType::Int64:
-			return join("i64vec", type.vecsize);
+			return join("i64vec", non_array_type->vecsize);
 		case SPIRType::UInt64:
-			return join("u64vec", type.vecsize);
+			return join("u64vec", non_array_type->vecsize);
 		default:
 			return "???";
 		}
 	}
-	else if (type.vecsize == type.columns) // Simple Matrix builtin
+	else if (non_array_type->vecsize == non_array_type->columns) // Simple Matrix builtin
 	{
-		switch (type.basetype)
+		switch (non_array_type->basetype)
 		{
 		case SPIRType::Boolean:
-			return join("bmat", type.vecsize);
+			return join("bmat", non_array_type->vecsize);
 		case SPIRType::Int:
-			return join("imat", type.vecsize);
+			return join("imat", non_array_type->vecsize);
 		case SPIRType::UInt:
-			return join("umat", type.vecsize);
+			return join("umat", non_array_type->vecsize);
 		case SPIRType::Half:
-			return join("f16mat", type.vecsize);
+			return join("f16mat", non_array_type->vecsize);
 		case SPIRType::Float:
-			return join("mat", type.vecsize);
+			return join("mat", non_array_type->vecsize);
 		case SPIRType::Double:
-			return join("dmat", type.vecsize);
+			return join("dmat", non_array_type->vecsize);
 		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
@@ -17792,20 +17800,20 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	}
 	else
 	{
-		switch (type.basetype)
+		switch (non_array_type->basetype)
 		{
 		case SPIRType::Boolean:
-			return join("bmat", type.columns, "x", type.vecsize);
+			return join("bmat", non_array_type->columns, "x", non_array_type->vecsize);
 		case SPIRType::Int:
-			return join("imat", type.columns, "x", type.vecsize);
+			return join("imat", non_array_type->columns, "x", non_array_type->vecsize);
 		case SPIRType::UInt:
-			return join("umat", type.columns, "x", type.vecsize);
+			return join("umat", non_array_type->columns, "x", non_array_type->vecsize);
 		case SPIRType::Half:
-			return join("f16mat", type.columns, "x", type.vecsize);
+			return join("f16mat", non_array_type->columns, "x", non_array_type->vecsize);
 		case SPIRType::Float:
-			return join("mat", type.columns, "x", type.vecsize);
+			return join("mat", non_array_type->columns, "x", non_array_type->vecsize);
 		case SPIRType::Double:
-			return join("dmat", type.columns, "x", type.vecsize);
+			return join("dmat", non_array_type->columns, "x", non_array_type->vecsize);
 		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
