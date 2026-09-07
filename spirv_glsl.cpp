@@ -17692,7 +17692,11 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		// The test suite is clean of this assumption, but it's very likely that we missed some edge case in the wild.
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
-		return join("vector<", type_to_glsl(get<SPIRType>(non_array_type->parent_type)), ", ", non_array_type->vecsize, ">");
+
+		// We might have a local override in terms of sign. Ensure the top-level basetype wins.
+		auto parent_type = get<SPIRType>(non_array_type->parent_type);
+		parent_type.basetype = non_array_type->basetype;
+		return join("vector<", type_to_glsl(parent_type), ", ", non_array_type->vecsize, ">");
 	}
 	else if (non_array_type->vecsize == 1 && non_array_type->columns == 1) // Scalar builtin
 	{
