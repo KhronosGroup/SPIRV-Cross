@@ -699,6 +699,13 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_EXT_shader_image_load_formatted");
 			break;
 
+		case CapabilityLongVectorEXT:
+			if (!options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
+			require_extension_internal("GL_EXT_long_vector");
+			long_vector_enabled = true;
+			break;
+
 		default:
 			break;
 		}
@@ -17673,12 +17680,18 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	while (is_array(*non_array_type))
 		non_array_type = &get<SPIRType>(non_array_type->parent_type);
 
-	if (non_array_type->vecsize > 4 || (non_array_type->vecsize == 1 && non_array_type->op == OpTypeVector))
+	if (non_array_type->vecsize > 4 ||
+		(long_vector_enabled && non_array_type->vecsize == 1 && non_array_type->op == OpTypeVector))
 	{
 		// Long vector. It also supports "smol vector" of just 1 element.
+		// Be conservative when enabling long vector for single vector components.
+		// We're very sensitive to bugs here since SPIRV-Cross code assumes that vecsize == 1 is not a vector
+		// in many places and SPIRType's are sometimes synthesized on the stack without
+		// ensuring that op is overridden to the correct scalar Op type.
+		// This used to be enough, but not anymore.
+		// The test suite is clean of this assumption, but it's very likely that we missed some edge case in the wild.
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Long vector requires Vulkan semantics.");
-		require_extension_internal("GL_EXT_long_vector");
 		return join("vector<", type_to_glsl(get<SPIRType>(non_array_type->parent_type)), ", ", non_array_type->vecsize, ">");
 	}
 	else if (non_array_type->vecsize == 1 && non_array_type->columns == 1) // Scalar builtin
