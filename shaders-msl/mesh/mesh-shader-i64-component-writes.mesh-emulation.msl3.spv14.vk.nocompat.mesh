@@ -1,0 +1,29 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+
+layout(local_size_x = 1) in;
+layout(max_vertices = 1, max_primitives = 1) out;
+layout(points) out;
+
+layout(location = 0) flat out i64vec4 signed_values[];
+layout(location = 2) flat out u64vec3 unsigned_values[];
+
+void write_signed(out int64_t target, int64_t value)
+{
+    target = value;
+}
+
+void main()
+{
+    SetMeshOutputsEXT(1, 1);
+    gl_MeshVerticesEXT[0].gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+    gl_PrimitivePointIndicesEXT[0] = 0;
+
+    signed_values[0][gl_LocalInvocationIndex] = int64_t(-1);
+    write_signed(signed_values[0].y, int64_t(2));
+    signed_values[0].zw = i64vec2(-3, 4);
+
+    unsigned_values[0].xy = u64vec2(6, 7);
+    unsigned_values[0].z = uint64_t(8);
+}

@@ -1,0 +1,174 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+    
+    object_data T& operator [] (size_t pos) object_data
+    {
+        return elements[pos];
+    }
+    constexpr const object_data T& operator [] (size_t pos) const object_data
+    {
+        return elements[pos];
+    }
+};
+
+void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, device uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spvMeshSizes.x = vertexCount;
+        spvMeshSizes.y = primitiveCount;
+    }
+}
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+    float gl_ClipDistance [[clip_distance]] [4];
+    float gl_ClipDistance_0 [[user(clip0)]];
+    float gl_ClipDistance_1 [[user(clip1)]];
+    float gl_ClipDistance_2 [[user(clip2)]];
+    float gl_ClipDistance_3 [[user(clip3)]];
+    float gl_CullDistance_0 [[user(cull0)]];
+    float gl_CullDistance_1 [[user(cull1)]];
+};
+
+constant spvUnsafeArray<float, 4> _24 = spvUnsafeArray<float, 4>({ 1.0, 1.0, 1.0, 1.0 });
+constant spvUnsafeArray<float, 2> _26 = spvUnsafeArray<float, 2>({ 1.0, 0.0 });
+
+struct spvMeshOutput
+{
+    uint2 counts;
+    spvUnsafeArray<float4, 3> spv3;
+    spvUnsafeArray<spvUnsafeArray<float, 4>, 3> spv4;
+    spvUnsafeArray<spvUnsafeArray<float, 2>, 3> spv5;
+    spvUnsafeArray<uint3, 1> spv2;
+};
+static_assert(__builtin_offsetof(spvMeshOutput, counts) == 0, "invalid mesh output counts offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv3) == 16, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv4) == 64, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv5) == 112, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv2) == 144, "invalid mesh output variable offset");
+static_assert(sizeof(spvMeshOutput) == 160, "invalid mesh output size");
+static_assert(alignof(spvMeshOutput) == 16, "invalid mesh output alignment");
+
+struct spvMeshDispatch
+{
+    uint4 grid;
+};
+
+using spvMesh_t = mesh<spvPerVertex, void, 3, 1, topology::triangle>;
+
+static inline __attribute__((always_inline))
+void _1(device spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, device spvUnsafeArray<float4, 3>& gl_Position, device spvUnsafeArray<spvUnsafeArray<float, 4>, 3>& gl_ClipDistance, device spvUnsafeArray<spvUnsafeArray<float, 2>, 3>& gl_CullDistance, thread uint& gl_LocalInvocationIndex, device uint2& spvMeshSizes)
+{
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 3u, 1u);
+    gl_PrimitiveTriangleIndicesEXT[0u] = uint3(0u, 1u, 2u);
+    gl_Position[0u] = float4(0.0, 0.0, 0.0, 1.0);
+    gl_Position[1u] = float4(1.0, 0.0, 0.0, 1.0);
+    gl_Position[2u] = float4(0.0, 1.0, 0.0, 1.0);
+    gl_ClipDistance[0u] = _24;
+    gl_ClipDistance[1u] = _24;
+    gl_ClipDistance[2u] = _24;
+    gl_CullDistance[0u] = _26;
+    gl_CullDistance[1u] = _26;
+    gl_CullDistance[2u] = _26;
+}
+
+kernel void main0(device spvMeshOutput* spvMeshOutputs [[buffer(28)]], constant spvMeshDispatch& spvMeshDispatch [[buffer(29)]], uint3 spvMeshBatchWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshBatchGrid [[threadgroups_per_grid]], uint3 spvMeshLocalInvocationID [[thread_position_in_threadgroup]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
+{
+    const uint spvMeshOutputIndex = spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;
+    device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    device uint2& spvMeshSizes = spvMeshOutput.counts;
+    if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
+    device spvUnsafeArray<uint3, 1> &gl_PrimitiveTriangleIndicesEXT = spvMeshOutput.spv2;
+    device spvUnsafeArray<float4, 3> &gl_Position = spvMeshOutput.spv3;
+    device spvUnsafeArray<spvUnsafeArray<float, 4>, 3> &gl_ClipDistance = spvMeshOutput.spv4;
+    device spvUnsafeArray<spvUnsafeArray<float, 2>, 3> &gl_CullDistance = spvMeshOutput.spv5;
+    _1(gl_PrimitiveTriangleIndicesEXT, gl_Position, gl_ClipDistance, gl_CullDistance, gl_LocalInvocationIndex, spvMeshSizes);
+}
+
+
+[[mesh]] void main0_replay(device const spvMeshOutput* spvMeshOutputs [[buffer(28)]], uint3 spvMeshReplayWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshReplayGrid [[threadgroups_per_grid]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+{
+    const uint spvMeshOutputIndex = spvMeshReplayWorkgroupID.x + spvMeshReplayWorkgroupID.y * spvMeshReplayGrid.x + spvMeshReplayWorkgroupID.z * spvMeshReplayGrid.x * spvMeshReplayGrid.y;
+    const device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    const uint2 spvMeshSizes = uint2(spvMeshOutput.counts.x, spvMeshOutput.counts.y & 0x7fffffffu);
+    const uint spvMeshProvokingVertexLast [[maybe_unused]] = spvMeshOutput.counts.y >> 31u;
+    const device spvUnsafeArray<float4, 3> &gl_Position = spvMeshOutput.spv3;
+    const device spvUnsafeArray<spvUnsafeArray<float, 4>, 3> &gl_ClipDistance = spvMeshOutput.spv4;
+    const device spvUnsafeArray<spvUnsafeArray<float, 2>, 3> &gl_CullDistance = spvMeshOutput.spv5;
+    const device spvUnsafeArray<uint3, 1> &gl_PrimitiveTriangleIndicesEXT = spvMeshOutput.spv2;
+    if (spvMeshSizes.y == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spvMeshSizes.y);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
+    {
+        spvPerVertex spvV = {};
+        spvV.gl_Position = gl_Position[spvVI];
+        spvV.gl_ClipDistance[0] = gl_ClipDistance[spvVI][0];
+        spvV.gl_ClipDistance_0 = gl_ClipDistance[spvVI][0];
+        spvV.gl_ClipDistance[1] = gl_ClipDistance[spvVI][1];
+        spvV.gl_ClipDistance_1 = gl_ClipDistance[spvVI][1];
+        spvV.gl_ClipDistance[2] = gl_ClipDistance[spvVI][2];
+        spvV.gl_ClipDistance_2 = gl_ClipDistance[spvVI][2];
+        spvV.gl_ClipDistance[3] = gl_ClipDistance[spvVI][3];
+        spvV.gl_ClipDistance_3 = gl_ClipDistance[spvVI][3];
+        spvV.gl_CullDistance_0 = gl_CullDistance[spvVI][0];
+        spvV.gl_CullDistance_1 = gl_CullDistance[spvVI][1];
+        spvMesh.set_vertex(spvVI, spvV);
+    }
+    const uint spvPI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.y)
+    {
+        spvMesh.set_index(spvPI * 3u + 0u, gl_PrimitiveTriangleIndicesEXT[spvPI].x);
+        spvMesh.set_index(spvPI * 3u + 1u, gl_PrimitiveTriangleIndicesEXT[spvPI].y);
+        spvMesh.set_index(spvPI * 3u + 2u, gl_PrimitiveTriangleIndicesEXT[spvPI].z);
+    }
+}

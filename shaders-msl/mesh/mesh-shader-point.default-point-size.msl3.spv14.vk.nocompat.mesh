@@ -1,0 +1,15 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(points, max_vertices = 1, max_primitives = 1) out;
+
+layout(location = 0) perprimitiveEXT out flat vec4 point_color[];
+
+void main()
+{
+	SetMeshOutputsEXT(1, 1);
+	gl_MeshVerticesEXT[0].gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+	gl_PrimitivePointIndicesEXT[0] = 0;
+	point_color[0] = vec4(0.0, 1.0, 1.0, 1.0);
+}

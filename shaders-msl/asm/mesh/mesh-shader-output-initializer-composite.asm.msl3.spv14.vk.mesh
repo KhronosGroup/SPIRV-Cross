@@ -1,0 +1,142 @@
+; SPIR-V
+; Version: 1.5 (when assembled for Vulkan 1.2)
+;
+; Taskless MeshEXT fixture for output-initializer lowering. The workgroup has
+; four invocations, but only invocation zero overwrites one initialized output
+; element. An emulation backend must therefore establish the initial capture
+; state before any invocation executes the user body.
+               OpCapability MeshShadingEXT
+               OpExtension "SPV_EXT_mesh_shader"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint MeshEXT %main "main" %local_index %indices %positions %culls %vertex_payload %vertex_matrix %primitive_payload
+               OpExecutionMode %main LocalSize 4 1 1
+               OpExecutionMode %main OutputTrianglesEXT
+               OpExecutionMode %main OutputVertices 3
+               OpExecutionMode %main OutputPrimitivesEXT 1
+
+               OpName %main "main"
+               OpName %local_index "gl_LocalInvocationIndex"
+               OpName %indices "gl_PrimitiveTriangleIndicesEXT"
+               OpName %positions "gl_Position"
+               OpName %culls "gl_CullPrimitiveEXT"
+               OpName %VertexPayload "VertexPayload"
+               OpMemberName %VertexPayload 0 "color"
+               OpMemberName %VertexPayload 1 "uv_pair"
+               OpName %vertex_payload "vertex_payload"
+               OpName %vertex_matrix "vertex_matrix"
+               OpName %PrimitivePayload "PrimitivePayload"
+               OpMemberName %PrimitivePayload 0 "tint"
+               OpName %primitive_payload "primitive_payload"
+
+               OpDecorate %local_index BuiltIn LocalInvocationIndex
+               OpDecorate %indices BuiltIn PrimitiveTriangleIndicesEXT
+               OpDecorate %positions BuiltIn Position
+               OpDecorate %culls BuiltIn CullPrimitiveEXT
+               OpDecorate %culls PerPrimitiveEXT
+               OpDecorate %VertexPayload Block
+               OpDecorate %vertex_payload Location 0
+               OpDecorate %vertex_matrix Location 3
+               OpDecorate %PrimitivePayload Block
+               OpMemberDecorate %PrimitivePayload 0 PerPrimitiveEXT
+               OpDecorate %primitive_payload Location 5
+
+       %void = OpTypeVoid
+    %fn_void = OpTypeFunction %void
+       %bool = OpTypeBool
+       %uint = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+     %v2float = OpTypeVector %float 2
+      %v3uint = OpTypeVector %uint 3
+     %v4float = OpTypeVector %float 4
+        %mat2 = OpTypeMatrix %v2float 2
+
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+      %false = OpConstantFalse %bool
+
+   %float_n1 = OpConstant %float -1
+    %float_0 = OpConstant %float 0
+ %float_0_25 = OpConstant %float 0.25
+  %float_0_5 = OpConstant %float 0.5
+ %float_0_75 = OpConstant %float 0.75
+    %float_1 = OpConstant %float 1
+
+        %tri = OpConstantComposite %v3uint %uint_0 %uint_1 %uint_2
+      %pos_0 = OpConstantComposite %v4float %float_n1 %float_n1 %float_0 %float_1
+      %pos_1 = OpConstantComposite %v4float %float_1 %float_n1 %float_0 %float_1
+      %pos_2 = OpConstantComposite %v4float %float_0 %float_1 %float_0 %float_1
+
+    %color_0 = OpConstantComposite %v4float %float_1 %float_0 %float_0 %float_1
+    %color_1 = OpConstantComposite %v4float %float_0 %float_1 %float_0 %float_1
+    %color_2 = OpConstantComposite %v4float %float_0 %float_0 %float_1 %float_1
+%color_override = OpConstantComposite %v4float %float_1 %float_1 %float_0 %float_1
+       %uv_00 = OpConstantComposite %v2float %float_0 %float_0
+       %uv_01 = OpConstantComposite %v2float %float_1 %float_0
+       %uv_10 = OpConstantComposite %v2float %float_0 %float_1
+       %uv_11 = OpConstantComposite %v2float %float_1 %float_1
+      %uv_mid = OpConstantComposite %v2float %float_0_5 %float_0_5
+     %uv_quarter = OpConstantComposite %v2float %float_0_25 %float_0_75
+      %mat_col0 = OpConstantComposite %v2float %float_1 %float_0
+      %mat_col1 = OpConstantComposite %v2float %float_0 %float_1
+      %identity = OpConstantComposite %mat2 %mat_col0 %mat_col1
+          %tint = OpConstantComposite %v4float %float_0_25 %float_0_5 %float_0_75 %float_1
+
+%arr_v3uint_1 = OpTypeArray %v3uint %uint_1
+%arr_v4float_3 = OpTypeArray %v4float %uint_3
+%arr_bool_1 = OpTypeArray %bool %uint_1
+%arr_v2float_2 = OpTypeArray %v2float %uint_2
+%VertexPayload = OpTypeStruct %v4float %arr_v2float_2
+%arr_VertexPayload_3 = OpTypeArray %VertexPayload %uint_3
+%arr_mat2_3 = OpTypeArray %mat2 %uint_3
+%PrimitivePayload = OpTypeStruct %v4float
+%arr_PrimitivePayload_1 = OpTypeArray %PrimitivePayload %uint_1
+
+   %uv_pair_0 = OpConstantComposite %arr_v2float_2 %uv_00 %uv_01
+   %uv_pair_1 = OpConstantComposite %arr_v2float_2 %uv_10 %uv_11
+   %uv_pair_2 = OpConstantComposite %arr_v2float_2 %uv_mid %uv_quarter
+   %vertex_0 = OpConstantComposite %VertexPayload %color_0 %uv_pair_0
+   %vertex_1 = OpConstantComposite %VertexPayload %color_1 %uv_pair_1
+   %vertex_2 = OpConstantComposite %VertexPayload %color_2 %uv_pair_2
+%vertex_override = OpConstantComposite %VertexPayload %color_override %uv_pair_1
+%primitive_0 = OpConstantComposite %PrimitivePayload %tint
+
+   %indices_init = OpConstantComposite %arr_v3uint_1 %tri
+ %positions_init = OpConstantComposite %arr_v4float_3 %pos_0 %pos_1 %pos_2
+     %culls_init = OpConstantComposite %arr_bool_1 %false
+%vertex_payload_init = OpConstantComposite %arr_VertexPayload_3 %vertex_0 %vertex_1 %vertex_2
+%vertex_matrix_init = OpConstantNull %arr_mat2_3
+%primitive_payload_init = OpConstantComposite %arr_PrimitivePayload_1 %primitive_0
+
+%ptr_input_uint = OpTypePointer Input %uint
+%ptr_output_arr_v3uint_1 = OpTypePointer Output %arr_v3uint_1
+%ptr_output_arr_v4float_3 = OpTypePointer Output %arr_v4float_3
+%ptr_output_arr_bool_1 = OpTypePointer Output %arr_bool_1
+%ptr_output_arr_VertexPayload_3 = OpTypePointer Output %arr_VertexPayload_3
+%ptr_output_arr_mat2_3 = OpTypePointer Output %arr_mat2_3
+%ptr_output_arr_PrimitivePayload_1 = OpTypePointer Output %arr_PrimitivePayload_1
+%ptr_output_VertexPayload = OpTypePointer Output %VertexPayload
+
+        %local_index = OpVariable %ptr_input_uint Input
+            %indices = OpVariable %ptr_output_arr_v3uint_1 Output %indices_init
+          %positions = OpVariable %ptr_output_arr_v4float_3 Output %positions_init
+              %culls = OpVariable %ptr_output_arr_bool_1 Output %culls_init
+     %vertex_payload = OpVariable %ptr_output_arr_VertexPayload_3 Output %vertex_payload_init
+      %vertex_matrix = OpVariable %ptr_output_arr_mat2_3 Output %vertex_matrix_init
+  %primitive_payload = OpVariable %ptr_output_arr_PrimitivePayload_1 Output %primitive_payload_init
+
+       %main = OpFunction %void None %fn_void
+      %entry = OpLabel
+               OpSetMeshOutputsEXT %uint_3 %uint_1
+     %local = OpLoad %uint %local_index
+   %is_zero = OpIEqual %bool %local %uint_0
+               OpSelectionMerge %merge None
+               OpBranchConditional %is_zero %overwrite %merge
+  %overwrite = OpLabel
+%vertex_1_ptr = OpAccessChain %ptr_output_VertexPayload %vertex_payload %uint_1
+               OpStore %vertex_1_ptr %vertex_override
+               OpBranch %merge
+      %merge = OpLabel
+               OpReturn
+               OpFunctionEnd
