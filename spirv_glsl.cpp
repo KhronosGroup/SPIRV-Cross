@@ -11014,7 +11014,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	// If we are translating access to a structured buffer, the first subscript '._m0' must be hidden
 	bool hide_first_subscript = count > 1 && is_user_type_structured(base);
 
-	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain = false) {
+	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain) {
 		AccessChainFlags mod_flags = flags;
 		if (!is_literal)
 			mod_flags &= ~ACCESS_CHAIN_INDEX_IS_LITERAL_BIT;
@@ -11172,7 +11172,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				case BuiltInClipDistance:
 					if (type->array.size() == 1) // Red herring. Only consider block IO for two-dimensional arrays here.
 					{
-						append_index(index, is_literal);
+						append_index(index, is_literal, false);
 						break;
 					}
 					// fallthrough
@@ -11185,7 +11185,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					else if (var->storage == StorageClassOutput)
 						expr = join("gl_out[", to_expression(index, register_expression_read), "].", expr);
 					else
-						append_index(index, is_literal);
+						append_index(index, is_literal, false);
 					break;
 
 				case BuiltInPrimitiveId:
@@ -11196,11 +11196,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					if (mesh_shader)
 						expr = join("gl_MeshPrimitivesEXT[", to_expression(index, register_expression_read), "].", expr);
 					else
-						append_index(index, is_literal);
+						append_index(index, is_literal, false);
 					break;
 
 				default:
-					append_index(index, is_literal);
+					append_index(index, is_literal, false);
 					break;
 				}
 			}
@@ -11241,7 +11241,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
 				// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
 				// For literal indices we are working on composites, so we ignore this since we have already converted to proper array.
-				append_index(index, is_literal);
+				append_index(index, is_literal, false);
 			}
 
 			if (var && has_decoration(var->self, DecorationBuiltIn) &&
