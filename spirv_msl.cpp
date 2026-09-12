@@ -1951,6 +1951,7 @@ void CompilerMSL::preprocess_op_codes()
 		if (!msl_options.supports_msl_version(3, 1))
 			SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
 		add_header_line("#include <metal_simdgroup_matrix>");
+		validate_cooperative_matrix_types();
 	}
 }
 
@@ -9481,6 +9482,227 @@ bool CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 	return false;
 }
 
+// Metal only implements Subgroup scoped 8x8 matrices with floating-point components.
+void CompilerMSL::validate_cooperative_matrix_type(const SPIRType &type)
+{
+	// Only the component types which have a simdgroup_*8x8 equivalent.
+	auto &comp = get<SPIRType>(type.parent_type);
+	if (comp.basetype != SPIRType::Float && comp.basetype != SPIRType::Half && comp.basetype != SPIRType::BFloat16)
+		SPIRV_CROSS_THROW("MSL cooperative matrices only support float16, float32, and bfloat16 component types.");
+
+	// Only Subgroup scope.
+	auto &scope = get<SPIRConstant>(type.ext.cooperative.scope_id);
+	if (scope.specialization)
+		SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
+	if (scope.scalar() != ScopeSubgroup)
+		SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
+
+	// Only 8x8.
+	auto &rows = get<SPIRConstant>(type.ext.cooperative.rows_id);
+	auto &columns = get<SPIRConstant>(type.ext.cooperative.columns_id);
+	if (rows.specialization || columns.specialization)
+		SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
+	if (rows.scalar() != 8 || columns.scalar() != 8)
+		SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
+}
+
+// Validates all cooperative matrix types up-front, rather than failing partway through a function.
+void CompilerMSL::validate_cooperative_matrix_types()
+{
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, const SPIRType &type) {
+		if (type.op == OpTypeCooperativeMatrixKHR)
+			validate_cooperative_matrix_type(type);
+	});
+}
+
+// 8x8 matrix over a 32-wide SIMD-group: every invocation holds two components.
+static const uint32_t k_cooperative_matrix_components_per_thread = (8 * 8) / 32;
+
+// Non-matrix operands, e.g. the scalar in OpMatrixTimesScalar, are broadcast to every component.
+string CompilerMSL::to_cooperative_matrix_component(uint32_t id, const string &index)
+{
+	if (expression_type(id).op != OpTypeCooperativeMatrixKHR)
+		return to_enclosed_unpacked_expression(id);
+
+	return join(to_enclosed_unpacked_expression(id), ".thread_elements()[", index, "]");
+}
+
+// op is prefixed to every component, so an empty op copies or broadcasts op0 instead.
+void CompilerMSL::emit_cooperative_matrix_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                   const char *op)
+{
+	emit_uninitialized_temporary_expression(result_type, result_id);
+
+	for (uint32_t i = 0; i < k_cooperative_matrix_components_per_thread; i++)
+	{
+		auto index = join(i, "u");
+		statement(to_cooperative_matrix_component(result_id, index), " = ", op,
+		          to_cooperative_matrix_component(op0, index), ";");
+	}
+
+	inherit_expression_dependencies(result_id, op0);
+}
+
+void CompilerMSL::emit_cooperative_matrix_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                    uint32_t op1, const char *op)
+{
+	emit_uninitialized_temporary_expression(result_type, result_id);
+
+	for (uint32_t i = 0; i < k_cooperative_matrix_components_per_thread; i++)
+	{
+		auto index = join(i, "u");
+		statement(to_cooperative_matrix_component(result_id, index), " = ",
+		          to_cooperative_matrix_component(op0, index), " ", op, " ",
+		          to_cooperative_matrix_component(op1, index), ";");
+	}
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+void CompilerMSL::emit_cooperative_matrix_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                        const char *op)
+{
+	emit_uninitialized_temporary_expression(result_type, result_id);
+
+	for (uint32_t i = 0; i < k_cooperative_matrix_components_per_thread; i++)
+	{
+		auto index = join(i, "u");
+		statement(to_cooperative_matrix_component(result_id, index), " = ", op, "(",
+		          to_cooperative_matrix_component(op0, index), ");");
+	}
+
+	inherit_expression_dependencies(result_id, op0);
+}
+
+void CompilerMSL::emit_cooperative_matrix_select_op(uint32_t result_type, uint32_t result_id, uint32_t cond,
+                                                    uint32_t op0, uint32_t op1)
+{
+	emit_uninitialized_temporary_expression(result_type, result_id);
+
+	for (uint32_t i = 0; i < k_cooperative_matrix_components_per_thread; i++)
+	{
+		auto index = join(i, "u");
+		statement(to_cooperative_matrix_component(result_id, index), " = ", to_enclosed_unpacked_expression(cond),
+		          " ? ", to_cooperative_matrix_component(op0, index), " : ",
+		          to_cooperative_matrix_component(op1, index), ";");
+	}
+
+	inherit_expression_dependencies(result_id, cond);
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+// Returns false if instruction is not a cooperative matrix op, so the caller can fall back.
+bool CompilerMSL::maybe_emit_cooperative_matrix_op(const Instruction &instruction)
+{
+	if (instruction.length < 3)
+		return false;
+
+	auto opcode = static_cast<Op>(instruction.op);
+	bool has_result = false, has_result_type = false;
+	HasResultAndType(opcode, &has_result, &has_result_type);
+	if (!has_result_type)
+		return false;
+
+	auto *ops = stream(instruction);
+	uint32_t result_type = ops[0];
+	uint32_t result_id = ops[1];
+
+	auto *type = &get<SPIRType>(result_type);
+	while (type && (is_pointer(*type) || is_array(*type)))
+		type = maybe_get<SPIRType>(type->parent_type);
+
+	if (!type || type->op != OpTypeCooperativeMatrixKHR)
+	{
+		// Extraction returns a scalar, so here the cooperative matrix is an operand, not the result.
+		if ((opcode == OpCompositeExtract || opcode == OpVectorExtractDynamic) && instruction.length >= 4 &&
+		    expression_type(ops[2]).op == OpTypeCooperativeMatrixKHR)
+		{
+			bool index_is_id = opcode == OpVectorExtractDynamic;
+			auto index = index_is_id ? to_expression(ops[3]) : join(ops[3], "u");
+
+			emit_op(result_type, result_id, to_cooperative_matrix_component(ops[2], index), should_forward(ops[2]));
+
+			inherit_expression_dependencies(result_id, ops[2]);
+			if (index_is_id)
+				inherit_expression_dependencies(result_id, ops[3]);
+			return true;
+		}
+
+		return false;
+	}
+
+	// Unsupported component types, scope or dimensions are rejected by validate_cooperative_matrix_types().
+	switch (opcode)
+	{
+	case OpFNegate:
+		emit_cooperative_matrix_unary_op(result_type, result_id, ops[2], "-");
+		break;
+
+	case OpFAdd:
+		emit_cooperative_matrix_binary_op(result_type, result_id, ops[2], ops[3], "+");
+		break;
+
+	case OpFSub:
+		emit_cooperative_matrix_binary_op(result_type, result_id, ops[2], ops[3], "-");
+		break;
+
+	case OpFMul:
+	case OpMatrixTimesScalar:
+		emit_cooperative_matrix_binary_op(result_type, result_id, ops[2], ops[3], "*");
+		break;
+
+	case OpFDiv:
+		emit_cooperative_matrix_binary_op(result_type, result_id, ops[2], ops[3], "/");
+		break;
+
+	case OpFConvert:
+	{
+		auto component_type = type_to_glsl(get<SPIRType>(type->parent_type));
+		emit_cooperative_matrix_unary_func_op(result_type, result_id, ops[2], component_type.c_str());
+		break;
+	}
+
+	case OpCompositeConstruct:
+		// A cooperative matrix is constructed from a single scalar, broadcast to every component.
+		if (instruction.length != 3)
+			SPIRV_CROSS_THROW("OpCompositeConstruct for cooperative matrix requires exactly one scalar component.");
+		emit_cooperative_matrix_unary_op(result_type, result_id, ops[2], "");
+		break;
+
+	case OpSelect:
+		// The condition is a scalar bool. Boolean cooperative matrices are rejected by validation.
+		emit_cooperative_matrix_select_op(result_type, result_id, ops[2], ops[3], ops[4]);
+		break;
+
+	case OpCompositeInsert:
+	case OpVectorInsertDynamic:
+	{
+		// OpCompositeInsert takes (object, composite, literal index),
+		// OpVectorInsertDynamic takes (vector, component, index id).
+		bool index_is_id = opcode == OpVectorInsertDynamic;
+		uint32_t object = index_is_id ? ops[3] : ops[2];
+		uint32_t matrix = index_is_id ? ops[2] : ops[3];
+		auto index = index_is_id ? to_expression(ops[4]) : join(ops[4], "u");
+
+		// Copy the matrix, then overwrite the one component being inserted.
+		emit_cooperative_matrix_unary_op(result_type, result_id, matrix, "");
+		statement(to_cooperative_matrix_component(result_id, index), " = ", to_unpacked_expression(object), ";");
+
+		inherit_expression_dependencies(result_id, object);
+		if (index_is_id)
+			inherit_expression_dependencies(result_id, ops[4]);
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
+	}
+
+	return true;
+}
+
 // Override for MSL-specific syntax instructions
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
@@ -9724,6 +9946,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFMul:
+		if (maybe_emit_cooperative_matrix_op(instruction))
+			break;
 		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFMul);
 		else
@@ -9731,6 +9955,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFAdd:
+		if (maybe_emit_cooperative_matrix_op(instruction))
+			break;
 		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFAdd);
 		else
@@ -9738,6 +9964,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFSub:
+		if (maybe_emit_cooperative_matrix_op(instruction))
+			break;
 		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFSub);
 		else
@@ -10918,10 +11146,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t A = ops[2], B = ops[3], C = ops[4];
-		uint32_t matrix_operands = instruction.length >= 6 ? ops[5] : uint32_t(CooperativeMatrixOperandsMaskNone);
 
-		if (matrix_operands != uint32_t(CooperativeMatrixOperandsMaskNone))
-			SPIRV_CROSS_THROW("MSL cooperative matrix muladd does not support setting matrix operands flags.");
+		// Matrix operand flags only affect integer components, which are not supported here.
 
 		emit_uninitialized_temporary_expression(result_type, id);
 		statement("simdgroup_multiply_accumulate(", to_expression(id), ", ",
@@ -10957,39 +11183,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	default:
 	{
 		// Prevent GLSL cooperative matrix code from leaking into MSL output.
-		// Element-wise arithmetic on cooperative matrices is not supported in Metal.
-		// Should cover any reasonable situation we come across.
-		if (instruction.length >= 2)
-		{
-			bool has_result = false, has_result_type = false;
-			HasResultAndType(opcode, &has_result, &has_result_type);
+		if (maybe_emit_cooperative_matrix_op(instruction))
+			break;
 
-			if (has_result_type)
-			{
-				auto *type = &get<SPIRType>(ops[0]);
-				while (type && (is_pointer(*type) || is_array(*type)))
-					type = this->maybe_get<SPIRType>(type->parent_type);
-				if (type->op == OpTypeCooperativeMatrixKHR)
-					SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
-			}
-
-			auto is_cooperative_matrix_typed_id = [&](uint32_t id) -> bool {
-				auto &type = expression_type(id);
-				return type.op == OpTypeCooperativeMatrixKHR;
-			};
-
-			if (opcode == OpCompositeExtract || opcode == OpVectorExtractDynamic)
-			{
-				if (instruction.length >= 3 && is_cooperative_matrix_typed_id(ops[2]))
-					SPIRV_CROSS_THROW("Unsupported extraction from cooperative matrix in MSL backend.");
-			}
-			else if (opcode == OpCompositeInsert || opcode == OpVectorInsertDynamic)
-			{
-				if ((instruction.length >= 3 && is_cooperative_matrix_typed_id(ops[2])) ||
-				    (instruction.length >= 4 && is_cooperative_matrix_typed_id(ops[3])))
-					SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
-			}
-		}
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
@@ -17121,20 +17317,8 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 			if (!msl_options.supports_msl_version(3, 1))
 				SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
 
-			// Only Subgroup scope
-			auto &scope_c = get<SPIRConstant>(coop_type->ext.cooperative.scope_id);
-			if (scope_c.specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
-			if (scope_c.scalar() != ScopeSubgroup)
-				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
-
-			// Only 8x8
-			auto &rows_c = get<SPIRConstant>(coop_type->ext.cooperative.rows_id);
-			auto &cols_c = get<SPIRConstant>(coop_type->ext.cooperative.columns_id);
-			if (rows_c.specialization || cols_c.specialization)
-				SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
-			if (rows_c.scalar() != 8 || cols_c.scalar() != 8)
-				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
+			// Only Subgroup scoped 8x8 matrices can be expressed.
+			validate_cooperative_matrix_type(*coop_type);
 
 			// Map component type to simdgroup_*8x8
 			auto &comp = get<SPIRType>(coop_type->parent_type);
@@ -19334,8 +19518,31 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		check_resource_write(args[0]);
 		break;
 
-	default:
+	case OpCompositeExtract:
+	case OpVectorExtractDynamic:
+	{
+		if (length >= 3)
+		{
+			auto *type = get_expression_result_type(args[2]);
+			if (type && type->op == OpTypeCooperativeMatrixKHR)
+				uses_cooperative_matrix = true;
+		}
 		break;
+	}
+
+	default:
+	{
+		// Any other operation producing a cooperative matrix is emulated by the backend.
+		bool has_result = false, has_result_type = false;
+		HasResultAndType(opcode, &has_result, &has_result_type);
+		if (has_result_type && length >= 1)
+		{
+			auto *type = self.maybe_get<SPIRType>(args[0]);
+			if (type && type->op == OpTypeCooperativeMatrixKHR)
+				uses_cooperative_matrix = true;
+		}
+		break;
+	}
 	}
 
 	return true;

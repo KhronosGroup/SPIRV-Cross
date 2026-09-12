@@ -1164,6 +1164,18 @@ protected:
 	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 	                     StorageClass lhs_storage, StorageClass rhs_storage) override;
 	void build_implicit_builtins();
+
+	// Emulates element-wise operations on simdgroup matrices, which Metal does not support natively.
+	std::string to_cooperative_matrix_component(uint32_t id, const std::string &index);
+	void emit_cooperative_matrix_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
+	void emit_cooperative_matrix_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+	                                       const char *op);
+	void emit_cooperative_matrix_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
+	void emit_cooperative_matrix_select_op(uint32_t result_type, uint32_t result_id, uint32_t cond, uint32_t op0,
+	                                       uint32_t op1);
+	bool maybe_emit_cooperative_matrix_op(const Instruction &instruction);
+	void validate_cooperative_matrix_type(const SPIRType &type);
+	void validate_cooperative_matrix_types();
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
 	bool uses_explicit_early_fragment_test();
