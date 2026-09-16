@@ -18580,6 +18580,11 @@ std::string CompilerGLSL::undef_loop_variable_initializer_suffix(const SPIRVaria
 	if (!type_can_zero_initialize(type))
 		return "";
 
+	// variable_decl() already emits the zero initializer for an OpUndef loop variable
+	// in this mode; adding a second one here would produce "x = 0 = 0".
+	if (var.loop_variable && options.force_zero_initialized_variables)
+		return "";
+
 	return join(" = ", to_zero_initialized_expression(var.basetype));
 }
 
