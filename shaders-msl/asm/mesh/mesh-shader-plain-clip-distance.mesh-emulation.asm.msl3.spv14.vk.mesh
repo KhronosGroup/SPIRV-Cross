@@ -1,0 +1,99 @@
+; SPIR-V
+; Version: 1.4
+;
+; Plain-variable ClipDistance/CullDistance regression for mesh capture/replay.
+; Unlike the canonical gl_MeshPerVertexEXT block form, this declares both as
+; standalone output arrays. The whole-array stores also verify that emulated
+; mesh output capture uses device-address-space array copies. ClipDistance has
+; a native Metal copy plus user varyings; CullDistance has only user varyings.
+               OpCapability Shader
+               OpCapability MeshShadingEXT
+               OpCapability ClipDistance
+               OpCapability CullDistance
+               OpExtension "SPV_EXT_mesh_shader"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint MeshEXT %main "main" %indices %positions %clip_distances %cull_distances
+               OpExecutionMode %main LocalSize 1 1 1
+               OpExecutionMode %main OutputTrianglesEXT
+               OpExecutionMode %main OutputVertices 3
+               OpExecutionMode %main OutputPrimitivesEXT 1
+
+               OpName %main "main"
+               OpName %indices "gl_PrimitiveTriangleIndicesEXT"
+               OpName %positions "gl_Position"
+               OpName %clip_distances "gl_ClipDistance"
+               OpName %cull_distances "gl_CullDistance"
+
+               OpDecorate %indices BuiltIn PrimitiveTriangleIndicesEXT
+               OpDecorate %positions BuiltIn Position
+               OpDecorate %clip_distances BuiltIn ClipDistance
+               OpDecorate %cull_distances BuiltIn CullDistance
+
+       %void = OpTypeVoid
+    %fn_void = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+     %v3uint = OpTypeVector %uint 3
+     %v4float = OpTypeVector %float 4
+
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+     %uint_4 = OpConstant %uint 4
+    %float_0 = OpConstant %float 0
+    %float_1 = OpConstant %float 1
+
+        %tri = OpConstantComposite %v3uint %uint_0 %uint_1 %uint_2
+      %pos_0 = OpConstantComposite %v4float %float_0 %float_0 %float_0 %float_1
+      %pos_1 = OpConstantComposite %v4float %float_1 %float_0 %float_0 %float_1
+      %pos_2 = OpConstantComposite %v4float %float_0 %float_1 %float_0 %float_1
+
+%arr_float_4 = OpTypeArray %float %uint_4
+ %clip_value = OpConstantComposite %arr_float_4 %float_1 %float_1 %float_1 %float_1
+%arr_float_2 = OpTypeArray %float %uint_2
+ %cull_value = OpConstantComposite %arr_float_2 %float_1 %float_0
+%arr_v3uint_1 = OpTypeArray %v3uint %uint_1
+%arr_v4float_3 = OpTypeArray %v4float %uint_3
+%arr_clip_3 = OpTypeArray %arr_float_4 %uint_3
+%arr_cull_3 = OpTypeArray %arr_float_2 %uint_3
+
+%ptr_output_arr_v3uint_1 = OpTypePointer Output %arr_v3uint_1
+%ptr_output_arr_v4float_3 = OpTypePointer Output %arr_v4float_3
+%ptr_output_arr_clip_3 = OpTypePointer Output %arr_clip_3
+%ptr_output_arr_cull_3 = OpTypePointer Output %arr_cull_3
+%ptr_output_v3uint = OpTypePointer Output %v3uint
+%ptr_output_v4float = OpTypePointer Output %v4float
+%ptr_output_arr_float_4 = OpTypePointer Output %arr_float_4
+%ptr_output_arr_float_2 = OpTypePointer Output %arr_float_2
+
+        %indices = OpVariable %ptr_output_arr_v3uint_1 Output
+      %positions = OpVariable %ptr_output_arr_v4float_3 Output
+%clip_distances = OpVariable %ptr_output_arr_clip_3 Output
+%cull_distances = OpVariable %ptr_output_arr_cull_3 Output
+
+       %main = OpFunction %void None %fn_void
+      %entry = OpLabel
+               OpSetMeshOutputsEXT %uint_3 %uint_1
+    %index_ptr = OpAccessChain %ptr_output_v3uint %indices %uint_0
+               OpStore %index_ptr %tri
+    %pos_ptr_0 = OpAccessChain %ptr_output_v4float %positions %uint_0
+    %pos_ptr_1 = OpAccessChain %ptr_output_v4float %positions %uint_1
+    %pos_ptr_2 = OpAccessChain %ptr_output_v4float %positions %uint_2
+               OpStore %pos_ptr_0 %pos_0
+               OpStore %pos_ptr_1 %pos_1
+               OpStore %pos_ptr_2 %pos_2
+   %clip_ptr_0 = OpAccessChain %ptr_output_arr_float_4 %clip_distances %uint_0
+   %clip_ptr_1 = OpAccessChain %ptr_output_arr_float_4 %clip_distances %uint_1
+   %clip_ptr_2 = OpAccessChain %ptr_output_arr_float_4 %clip_distances %uint_2
+               OpStore %clip_ptr_0 %clip_value
+               OpStore %clip_ptr_1 %clip_value
+               OpStore %clip_ptr_2 %clip_value
+   %cull_ptr_0 = OpAccessChain %ptr_output_arr_float_2 %cull_distances %uint_0
+   %cull_ptr_1 = OpAccessChain %ptr_output_arr_float_2 %cull_distances %uint_1
+   %cull_ptr_2 = OpAccessChain %ptr_output_arr_float_2 %cull_distances %uint_2
+               OpStore %cull_ptr_0 %cull_value
+               OpStore %cull_ptr_1 %cull_value
+               OpStore %cull_ptr_2 %cull_value
+               OpReturn
+               OpFunctionEnd

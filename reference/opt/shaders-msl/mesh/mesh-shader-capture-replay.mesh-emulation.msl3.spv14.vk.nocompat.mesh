@@ -1,0 +1,303 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+    
+    object_data T& operator [] (size_t pos) object_data
+    {
+        return elements[pos];
+    }
+    constexpr const object_data T& operator [] (size_t pos) const object_data
+    {
+        return elements[pos];
+    }
+};
+
+void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, device uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spvMeshSizes.x = vertexCount;
+        spvMeshSizes.y = primitiveCount;
+    }
+}
+
+struct VertexData
+{
+    float4 color;
+    spvUnsafeArray<float2, 2> uv;
+};
+
+struct gl_MeshPerVertexEXT
+{
+    float4 gl_Position [[position]];
+    float gl_PointSize;
+    float gl_ClipDistance [[clip_distance]] [2];
+};
+
+struct PrimitiveData
+{
+    spvUnsafeArray<float4, 2> tint;
+    uint2 flags;
+};
+
+struct gl_MeshPerPrimitiveEXT
+{
+    uint gl_PrimitiveID [[primitive_id]];
+    uint gl_Layer [[render_target_array_index]];
+    uint gl_ViewportIndex [[viewport_array_index]];
+    bool gl_CullPrimitiveEXT [[primitive_culled]];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(4u, 1u, 1u);
+
+struct spvPerVertex
+{
+    float4 vertices_color [[user(locn0)]];
+    float2 vertices_uv_0 [[user(locn1)]];
+    float2 vertices_uv_1 [[user(locn2)]];
+    float4 gl_Position [[position]];
+    float gl_PointSize;
+    float gl_ClipDistance [[clip_distance]] [2];
+    float gl_ClipDistance_0 [[user(clip0)]];
+    float gl_ClipDistance_1 [[user(clip1)]];
+    float2 vertex_basis_0 [[user(locn6)]];
+    float2 vertex_basis_1 [[user(locn7)]];
+    float2 vertex_pair_0 [[user(locn10)]];
+    float2 vertex_pair_1 [[user(locn11)]];
+};
+
+struct spvPerPrimitive
+{
+    float4 primitives_tint_0 [[user(locn3)]];
+    float4 primitives_tint_1 [[user(locn4)]];
+    uint2 primitives_flags [[user(locn5)]];
+    uint gl_PrimitiveID [[primitive_id]];
+    uint gl_Layer [[render_target_array_index]];
+    uint gl_ViewportIndex [[viewport_array_index]];
+    bool gl_CullPrimitiveEXT [[primitive_culled]];
+    float2 primitive_basis_0 [[user(locn8)]];
+    float2 primitive_basis_1 [[user(locn9)]];
+    float2 primitive_pair_0 [[user(locn12)]];
+    float2 primitive_pair_1 [[user(locn13)]];
+};
+
+struct spvMeshOutput
+{
+    uint2 counts;
+    spvUnsafeArray<VertexData, 4> spv32;
+    spvUnsafeArray<gl_MeshPerVertexEXT, 4> spv81;
+    spvUnsafeArray<float2x2, 4> spv111;
+    spvUnsafeArray<spvUnsafeArray<float2, 2>, 4> spv132;
+    spvUnsafeArray<uint3, 2> spv265;
+    spvUnsafeArray<PrimitiveData, 2> spv149;
+    spvUnsafeArray<gl_MeshPerPrimitiveEXT, 2> spv186;
+    spvUnsafeArray<float2x2, 2> spv214;
+    spvUnsafeArray<spvUnsafeArray<float2, 2>, 2> spv234;
+};
+static_assert(__builtin_offsetof(spvMeshOutput, counts) == 0, "invalid mesh output counts offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv32) == 16, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv81) == 144, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv111) == 272, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv132) == 336, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv265) == 400, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv149) == 432, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv186) == 528, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv214) == 560, "invalid mesh output variable offset");
+static_assert(__builtin_offsetof(spvMeshOutput, spv234) == 592, "invalid mesh output variable offset");
+static_assert(sizeof(spvMeshOutput) == 624, "invalid mesh output size");
+static_assert(alignof(spvMeshOutput) == 16, "invalid mesh output alignment");
+
+struct spvMeshDispatch
+{
+    uint4 grid;
+};
+
+using spvMesh_t = mesh<spvPerVertex, spvPerPrimitive, 4, 2, topology::triangle>;
+
+static inline __attribute__((always_inline))
+void _4(thread uint3& gl_GlobalInvocationID, device spvUnsafeArray<VertexData, 4>& vertices, thread uint3& gl_WorkGroupID, thread uint3& gl_NumWorkGroups, thread uint& gl_DrawID, thread uint3& gl_LocalInvocationID, device spvUnsafeArray<gl_MeshPerVertexEXT, 4>& gl_MeshVerticesEXT, device spvUnsafeArray<float2x2, 4>& vertex_basis, thread uint& gl_LocalInvocationIndex, device spvUnsafeArray<spvUnsafeArray<float2, 2>, 4>& vertex_pair, device spvUnsafeArray<PrimitiveData, 2>& primitives, device spvUnsafeArray<gl_MeshPerPrimitiveEXT, 2>& gl_MeshPrimitivesEXT, device spvUnsafeArray<float2x2, 2>& primitive_basis, device spvUnsafeArray<spvUnsafeArray<float2, 2>, 2>& primitive_pair, device spvUnsafeArray<uint3, 2>& gl_PrimitiveTriangleIndicesEXT, device uint2& spvMeshSizes)
+{
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 4u, 2u);
+    uint _250 = (gl_LocalInvocationIndex + 1u) & 3u;
+    float3 _280 = float3(gl_GlobalInvocationID);
+    float2 _284 = float2(gl_WorkGroupID.xy);
+    float _286 = _284.x;
+    ((device float*)&vertices[_250].color)[0u] = _286;
+    float _288 = _284.y;
+    ((device float*)&vertices[_250].color)[1u] = _288;
+    float _292 = float(gl_NumWorkGroups.x);
+    ((device float*)&vertices[_250].color)[2u] = _292;
+    ((device float*)&vertices[_250].color)[3u] = float(int(gl_DrawID));
+    ((device float*)&vertices[_250].uv[0])[0u] = float(gl_LocalInvocationID.x);
+    ((device float*)&vertices[_250].uv[0])[1u] = 4.0;
+    vertices[_250].uv[1] = _280.xy;
+    float _312 = _280.x;
+    ((device float*)&gl_MeshVerticesEXT[_250].gl_Position)[0u] = _312;
+    ((device float*)&gl_MeshVerticesEXT[_250].gl_Position)[1u] = _280.y;
+    ((device float*)&gl_MeshVerticesEXT[_250].gl_Position)[2u] = _280.z;
+    ((device float*)&gl_MeshVerticesEXT[_250].gl_Position)[3u] = 1.0;
+    gl_MeshVerticesEXT[_250].gl_PointSize = float(_250 + 1u);
+    float _326 = float(_250);
+    gl_MeshVerticesEXT[_250].gl_ClipDistance[0] = _326;
+    gl_MeshVerticesEXT[_250].gl_ClipDistance[1] = -_326;
+    float _337 = float(gl_LocalInvocationIndex);
+    float2 _338 = float2(_326, _337);
+    vertex_basis[_250][0] = _338;
+    ((device float*)&vertex_basis[_250][1])[0u] = float(gl_WorkGroupID.x);
+    ((device float*)&vertex_basis[_250][1])[1u] = _292;
+    vertex_pair[_250][0] = _338;
+    float2 _360 = float2(gl_GlobalInvocationID.xy);
+    vertex_pair[_250][1] = _360;
+    if (gl_LocalInvocationIndex < 2u)
+    {
+        ((device float*)&primitives[gl_LocalInvocationIndex].tint[0])[0u] = _286;
+        ((device float*)&primitives[gl_LocalInvocationIndex].tint[0])[1u] = _288;
+        float2 _374 = float2(gl_NumWorkGroups.xy);
+        ((device float*)&primitives[gl_LocalInvocationIndex].tint[0])[2u] = _374.x;
+        ((device float*)&primitives[gl_LocalInvocationIndex].tint[0])[3u] = _374.y;
+        primitives[gl_LocalInvocationIndex].tint[1] = float4(_312, _280.yz, 1.0);
+        ((device uint*)&primitives[gl_LocalInvocationIndex].flags)[0u] = gl_LocalInvocationIndex;
+        ((device uint*)&primitives[gl_LocalInvocationIndex].flags)[1u] = gl_LocalInvocationIndex;
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveID = int(uint(int(gl_DrawID)) + gl_LocalInvocationIndex);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_Layer = int(gl_WorkGroupID.z);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_ViewportIndex = int(gl_NumWorkGroups.z - 1u);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_CullPrimitiveEXT = short(gl_LocalInvocationIndex == 1u);
+        float2 _420 = float2(_337);
+        primitive_basis[gl_LocalInvocationIndex][0] = _420;
+        ((device float*)&primitive_basis[gl_LocalInvocationIndex][1])[0u] = float(gl_WorkGroupID.y);
+        ((device float*)&primitive_basis[gl_LocalInvocationIndex][1])[1u] = float(gl_NumWorkGroups.y);
+        primitive_pair[gl_LocalInvocationIndex][0] = _420;
+        primitive_pair[gl_LocalInvocationIndex][1] = _360;
+        gl_PrimitiveTriangleIndicesEXT[gl_LocalInvocationIndex] = (gl_LocalInvocationIndex == 0u) ? uint3(0u, 1u, 2u) : uint3(2u, 3u, 0u);
+    }
+    threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup | mem_flags::mem_texture);
+}
+
+kernel void main0(constant uint* spvDrawIndex [[buffer(19)]], device spvMeshOutput* spvMeshOutputs [[buffer(28)]], constant spvMeshDispatch& spvMeshDispatch [[buffer(29)]], uint3 spvMeshBatchWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshBatchGrid [[threadgroups_per_grid]], uint3 spvMeshLocalInvocationID [[thread_position_in_threadgroup]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
+{
+    const uint spvMeshOutputIndex = spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;
+    device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    device uint2& spvMeshSizes = spvMeshOutput.counts;
+    if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
+    const uint spvMeshWorkgroupIndex = (spvMeshDispatch.grid.w & 0x7fffffffu) + spvMeshBatchWorkgroupID.x + spvMeshBatchWorkgroupID.y * spvMeshBatchGrid.x + spvMeshBatchWorkgroupID.z * spvMeshBatchGrid.x * spvMeshBatchGrid.y;
+    const uint3 spvMeshWorkgroupID = uint3(spvMeshWorkgroupIndex % spvMeshDispatch.grid.x, (spvMeshWorkgroupIndex / spvMeshDispatch.grid.x) % spvMeshDispatch.grid.y, spvMeshWorkgroupIndex / (spvMeshDispatch.grid.x * spvMeshDispatch.grid.y));
+    uint3 gl_WorkGroupID = spvMeshWorkgroupID;
+    uint3 gl_NumWorkGroups = spvMeshDispatch.grid.xyz;
+    uint3 gl_LocalInvocationID = spvMeshLocalInvocationID;
+    uint3 gl_GlobalInvocationID = spvMeshWorkgroupID * gl_WorkGroupSize + spvMeshLocalInvocationID;
+    uint gl_DrawID = *spvDrawIndex;
+    device spvUnsafeArray<VertexData, 4> &vertices = spvMeshOutput.spv32;
+    device spvUnsafeArray<gl_MeshPerVertexEXT, 4> &gl_MeshVerticesEXT = spvMeshOutput.spv81;
+    device spvUnsafeArray<float2x2, 4> &vertex_basis = spvMeshOutput.spv111;
+    device spvUnsafeArray<spvUnsafeArray<float2, 2>, 4> &vertex_pair = spvMeshOutput.spv132;
+    device spvUnsafeArray<PrimitiveData, 2> &primitives = spvMeshOutput.spv149;
+    device spvUnsafeArray<gl_MeshPerPrimitiveEXT, 2> &gl_MeshPrimitivesEXT = spvMeshOutput.spv186;
+    device spvUnsafeArray<float2x2, 2> &primitive_basis = spvMeshOutput.spv214;
+    device spvUnsafeArray<spvUnsafeArray<float2, 2>, 2> &primitive_pair = spvMeshOutput.spv234;
+    device spvUnsafeArray<uint3, 2> &gl_PrimitiveTriangleIndicesEXT = spvMeshOutput.spv265;
+    _4(gl_GlobalInvocationID, vertices, gl_WorkGroupID, gl_NumWorkGroups, gl_DrawID, gl_LocalInvocationID, gl_MeshVerticesEXT, vertex_basis, gl_LocalInvocationIndex, vertex_pair, primitives, gl_MeshPrimitivesEXT, primitive_basis, primitive_pair, gl_PrimitiveTriangleIndicesEXT, spvMeshSizes);
+}
+
+
+[[mesh]] void main0_replay(device const spvMeshOutput* spvMeshOutputs [[buffer(28)]], uint3 spvMeshReplayWorkgroupID [[threadgroup_position_in_grid]], uint3 spvMeshReplayGrid [[threadgroups_per_grid]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+{
+    const uint spvMeshOutputIndex = spvMeshReplayWorkgroupID.x + spvMeshReplayWorkgroupID.y * spvMeshReplayGrid.x + spvMeshReplayWorkgroupID.z * spvMeshReplayGrid.x * spvMeshReplayGrid.y;
+    const device spvMeshOutput& spvMeshOutput = spvMeshOutputs[spvMeshOutputIndex];
+    const uint2 spvMeshSizes = uint2(spvMeshOutput.counts.x, spvMeshOutput.counts.y & 0x7fffffffu);
+    const uint spvMeshProvokingVertexLast [[maybe_unused]] = spvMeshOutput.counts.y >> 31u;
+    const device spvUnsafeArray<VertexData, 4> &vertices = spvMeshOutput.spv32;
+    const device spvUnsafeArray<gl_MeshPerVertexEXT, 4> &gl_MeshVerticesEXT = spvMeshOutput.spv81;
+    const device spvUnsafeArray<float2x2, 4> &vertex_basis = spvMeshOutput.spv111;
+    const device spvUnsafeArray<spvUnsafeArray<float2, 2>, 4> &vertex_pair = spvMeshOutput.spv132;
+    const device spvUnsafeArray<uint3, 2> &gl_PrimitiveTriangleIndicesEXT = spvMeshOutput.spv265;
+    const device spvUnsafeArray<PrimitiveData, 2> &primitives = spvMeshOutput.spv149;
+    const device spvUnsafeArray<gl_MeshPerPrimitiveEXT, 2> &gl_MeshPrimitivesEXT = spvMeshOutput.spv186;
+    const device spvUnsafeArray<float2x2, 2> &primitive_basis = spvMeshOutput.spv214;
+    const device spvUnsafeArray<spvUnsafeArray<float2, 2>, 2> &primitive_pair = spvMeshOutput.spv234;
+    if (spvMeshSizes.y == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spvMeshSizes.y);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    const uint spvVI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.x)
+    {
+        spvPerVertex spvV = {};
+        spvV.vertices_color = vertices[spvVI].color;
+        spvV.vertices_uv_0 = vertices[spvVI].uv[0];
+        spvV.vertices_uv_1 = vertices[spvVI].uv[1];
+        spvV.gl_Position = gl_MeshVerticesEXT[spvVI].gl_Position;
+        spvV.gl_PointSize = gl_MeshVerticesEXT[spvVI].gl_PointSize;
+        spvV.gl_ClipDistance[0] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
+        spvV.gl_ClipDistance_0 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
+        spvV.gl_ClipDistance[1] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[1];
+        spvV.gl_ClipDistance_1 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[1];
+        spvV.vertex_basis_0 = vertex_basis[spvVI][0];
+        spvV.vertex_basis_1 = vertex_basis[spvVI][1];
+        spvV.vertex_pair_0 = vertex_pair[spvVI][0];
+        spvV.vertex_pair_1 = vertex_pair[spvVI][1];
+        spvMesh.set_vertex(spvVI, spvV);
+    }
+    const uint spvPI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.y)
+    {
+        spvMesh.set_index(spvPI * 3u + 0u, gl_PrimitiveTriangleIndicesEXT[spvPI].x);
+        spvMesh.set_index(spvPI * 3u + 1u, gl_PrimitiveTriangleIndicesEXT[spvPI].y);
+        spvMesh.set_index(spvPI * 3u + 2u, gl_PrimitiveTriangleIndicesEXT[spvPI].z);
+        spvPerPrimitive spvP = {};
+        spvP.primitives_tint_0 = primitives[spvPI].tint[0];
+        spvP.primitives_tint_1 = primitives[spvPI].tint[1];
+        spvP.primitives_flags = primitives[spvPI].flags;
+        spvP.gl_PrimitiveID = gl_MeshPrimitivesEXT[spvPI].gl_PrimitiveID;
+        spvP.gl_Layer = gl_MeshPrimitivesEXT[spvPI].gl_Layer;
+        spvP.gl_ViewportIndex = gl_MeshPrimitivesEXT[spvPI].gl_ViewportIndex;
+        spvP.gl_CullPrimitiveEXT = gl_MeshPrimitivesEXT[spvPI].gl_CullPrimitiveEXT;
+        spvP.primitive_basis_0 = primitive_basis[spvPI][0];
+        spvP.primitive_basis_1 = primitive_basis[spvPI][1];
+        spvP.primitive_pair_0 = primitive_pair[spvPI][0];
+        spvP.primitive_pair_1 = primitive_pair[spvPI][1];
+        spvMesh.set_primitive(spvPI, spvP);
+    }
+}

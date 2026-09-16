@@ -1,0 +1,27 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 3) in;
+layout(lines, max_vertices = 3, max_primitives = 2) out;
+
+out gl_MeshPerVertexEXT
+{
+	vec4 gl_Position;
+} gl_MeshVerticesEXT[];
+
+layout(location = 0) perprimitiveEXT out flat vec4 primitive_color[];
+
+void main()
+{
+	SetMeshOutputsEXT(3, 2);
+
+	uint index = gl_LocalInvocationIndex;
+	gl_MeshVerticesEXT[index].gl_Position = vec4(float(index) - 1.0, 0.0, 0.0, 1.0);
+
+	if (index < 2u)
+	{
+		gl_PrimitiveLineIndicesEXT[index] = index == 0u ? uvec2(0, 1) : uvec2(1, 2);
+		gl_MeshPrimitivesEXT[index].gl_CullPrimitiveEXT = index == 1u;
+		primitive_color[index] = index == 0u ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
+	}
+}
