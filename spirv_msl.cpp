@@ -5127,6 +5127,36 @@ void CompilerMSL::align_struct(SPIRType &ib_type, unordered_set<uint32_t> &align
 		// offsets, array strides and matrix strides.
 		ensure_member_packing_rules_msl(ib_type, mbr_idx);
 
+		// Arrays of structs: the element struct may just have been packed (by its own align_struct pass above)
+		// to a size smaller than the declared ArrayStride. mark_scalar_layout_structs() runs before that packing
+		// and only sees the unpacked size, so it can miss this case. MSL cannot express an array stride larger
+		// than sizeof(T); route such arrays through spvPaddedArrayElement exactly like that pass does.
+		{
+			auto &mbr_type = get<SPIRType>(ib_type.member_types[mbr_idx]);
+			if (mbr_type.basetype == SPIRType::Struct && !mbr_type.array.empty() &&
+			    !(mbr_type.pointer && mbr_type.storage == StorageClassPhysicalStorageBuffer))
+			{
+				auto *struct_type = &mbr_type;
+				while (!struct_type->array.empty())
+					struct_type = &get<SPIRType>(struct_type->parent_type);
+
+				if (!has_decoration(struct_type->self, DecorationArrayStride))
+				{
+					uint32_t array_stride = type_struct_member_array_stride(ib_type, mbr_idx);
+					uint32_t dimensions = uint32_t(mbr_type.array.size() - 1);
+					for (uint32_t dim = 0; dim < dimensions; dim++)
+						array_stride /= max<uint32_t>(to_array_size_literal(mbr_type, dim), 1u);
+
+					uint32_t msl_size = get_declared_struct_size_msl(*struct_type);
+					if (array_stride > msl_size)
+					{
+						set_decoration(struct_type->self, DecorationArrayStride, msl_size);
+						add_spv_func_and_recompile(SPVFuncImplPaddedArrayElement);
+					}
+				}
+			}
+		}
+
 		// Align current offset to the current member's default alignment. If the member was packed, it will observe
 		// the updated alignment here.
 		uint32_t msl_align_mask = get_declared_struct_member_alignment_msl(ib_type, mbr_idx) - 1;
@@ -5134,6 +5164,12 @@ void CompilerMSL::align_struct(SPIRType &ib_type, unordered_set<uint32_t> &align
 
 		// Fetch the member offset as declared in the SPIRV.
 		uint32_t spirv_mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
+
+		// A previous compilation pass may have recorded a padding target that no longer applies
+		// (e.g. a struct array that is now emitted with spvPaddedArrayElement and therefore
+		// already spans its full ArrayStride). Recompute it from scratch on every pass.
+		unset_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPaddingTarget);
+
 		if (spirv_mbr_offset > aligned_msl_offset)
 		{
 			// Since MSL and SPIR-V have slightly different struct member alignment and
