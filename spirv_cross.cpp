@@ -821,6 +821,16 @@ bool Compiler::is_runtime_size_array(const SPIRType &type)
 	return type.op == OpTypeRuntimeArray;
 }
 
+bool Compiler::is_struct_wrapped_opaque_descriptor_array(const SPIRType &type) const
+{
+	// Specific detection of glslang code patterns.
+	return type.basetype == SPIRType::Struct &&
+	       has_decoration(type.self, DecorationBlock) &&
+	       type.member_types.size() == 1 &&
+	       type_is_opaque_value(get<SPIRType>(type.member_types.front())) &&
+	       is_runtime_size_array(get<SPIRType>(type.member_types.front()));
+}
+
 ShaderResources Compiler::get_shader_resources() const
 {
 	return get_shader_resources(nullptr);
@@ -5510,7 +5520,7 @@ void Compiler::analyze_descriptor_heap_types()
 				if (ptr_type.basetype == SPIRType::Struct)
 				{
 					DescriptorHeapMeta meta = {};
-					meta.type = ptr_type.self;
+					meta.data_type = ptr_type.self;
 					meta.hlsl_style_stride = hlsl_style_stride_access_chains.count(args[2]);
 					meta.buffer_pointer_id = args[1];
 					meta.storage = ptr_type.storage;
@@ -5531,6 +5541,25 @@ void Compiler::analyze_descriptor_heap_types()
 			{
 				auto &data_type = compiler.get<SPIRType>(args[2]);
 
+				// Newer glslang can emit uniformconstant descriptors as:
+				// struct { non{readable,writable} T descriptors[]; }, as a way to add NonWritable / NonReadable.
+				// Detect this as a special case. We cannot deal with arbitrary complication in HLLs.
+				bool is_struct_wrapped_runtime_array = compiler.is_struct_wrapped_opaque_descriptor_array(data_type);
+
+				TypeID descriptor_array_type_id = args[2];
+				if (is_struct_wrapped_runtime_array)
+				{
+					descriptor_array_type_id = data_type.member_types.front();
+					if (!compiler.has_member_decoration(data_type.self, 0, DecorationOffset) &&
+					    compiler.get_member_decoration(data_type.self, 0, DecorationOffset) != 0)
+					{
+						ID offset_id = compiler.get_member_decoration(data_type.self, 0, DecorationOffsetIdEXT);
+						auto *c = compiler.maybe_get <SPIRConstant>(offset_id);
+						if (!c || c->specialization || c->scalar() != 0)
+							SPIRV_CROSS_THROW("Offset for resource heap must be constant 0.");
+					}
+				}
+
 				if (compiler.is_pointer(data_type))
 					SPIRV_CROSS_THROW("pointer type not allowed.");
 
@@ -5539,11 +5568,11 @@ void Compiler::analyze_descriptor_heap_types()
 				// Need to validate the array stride and types. HLLs are not flexible enough to support the full flexibility of SPIR-V.
 				if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInResourceHeapEXT)
 				{
-					if (!compiler.is_runtime_size_array(data_type))
+					if (!is_struct_wrapped_runtime_array && !is_runtime_size_array(data_type))
 						SPIRV_CROSS_THROW("Descriptor heap must be accessed as a runtime array.");
 
 					// The only meaningful use of this is ArrayStride equal to sizeof(type) right now.
-					uint32_t array_stride_id = compiler.get_decoration(args[2], DecorationArrayStrideIdEXT);
+					uint32_t array_stride_id = compiler.get_decoration(descriptor_array_type_id, DecorationArrayStrideIdEXT);
 					if (!array_stride_id)
 						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for resource heap.");
 
@@ -5574,19 +5603,20 @@ void Compiler::analyze_descriptor_heap_types()
 					if (c && !c->size_of_type)
 						SPIRV_CROSS_THROW("Resource heap array stride must be ConstantSizeOfEXT for high level languages.");
 
-					auto &element_type = compiler.get<SPIRType>(data_type.parent_type);
+					auto &descriptor_array_type = compiler.get<SPIRType>(descriptor_array_type_id);
+					auto &element_type = compiler.get<SPIRType>(descriptor_array_type.parent_type);
 
 					if (element_type.basetype == SPIRType::DescriptorHeapBuffer)
 					{
 						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::DescriptorHeapBuffer)
 							SPIRV_CROSS_THROW("Buffer descriptors in heap must be ConstantSizeOfEXT(OpTypeBufferEXT) for GLSL.");
 					}
-					else if (data_type.basetype == SPIRType::Image)
+					else if (element_type.basetype == SPIRType::Image)
 					{
 						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::Image)
 							SPIRV_CROSS_THROW("Image descriptors in heap must be ConstantSizeOfEXT(OpTypeImage) for GLSL.");
 					}
-					else if (data_type.basetype == SPIRType::AccelerationStructure)
+					else if (element_type.basetype == SPIRType::AccelerationStructure)
 					{
 						if (c && compiler.get<SPIRType>(c->size_of_type).basetype != SPIRType::AccelerationStructure)
 							SPIRV_CROSS_THROW("RTAS descriptors in heap must be ConstantSizeOfEXT(OpTypeAccelerationStructure) for GLSL.");
@@ -5594,11 +5624,11 @@ void Compiler::analyze_descriptor_heap_types()
 				}
 				else if (BuiltIn(compiler.get_decoration(args[3], DecorationBuiltIn)) == BuiltInSamplerHeapEXT)
 				{
-					if (!compiler.is_runtime_size_array(data_type))
+					if (!is_struct_wrapped_runtime_array && !is_runtime_size_array(data_type))
 						SPIRV_CROSS_THROW("Descriptor heap must be accessed as a runtime array.");
 
 					// The only meaningful use of this is ArrayStride equal to sizeof(sampler) right now.
-					uint32_t array_stride_id = compiler.get_decoration(args[2], DecorationArrayStrideIdEXT);
+					uint32_t array_stride_id = compiler.get_decoration(descriptor_array_type_id, DecorationArrayStrideIdEXT);
 					if (!array_stride_id)
 						SPIRV_CROSS_THROW("Expected ArrayStrideIdEXT to be set for sampler heap.");
 
@@ -5611,23 +5641,38 @@ void Compiler::analyze_descriptor_heap_types()
 				if (hlsl_style_stride)
 					hlsl_style_stride_access_chains.insert(args[1]);
 
-				if (data_type.basetype == SPIRType::SampledImage)
+				auto *element_type = &compiler.get<SPIRType>(descriptor_array_type_id);
+				while (compiler.is_array(*element_type))
+					element_type = &compiler.get<SPIRType>(element_type->parent_type);
+
+				if (element_type->basetype == SPIRType::SampledImage)
 				{
 					SPIRV_CROSS_THROW("Attempting to access heap as combined sampler image. This does not make sense.");
 				}
-				else if (data_type.basetype == SPIRType::Image ||
-				         data_type.basetype == SPIRType::AccelerationStructure ||
-				         data_type.basetype == SPIRType::Sampler)
+				else if (element_type->basetype == SPIRType::Image ||
+				         element_type->basetype == SPIRType::AccelerationStructure ||
+				         element_type->basetype == SPIRType::Sampler)
 				{
 					DescriptorHeapMeta meta = {};
-					meta.type = data_type.self;
+					meta.data_type = element_type->self;
+					meta.name_type = data_type.self;
 					meta.hlsl_style_stride = hlsl_style_stride;
+
+					if (is_struct_wrapped_runtime_array)
+					{
+						meta.nonreadable = compiler.has_member_decoration(data_type.self, 0, DecorationNonReadable);
+						meta.nonwritable = compiler.has_member_decoration(data_type.self, 0, DecorationNonWritable);
+						meta.coherent = compiler.has_member_decoration(data_type.self, 0, DecorationCoherent);
+						meta.is_volatile = compiler.has_member_decoration(data_type.self, 0, DecorationVolatile);
+						meta.is_restrict = compiler.has_member_decoration(data_type.self, 0, DecorationRestrict);
+					}
+
 					add_unique_type(meta);
 				}
 				else if (buffer_pointers.count(args[3]) != 0)
 				{
-					if (!compiler.has_decoration(data_type.self, DecorationBlock) &&
-					    !compiler.has_decoration(data_type.self, DecorationBufferBlock))
+					if (!compiler.has_decoration(element_type->self, DecorationBlock) &&
+					    !compiler.has_decoration(element_type->self, DecorationBufferBlock))
 					{
 						SPIRV_CROSS_THROW("BufferPointerEXT must reference a block type.");
 					}
@@ -5638,7 +5683,7 @@ void Compiler::analyze_descriptor_heap_types()
 					{
 						// This is where the pointer becomes typed, so register it here.
 						DescriptorHeapMeta meta = {};
-						meta.type = data_type.self;
+						meta.data_type = data_type.self;
 						meta.hlsl_style_stride = pointer_meta.hlsl_style_stride;
 						meta.buffer_pointer_id = args[3];
 						meta.storage = buffer_type.storage;
@@ -5674,11 +5719,12 @@ void Compiler::analyze_descriptor_heap_types()
 
 		void add_unique_type(const DescriptorHeapMeta &meta)
 		{
-			assert(meta.type != 0);
+			assert(meta.data_type != 0);
 
 			for (auto &type : heap_types)
 			{
-				if (type.type == meta.type && type.storage == meta.storage &&
+				if (type.data_type == meta.data_type && type.name_type == meta.name_type &&
+				    type.storage == meta.storage &&
 				    type.buffer_pointer_id == meta.buffer_pointer_id &&
 				    type.nonreadable == meta.nonreadable &&
 				    type.nonwritable == meta.nonwritable &&

@@ -2714,7 +2714,7 @@ std::string CompilerGLSL::to_buffer_pointer_name_prefix(uint32_t ptr_id) const
 
 	assert(itr != descriptor_heap_types.end());
 
-	auto name = to_name(itr->type);
+	auto name = to_name(itr->data_type);
 
 	// The same block type can be instantiated with different read-write decorations.
 	name += heap_meta_to_prefix(*itr);
@@ -2733,7 +2733,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	if (var)
 		type = &get<SPIRType>(var->basetype);
 	else
-		type = &get<SPIRType>(heap_meta->type);
+		type = &get<SPIRType>(heap_meta->data_type);
 
 	Bitset flags = var ? ir.get_buffer_block_flags(*var) : ir.get_buffer_block_type_flags(*type);
 	auto storage = var ? var->storage : heap_meta->storage;
@@ -4309,7 +4309,7 @@ void CompilerGLSL::emit_resources()
 
 	for (const auto &heap_type : descriptor_heap_types)
 	{
-		auto &type = get<SPIRType>(heap_type.type);
+		auto &type = get<SPIRType>(heap_type.data_type);
 
 		if (heap_type.hlsl_style_stride)
 			needs_hlsl_warning = true;
@@ -4318,18 +4318,27 @@ void CompilerGLSL::emit_resources()
 		{
 			string type_layout;
 
-			// We lose NonWritable / NonReadable information, glslang issue, no good way to plumb it through either ...
 			if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.format != ImageFormatUnknown)
-				type_layout = join("layout(", to_descriptor_heap_layout(type), ", ", format_to_glsl(type.image.format), ") uniform ");
+			{
+				type_layout = join("layout(", to_descriptor_heap_layout(type), ", ", format_to_glsl(type.image.format), ") ",
+					heap_type.nonwritable ? "readonly " : "",
+					heap_type.nonreadable ? "writeonly " : "",
+					heap_type.coherent ? "coherent " : "",
+					heap_type.is_volatile ? "volatile " : "",
+					heap_type.is_restrict ? "restrict " : "",
+					"uniform ");
+			}
 			else
 				type_layout = join("layout(", to_descriptor_heap_layout(type), ") uniform ");
 
-			statement(type_layout, variable_decl(type, join("spv", to_name(type.self), "ResourceHeap")), "[];");
+			statement(type_layout, variable_decl(type, join("spv",
+				to_name(heap_type.name_type ? heap_type.name_type : TypeID(type.self)), "ResourceHeap")), "[];");
 		}
 		else if (type.basetype == SPIRType::Sampler)
 		{
 			statement("layout(", to_descriptor_heap_layout(type), ") uniform ",
-				variable_decl(type, join("spv", to_name(type.self), "SamplerHeap")), "[];");
+				variable_decl(type, join("spv",
+					to_name(heap_type.name_type ? heap_type.name_type : TypeID(type.self)), "SamplerHeap")), "[];");
 		}
 		else
 		{
@@ -8729,7 +8738,8 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
 	    is_depth_image(imgtype, tex) && args.lod && !args.base.is_fetch)
 	{
-		if (!expression_is_constant_null(args.lod))
+		if (has_extension("GL_EXT_texture_shadow_lod") ||
+		    options.vulkan_semantics || !expression_is_constant_null(args.lod))
 		{
 			require_extension_internal("GL_EXT_texture_shadow_lod");
 		}
@@ -11012,8 +11022,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		access_meshlet_position_y = base_expr->access_meshlet_position_y;
 	}
 
-	// If we are translating access to a structured buffer, the first subscript '._m0' must be hidden
+	// If we are translating access to a structured buffer, the first subscript '._m0' must be hidden.
 	bool hide_first_subscript = count > 1 && is_user_type_structured(base);
+
+	// If we're doing untyped access into a struct containing descriptors, skip the first index.
+	if (untyped_data_type && is_struct_wrapped_opaque_descriptor_array(*untyped_data_type))
+		hide_first_subscript = true;
 
 	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain) {
 		AccessChainFlags mod_flags = flags;
@@ -13246,7 +13260,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (untyped)
 		{
-			auto &data_type = get<SPIRType>(ops[2]);
+			auto &base_data_type = get<SPIRType>(ops[2]);
+			bool is_struct_wrapped_runtime_array = is_struct_wrapped_opaque_descriptor_array(base_data_type);
+
+			TypeID descriptor_array_type_id = ops[2];
+			if (is_struct_wrapped_runtime_array)
+				descriptor_array_type_id = base_data_type.member_types.front();
+
+			auto &data_type = get<SPIRType>(descriptor_array_type_id);
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr_id);
 			if (data_type.basetype == SPIRType::Image || data_type.basetype == SPIRType::Sampler ||
 				data_type.basetype == SPIRType::AccelerationStructure ||
@@ -13259,7 +13280,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (ptr_expr && ptr_expr->buffer_pointer)
 					e = join(to_buffer_pointer_name_prefix(ptr_expr->self), e);
 				else
-					e = join("spv", to_name(data_type.self), e);
+					e = join("spv", to_name(base_data_type.self), e);
 			}
 		}
 

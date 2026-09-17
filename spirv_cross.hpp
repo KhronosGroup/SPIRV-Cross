@@ -723,6 +723,7 @@ protected:
 	bool is_physical_or_buffer_pointer(const SPIRType &type) const;
 	bool is_physical_pointer_to_buffer_block(const SPIRType &type) const;
 	static bool is_runtime_size_array(const SPIRType &type);
+	bool is_struct_wrapped_opaque_descriptor_array(const SPIRType &type) const;
 	uint32_t expression_type_id(uint32_t id) const;
 	const SPIRType &expression_type(uint32_t id) const;
 	bool expression_is_lvalue(uint32_t id) const;
@@ -1117,12 +1118,15 @@ protected:
 
 	struct DescriptorHeapMeta
 	{
-		TypeID type;
+		TypeID data_type;
+		TypeID name_type; // This can be non-zero, as a way to disambiguate.
 		bool hlsl_style_stride;
 
 		// For buffers
 		ID buffer_pointer_id;
 		StorageClass storage;
+
+		// For buffers and storage images if using newer glslang.
 		bool nonwritable;
 		bool nonreadable;
 		bool coherent;

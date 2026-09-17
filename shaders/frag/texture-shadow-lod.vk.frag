@@ -11,9 +11,9 @@ layout(location = 0) out vec4 FragColor;
 void main()
 {
     float r = 0.0;
-    r += textureLod(uShadow2DArray, vec4(vUV.xyz, vUV.w), vLod);
-    r += textureLod(uShadowCube, vec4(vUV.xyz, vUV.w), vLod);
-    r += textureLodOffset(uShadow2DArray, vec4(vUV.xyz, vUV.w), vLod, ivec2(1));
+    r += textureLod(uShadow2DArray, vUV, 0.0);
+    r += textureLod(uShadow2DArray, vUV, vLod);
+    r += textureLod(uShadowCube, vUV, vLod);
+    r += textureLodOffset(uShadow2DArray, vUV, vLod, ivec2(1, 1));
     FragColor = vec4(r);
 }
-
