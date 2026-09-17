@@ -5898,7 +5898,8 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 			uint32_t physical_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 			bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
 			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
-			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id,
+			auto &value_type = get_pointee_type(get<SPIRType>(e.expression_type));
+			return convert_row_major_matrix(e.expression, value_type, physical_type_id,
 			                                is_packed, relaxed);
 		}
 		else if (flattened_structs.count(id))
@@ -16879,7 +16880,11 @@ bool CompilerGLSL::member_is_packed_physical_type(const SPIRType &type, uint32_t
 string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, uint32_t /* physical_type_id */,
                                               bool /*is_packed*/, bool relaxed)
 {
+	if (is_pointer(exp_type))
+		SPIRV_CROSS_THROW("Cannot transpose a pointer type.");
+
 	strip_enclosed_expression(exp_str);
+
 	if (!is_matrix(exp_type))
 	{
 		auto column_index = exp_str.find_last_of('[');
@@ -16899,7 +16904,6 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 			column_expr = column_expr.substr(end_deferred_index) +
 			              column_expr.substr(0, end_deferred_index);
 		}
-
 		auto transposed_expr = type_to_glsl_constructor(exp_type) + "(";
 
 		// Loading a column from a row-major matrix. Unroll the load.
