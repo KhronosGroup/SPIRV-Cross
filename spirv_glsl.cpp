@@ -16899,14 +16899,14 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 			column_expr = column_expr.substr(end_deferred_index) +
 			              column_expr.substr(0, end_deferred_index);
 		}
-
-		auto transposed_expr = type_to_glsl_constructor(exp_type) + "(";
+		auto &val_type = get_pointee_type(exp_type);
+		auto transposed_expr = type_to_glsl_constructor(val_type) + "(";
 
 		// Loading a column from a row-major matrix. Unroll the load.
-		for (uint32_t c = 0; c < exp_type.vecsize; c++)
+		for (uint32_t c = 0; c < val_type.vecsize; c++)
 		{
 			transposed_expr += join(exp_str, '[', c, ']', column_expr);
-			if (c + 1 < exp_type.vecsize)
+			if (c + 1 < val_type.vecsize)
 				transposed_expr += ", ";
 		}
 
