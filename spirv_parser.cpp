@@ -338,7 +338,7 @@ void Parser::parse(const Instruction &instruction)
 			spirv_ext = SPIRExtension::SPV_AMD_gcn_shader;
 		else if (ext == "NonSemantic.DebugPrintf")
 			spirv_ext = SPIRExtension::NonSemanticDebugPrintf;
-		else if (ext == "NonSemantic.Shader.DebugInfo.100")
+		else if (ext.find("NonSemantic.Shader.DebugInfo.") == 0)
 			spirv_ext = SPIRExtension::NonSemanticShaderDebugInfo;
 		else if (ext.find("NonSemantic.") == 0)
 			spirv_ext = SPIRExtension::NonSemanticGeneric;
