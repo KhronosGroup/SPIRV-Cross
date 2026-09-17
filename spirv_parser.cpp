@@ -650,6 +650,7 @@ void Parser::parse(const Instruction &instruction)
 	}
 
 	case OpMemberDecorate:
+	case OpMemberDecorateIdEXT:
 	{
 		uint32_t id = ops[0];
 		uint32_t member = ops[1];
@@ -660,12 +661,6 @@ void Parser::parse(const Instruction &instruction)
 			ir.set_member_decoration(id, member, decoration);
 		break;
 	}
-
-	// MemberDecorateIdEXT only applies to OffsetIdEXT when descriptors are packed in structs.
-	// This is currently unsupported and will fail in compilation.
-	// Pass it through in case someone just needs reflection.
-	case OpMemberDecorateIdEXT:
-		break;
 
 	case OpMemberDecorateStringGOOGLE:
 	{
