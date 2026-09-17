@@ -8738,7 +8738,8 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
 	    is_depth_image(imgtype, tex) && args.lod && !args.base.is_fetch)
 	{
-		if (!expression_is_constant_null(args.lod))
+		if (has_extension("GL_EXT_texture_shadow_lod") ||
+		    options.vulkan_semantics || !expression_is_constant_null(args.lod))
 		{
 			require_extension_internal("GL_EXT_texture_shadow_lod");
 		}
