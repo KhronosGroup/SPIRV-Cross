@@ -1215,13 +1215,13 @@ void Parser::parse(const Instruction &instruction)
 	{
 		uint32_t res = ops[0];
 		uint32_t id = ops[1];
-		// Control
+		uint32_t control = ops[2];
 		uint32_t type = ops[3];
 
 		if (current_function)
 			SPIRV_CROSS_THROW("Must end a function before starting a new one!");
 
-		current_function = &set<SPIRFunction>(id, res, type);
+		current_function = &set<SPIRFunction>(id, res, control, type);
 		break;
 	}
 

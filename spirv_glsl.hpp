@@ -1131,7 +1131,7 @@ protected:
 	bool is_descriptor_non_uniform(uint32_t id) const;
 	std::string to_descriptor_heap_layout(const SPIRType &type, StorageClass storage = StorageClassUniformConstant) const;
 
-	std::string construct_function_attributes(bool is_entry_point);
+	std::string construct_function_attributes(const SPIRFunction &func, bool is_entry_point);
 
 private:
 	void init();

@@ -21011,7 +21011,7 @@ void CompilerMSL::emit_mesh_entry_point()
 	const uint32_t func_id = ir.increase_bound_by(3);
 	const uint32_t block_id = func_id + 1;
 	const uint32_t ret_id = func_id + 2;
-	auto &wrapped_main = set<SPIRFunction>(func_id, f.return_type, f.function_type);
+	auto &wrapped_main = set<SPIRFunction>(func_id, f.return_type, f.function_control, f.function_type);
 
 	wrapped_main.blocks.push_back(block_id);
 	wrapped_main.entry_block = block_id;

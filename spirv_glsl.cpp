@@ -1155,6 +1155,17 @@ void CompilerGLSL::emit_header()
 			statement("#define SPIRV_Cross_endInvocationInterlock()");
 			statement("#endif");
 		}
+		else if (ext == "GL_EXT_function_control_attributes")
+		{
+			statement("#if defined(GL_EXT_function_control_attributes)");
+			statement("#extension GL_EXT_function_control_attributes : require");
+			statement("#define SPIRV_CROSS_INLINE [[inline]]");
+			statement("#define SPIRV_CROSS_NOINLINE [[noinline]]");
+			statement("#else");
+			statement("#define SPIRV_CROSS_INLINE");
+			statement("#define SPIRV_CROSS_NOINLINE");
+			statement("#endif");
+		}
 		else
 			statement("#extension ", ext, " : require");
 	}
@@ -18047,7 +18058,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 	string decl;
 
-	decl += construct_function_attributes(is_entry_point);
+	decl += construct_function_attributes(func, is_entry_point);
 
 	auto &type = get<SPIRType>(func.return_type);
 	decl += flags_to_qualifiers_glsl(type, 0, return_flags);
@@ -21185,7 +21196,7 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 	return "descriptor_heap";
 }
 
-string CompilerGLSL::construct_function_attributes(bool is_entry_point)
+string CompilerGLSL::construct_function_attributes(const SPIRFunction &func, bool is_entry_point)
 {
 	string function_attributes;
 
@@ -21209,11 +21220,23 @@ string CompilerGLSL::construct_function_attributes(bool is_entry_point)
 			add_attribute(function_attributes, "maximally_reconverges");
 		}
 	}
+	else
+	{
+		if (func.function_control & FunctionControlDontInlineMask)
+		{
+			require_extension_internal("GL_EXT_function_control_attributes");
+			function_attributes += "SPIRV_CROSS_NOINLINE\n";
+		}
+		else if (func.function_control & FunctionControlInlineMask)
+		{
+			require_extension_internal("GL_EXT_function_control_attributes");
+			function_attributes += "SPIRV_CROSS_INLINE\n";
+		}
+		return function_attributes;
+	}
 
 	if (!function_attributes.empty())
-	{
 		function_attributes += "]]\n";
-	}
 
 	return function_attributes;
 }
