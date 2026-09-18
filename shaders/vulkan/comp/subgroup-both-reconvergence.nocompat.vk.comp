@@ -1,0 +1,9 @@
+#version 450
+
+#extension GL_EXT_subgroup_uniform_control_flow : require
+#extension GL_EXT_maximal_reconvergence : require
+
+[[subgroup_uniform_control_flow, maximally_reconverges]]
+void main()
+{
+}

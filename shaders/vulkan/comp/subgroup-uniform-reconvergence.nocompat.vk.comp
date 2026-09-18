@@ -1,0 +1,8 @@
+#version 450
+
+#extension GL_EXT_subgroup_uniform_control_flow : require
+
+[[subgroup_uniform_control_flow]]
+void main()
+{
+}

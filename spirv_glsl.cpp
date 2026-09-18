@@ -18047,6 +18047,8 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 	string decl;
 
+	decl += construct_function_attributes(is_entry_point);
+
 	auto &type = get<SPIRType>(func.return_type);
 	decl += flags_to_qualifiers_glsl(type, 0, return_flags);
 	decl += type_to_glsl(type);
@@ -21183,3 +21185,35 @@ std::string CompilerGLSL::to_descriptor_heap_layout(const SPIRType &type, Storag
 	return "descriptor_heap";
 }
 
+string CompilerGLSL::construct_function_attributes(bool is_entry_point)
+{
+	string function_attributes;
+
+	const auto add_attribute = [](string &attributes, const string &name) -> void
+	{
+		attributes += attributes.empty() ? "[[" : ", ";
+		attributes += name;
+	};
+
+	if (is_entry_point)
+	{
+		auto &execution = get_entry_point();
+		if (execution.flags.get(ExecutionModeSubgroupUniformControlFlowKHR))
+		{
+			require_extension_internal("GL_EXT_subgroup_uniform_control_flow");
+			add_attribute(function_attributes, "subgroup_uniform_control_flow");
+		}
+		if (execution.flags.get(ExecutionModeMaximallyReconvergesKHR))
+		{
+			require_extension_internal("GL_EXT_maximal_reconvergence");
+			add_attribute(function_attributes, "maximally_reconverges");
+		}
+	}
+
+	if (!function_attributes.empty())
+	{
+		function_attributes += "]]\n";
+	}
+
+	return function_attributes;
+}
