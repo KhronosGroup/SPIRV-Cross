@@ -19693,7 +19693,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 					arguments.push_back(join("\"", extract_string(c->words.data(), c->words.size()), "\""));
 
 					// TODO: Do we check for ASCII or valid UTF-8 encoding here? Probably overkill.
-					for (uint32_t i = 1, n = varargs.size(); i < n; i++)
+					for (size_t i = 1, n = varargs.size(); i < n; i++)
 						arguments.push_back(to_expression(varargs[i]));
 
 					statement("abortEXT(", merge(arguments), ");");
