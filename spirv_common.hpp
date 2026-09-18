@@ -378,6 +378,7 @@ enum Types
 	TypeUndef,
 	TypeString,
 	TypeDebugLocalVariable,
+	TypeConstantData,
 	TypeCount
 };
 
@@ -876,7 +877,8 @@ struct SPIRBlock : IVariant
 		Kill, // Discard
 		IgnoreIntersection, // Ray Tracing
 		TerminateRay, // Ray Tracing
-		EmitMeshTasks // Mesh shaders
+		EmitMeshTasks, // Mesh shaders
+		ShaderAbort
 	};
 
 	enum Merge
@@ -944,6 +946,12 @@ struct SPIRBlock : IVariant
 		ID groups[3];
 		ID payload;
 	} mesh = {};
+
+	struct
+	{
+		TypeID physical_type;
+		ID payload;
+	} shader_abort = {};
 
 	SmallVector<Instruction> ops;
 
@@ -1224,6 +1232,23 @@ struct SPIRVariable : IVariant
 	SPIRFunction::Parameter *parameter = nullptr;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRVariable)
+};
+
+struct SPIRConstantData : IVariant
+{
+	enum
+	{
+		type = TypeConstantData
+	};
+
+	SPIRConstantData(TypeID type_id_, const uint32_t *words_, uint32_t word_count, bool specialization_)
+		: type_id(type_id_), words(words_, words_ + word_count), specialization(specialization_) {}
+
+	TypeID type_id;
+	SmallVector<uint32_t> words;
+	bool specialization;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRConstantData)
 };
 
 struct SPIRConstant : IVariant
@@ -2109,6 +2134,8 @@ static const uint32_t ResourceBindingPushConstantDescriptorSet = ~(0u);
 // Special constant used in a {MSL,HLSL}ResourceBinding binding
 // element to indicate the bindings for the push constants.
 static const uint32_t ResourceBindingPushConstantBinding = 0;
+
+std::string extract_string(const uint32_t *spirv, size_t size);
 } // namespace SPIRV_CROSS_NAMESPACE
 
 namespace std

@@ -50,6 +50,7 @@ ParsedIR::ParsedIR()
 	pool_group->pools[TypeUndef].reset(new ObjectPool<SPIRUndef>);
 	pool_group->pools[TypeString].reset(new ObjectPool<SPIRString>);
 	pool_group->pools[TypeDebugLocalVariable].reset(new ObjectPool<SPIRDebugLocalVariable>);
+	pool_group->pools[TypeConstantData].reset(new ObjectPool<SPIRConstantData>);
 }
 
 // Should have been default-implemented, but need this on MSVC 2013.
@@ -1152,4 +1153,22 @@ void ParsedIR::make_constant_null(uint32_t id, uint32_t type, bool add_to_typed_
 	}
 }
 
+string extract_string(const uint32_t *spirv, size_t word_count)
+{
+	string ret;
+	for (uint32_t i = 0; i < word_count; i++)
+	{
+		uint32_t w = spirv[i];
+
+		for (uint32_t j = 0; j < 4; j++, w >>= 8)
+		{
+			char c = w & 0xff;
+			if (c == '\0')
+				return ret;
+			ret += c;
+		}
+	}
+
+	SPIRV_CROSS_THROW("String was not terminated before EOF");
+}
 } // namespace SPIRV_CROSS_NAMESPACE

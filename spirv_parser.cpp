@@ -22,6 +22,7 @@
  */
 
 #include "spirv_parser.hpp"
+#include "spirv_common.hpp"
 #include "NonSemanticShaderDebugInfo100.h"
 #include <assert.h>
 
@@ -189,23 +190,9 @@ const uint32_t *Parser::stream(const Instruction &instr) const
 	return &ir.spirv[instr.offset];
 }
 
-static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
+static string extract_string(const std::vector<uint32_t> &spirv, uint32_t offset)
 {
-	string ret;
-	for (uint32_t i = offset; i < spirv.size(); i++)
-	{
-		uint32_t w = spirv[i];
-
-		for (uint32_t j = 0; j < 4; j++, w >>= 8)
-		{
-			char c = w & 0xff;
-			if (c == '\0')
-				return ret;
-			ret += c;
-		}
-	}
-
-	SPIRV_CROSS_THROW("String was not terminated before EOF");
+	return extract_string(spirv.data() + offset, spirv.size() - offset);
 }
 
 void Parser::parse(const Instruction &instruction)
@@ -1201,6 +1188,15 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpConstantDataKHR:
+	case OpSpecConstantDataKHR:
+	{
+		uint32_t id = ops[1];
+		uint32_t type = ops[0];
+		set<SPIRConstantData>(id, type, ops + 2, length - 2, op == OpSpecConstantDataKHR);
+		break;
+	}
+
 	case OpTypeBufferEXT:
 	{
 		uint32_t type = ops[0];
@@ -1418,6 +1414,15 @@ void Parser::parse(const Instruction &instruction)
 		current_block = nullptr;
 		// Currently glslang is bugged and does not treat EmitMeshTasksEXT as a terminator.
 		ignore_trailing_block_opcodes = true;
+		break;
+
+	case OpAbortKHR:
+		if (!current_block)
+			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
+		current_block->terminator = SPIRBlock::ShaderAbort;
+		current_block->shader_abort.physical_type = ops[0];
+		current_block->shader_abort.payload = ops[1];
+		current_block = nullptr;
 		break;
 
 	case OpReturn:

@@ -706,6 +706,12 @@ void CompilerGLSL::find_static_extensions()
 			long_vector_enabled = true;
 			break;
 
+		case CapabilityAbortKHR:
+			if (!options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Abort requires Vulkan semantics.");
+			require_extension_internal("GL_EXT_abort");
+			break;
+
 		default:
 			break;
 		}
@@ -843,6 +849,8 @@ string CompilerGLSL::compile()
 	analyze_interlocked_resource_usage();
 	if (!inout_color_attachments.empty())
 		emit_inout_fragment_outputs_copy_to_subpass_inputs();
+	if (has_extension("GL_EXT_abort"))
+		analyze_shader_abort_usage();
 
 	// Shaders might cast unrelated data to pointers of non-block types.
 	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
@@ -4107,6 +4115,10 @@ void CompilerGLSL::emit_resources()
 					is_natural_struct = true;
 				}
 
+				// Don't declare these. They purely exist to signal physical layout to OpAbortKHR.
+				if (abort_block_types.count(type->self))
+					is_natural_struct = false;
+
 				if (is_natural_struct)
 				{
 					if (emitted)
@@ -6030,6 +6042,11 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 	case TypeAccessChain:
 		// We cannot express this type. They only have meaning in other OpAccessChains, OpStore or OpLoad.
 		SPIRV_CROSS_THROW("Access chains have no default expression representation.");
+
+	case TypeConstantData:
+		// This is only intended to be used as part of shader abort and should never be turned
+		// into an actual expression.
+		return "unsupported_constant_data_expression";
 
 	default:
 		return to_name(id);
@@ -13574,6 +13591,17 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		const auto *const elems = &ops[2];
 		length -= 2;
 
+		auto abort_itr = abort_payloads.find(id);
+		if (abort_itr != abort_payloads.end())
+		{
+			// Special case. This composite should not be emitted as a struct in-code,
+			// but deferred to abortEXT() with unrolled arguments.
+			abort_itr->second.clear();
+			abort_itr->second.insert(abort_itr->second.end(), elems, elems + length);
+			emit_op(result_type, id, "invalid_abort_ext_expression_that_was_used_as_value", true);
+			break;
+		}
+
 		bool forward = true;
 		for (uint32_t i = 0; i < length; i++)
 			forward = forward && should_forward(elems[i]);
@@ -19645,6 +19673,39 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	case SPIRBlock::EmitMeshTasks:
 		emit_mesh_tasks(block);
 		break;
+
+	case SPIRBlock::ShaderAbort:
+	{
+		SmallVector<string> arguments;
+		auto &varargs = abort_payloads[block.shader_abort.payload];
+		if (varargs.empty())
+			statement("abortEXT(\"empty-abort\");");
+		else
+		{
+			bool known_encoding = false;
+			if (const auto *c = maybe_get<SPIRConstantData>(varargs.front()))
+			{
+				auto &type = get<SPIRType>(c->type_id);
+				if ((type.basetype == SPIRType::UByte || type.basetype == SPIRType::SByte) && is_array(type))
+				{
+					// We just have to YOLO and assume this is a string.
+					// It technically doesn't have to be, but realistically, it will be for any use case we care about.
+					arguments.push_back(join("\"", extract_string(c->words.data(), c->words.size()), "\""));
+
+					// TODO: Do we check for ASCII or valid UTF-8 encoding here? Probably overkill.
+					for (size_t i = 1, n = varargs.size(); i < n; i++)
+						arguments.push_back(to_expression(varargs[i]));
+
+					statement("abortEXT(", merge(arguments), ");");
+					known_encoding = true;
+				}
+			}
+
+			if (!known_encoding)
+				statement("abortEXT(\"unknown-encoding-of-abort\");");
+		}
+		break;
+	}
 
 	default:
 		SPIRV_CROSS_THROW("Unimplemented block terminator.");
