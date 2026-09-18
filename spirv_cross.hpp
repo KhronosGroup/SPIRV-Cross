@@ -1211,6 +1211,10 @@ protected:
 
 	void make_constant_null(uint32_t id, uint32_t type);
 
+	void analyze_shader_abort_usage();
+	std::unordered_set<uint32_t> abort_block_types;
+	std::unordered_map<uint32_t, SmallVector<uint32_t>> abort_payloads;
+
 	std::unordered_map<uint32_t, std::string> declared_block_names;
 
 	static bool instruction_to_result_type(

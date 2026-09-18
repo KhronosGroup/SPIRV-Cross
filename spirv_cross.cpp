@@ -201,7 +201,8 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 	if (block.terminator == SPIRBlock::Kill ||
 	    block.terminator == SPIRBlock::TerminateRay ||
 	    block.terminator == SPIRBlock::IgnoreIntersection ||
-	    block.terminator == SPIRBlock::EmitMeshTasks)
+	    block.terminator == SPIRBlock::EmitMeshTasks ||
+	    block.terminator == SPIRBlock::ShaderAbort)
 		return false;
 
 	for (auto &i : block.ops)
@@ -638,6 +639,9 @@ uint32_t Compiler::expression_type_id(uint32_t id) const
 
 	case TypeAccessChain:
 		return get<SPIRAccessChain>(id).basetype;
+
+	case TypeConstantData:
+		return get<SPIRConstantData>(id).type_id;
 
 	default:
 		SPIRV_CROSS_THROW("Cannot resolve expression type.");
@@ -6058,6 +6062,25 @@ void Compiler::analyze_interlocked_resource_usage()
 		interlocked_is_complex =
 		    !handler.use_critical_section || handler.interlock_function_id != ir.default_entry_point;
 	}
+}
+
+void Compiler::analyze_shader_abort_usage()
+{
+	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, const SPIRFunction &func)
+	{
+		for (auto &block_id : func.blocks)
+		{
+			auto &block = this->get<SPIRBlock>(block_id);
+			if (block.terminator == SPIRBlock::ShaderAbort)
+			{
+				// Don't declare this explicitly.
+				abort_block_types.insert(block.shader_abort.physical_type);
+				// Mark the composite as being consumed by abort.
+				// It should not be emitted as-is.
+				abort_payloads[block.shader_abort.payload] = {};
+			}
+		}
+	});
 }
 
 // Helper function
