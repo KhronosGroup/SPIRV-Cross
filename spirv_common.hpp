@@ -1016,7 +1016,7 @@ struct SPIRFunction : IVariant
 		type = TypeFunction
 	};
 
-	SPIRFunction(TypeID return_type_, TypeID function_control_, TypeID function_type_)
+	SPIRFunction(TypeID return_type_, uint32_t function_control_, TypeID function_type_)
 	    : return_type(return_type_)
 		, function_control(function_control_)
 	    , function_type(function_type_)
@@ -1057,7 +1057,7 @@ struct SPIRFunction : IVariant
 	};
 
 	TypeID return_type;
-	TypeID function_control;
+	uint32_t function_control;
 	TypeID function_type;
 	SmallVector<Parameter> arguments;
 
