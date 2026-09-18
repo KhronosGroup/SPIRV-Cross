@@ -266,7 +266,7 @@ public:
 	// require_extension("GL_KHR_my_extension");
 	void require_extension(const std::string &ext);
 
-	// Returns the list of required extensions. After compilation this will contains any other 
+	// Returns the list of required extensions. After compilation this will contains any other
 	// extensions that the compiler used automatically, in addition to the user specified ones.
 	const SmallVector<std::string> &get_required_extensions() const;
 
@@ -1130,6 +1130,8 @@ protected:
 	SmallVector<DescriptorHeapMapping> descriptor_heap_mappings;
 	bool is_descriptor_non_uniform(uint32_t id) const;
 	std::string to_descriptor_heap_layout(const SPIRType &type, StorageClass storage = StorageClassUniformConstant) const;
+
+	std::string construct_function_attributes(const SPIRFunction &func, bool is_entry_point);
 
 private:
 	void init();

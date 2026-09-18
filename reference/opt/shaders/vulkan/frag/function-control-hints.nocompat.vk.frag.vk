@@ -1,0 +1,25 @@
+#version 450
+#if defined(GL_EXT_function_control_attributes)
+#extension GL_EXT_function_control_attributes : require
+#define SPIRV_CROSS_INLINE [[inline]]
+#define SPIRV_CROSS_NOINLINE [[noinline]]
+#else
+#define SPIRV_CROSS_INLINE
+#define SPIRV_CROSS_NOINLINE
+#endif
+
+layout(location = 0) out vec4 color;
+
+SPIRV_CROSS_NOINLINE
+int noinlineFn(int i)
+{
+    return i + 2;
+}
+
+void main()
+{
+    int param = 2;
+    int _38 = noinlineFn(param);
+    color = vec4(float(8 + (_38 + _38)));
+}
+
