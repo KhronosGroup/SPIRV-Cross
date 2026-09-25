@@ -62,37 +62,36 @@ void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMe
     }
 }
 
+struct gl_MeshPerVertexEXT
+{
+    float4 gl_Position [[position]];
+};
+
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 struct spvPerVertex
 {
     float4 gl_Position [[position]];
-    float3 out_var_COLOR0 [[user(locn0)]];
 };
 
-using spvMesh_t = mesh<spvPerVertex, void, 3, 1, topology::triangle>;
+using spvMesh_t = mesh<spvPerVertex, void, 1, 1, topology::point>;
 
 static inline __attribute__((always_inline))
-void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, threadgroup spvUnsafeArray<float4, 3>& gl_Position, threadgroup spvUnsafeArray<float3, 3>& out_var_COLOR0, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
+void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 1>& gl_MeshVerticesEXT, thread uint& gl_DrawID, threadgroup spvUnsafeArray<uint, 1>& gl_PrimitivePointIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
 {
-    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 3u, 1u);
-    gl_PrimitiveTriangleIndicesEXT[0] = uint3(0u, 1u, 2u);
-    gl_Position[0] = float4(-0.5, -0.5, 0.0, 1.0);
-    out_var_COLOR0[0] = float3(1.0, 0.0, 0.0);
-    gl_Position[1] = float4(0.5, -0.5, 0.0, 1.0);
-    out_var_COLOR0[1] = float3(0.0, 1.0, 0.0);
-    gl_Position[2] = float4(0.0, 0.5, 0.0, 1.0);
-    out_var_COLOR0[2] = float3(0.0, 0.0, 1.0);
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 1u, 1u);
+    gl_MeshVerticesEXT[0].gl_Position = float4(float(int(gl_DrawID)));
+    gl_PrimitivePointIndicesEXT[0] = 0u;
 }
 
-[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+[[mesh]] void main0(constant uint* spvDrawIndex [[buffer(19)]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
 {
     threadgroup uint2 spvMeshSizes;
-    threadgroup spvUnsafeArray<uint3, 1> gl_PrimitiveTriangleIndicesEXT;
-    threadgroup spvUnsafeArray<float4, 3> gl_Position;
-    threadgroup spvUnsafeArray<float3, 3> out_var_COLOR0;
+    threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 1> gl_MeshVerticesEXT;
+    threadgroup spvUnsafeArray<uint, 1> gl_PrimitivePointIndicesEXT;
     if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
-    _1(gl_PrimitiveTriangleIndicesEXT, gl_Position, out_var_COLOR0, gl_LocalInvocationIndex, spvMeshSizes);
+    uint gl_DrawID = *spvDrawIndex;
+    _4(gl_MeshVerticesEXT, gl_DrawID, gl_PrimitivePointIndicesEXT, gl_LocalInvocationIndex, spvMeshSizes);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (spvMeshSizes.y == 0)
     {
@@ -100,19 +99,17 @@ void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, th
     }
     spvMesh.set_primitive_count(spvMeshSizes.y);
     const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
-    for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
+    const uint spvVI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.x)
     {
         spvPerVertex spvV = {};
-        spvV.gl_Position = gl_Position[spvVI];
-        spvV.out_var_COLOR0 = out_var_COLOR0[spvVI];
+        spvV.gl_Position = gl_MeshVerticesEXT[spvVI].gl_Position;
         spvMesh.set_vertex(spvVI, spvV);
     }
     const uint spvPI = gl_LocalInvocationIndex;
     if (gl_LocalInvocationIndex < spvMeshSizes.y)
     {
-        spvMesh.set_index(spvPI * 3u + 0u, gl_PrimitiveTriangleIndicesEXT[spvPI].x);
-        spvMesh.set_index(spvPI * 3u + 1u, gl_PrimitiveTriangleIndicesEXT[spvPI].y);
-        spvMesh.set_index(spvPI * 3u + 2u, gl_PrimitiveTriangleIndicesEXT[spvPI].z);
+        spvMesh.set_index(spvPI, gl_PrimitivePointIndicesEXT[spvPI]);
     }
 }
 

@@ -62,7 +62,7 @@ void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMe
     }
 }
 
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1, 1, 1);
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 struct spvPerVertex
 {

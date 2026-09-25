@@ -1,0 +1,21 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(local_size_x = 3) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+layout(location = 0) flat out int64_t a[];
+layout(location = 1) flat out i64vec3 c[];
+layout(location = 3) perprimitiveEXT flat out u64vec4 d[];
+void main()
+{
+	SetMeshOutputsEXT(3, 1);
+	uint i = gl_LocalInvocationIndex;
+	gl_MeshVerticesEXT[i].gl_Position = vec4(float(i));
+	a[i] = int64_t(i) << 35;
+	c[i] = i64vec3(-1l, int64_t(i), 3l);
+	if (i == 0u)
+	{
+		gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+		d[0] = u64vec4(1ul, 2ul << 40, 3ul, 4ul);
+	}
+}

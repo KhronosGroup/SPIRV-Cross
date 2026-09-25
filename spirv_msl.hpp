@@ -1007,6 +1007,9 @@ protected:
 	bool is_tesc_shader() const;
 	bool is_tese_shader() const;
 	bool is_mesh_shader() const;
+	bool is_mesh_output_with_default(spv::BuiltIn builtin, spv::StorageClass storage) const;
+	bool is_64bit_integer_interface(const SPIRType &type) const;
+	std::string interface_word_swizzle(const SPIRType &type, uint32_t index);
 
 	void preprocess_op_codes();
 	void localize_global_variables();
