@@ -3039,6 +3039,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 
 		elem_cnt = to_array_size_literal(var_type);
 	}
+	bool words = is_64bit_integer_interface(var_type);
+	if (words)
+		elem_cnt = (var_type.vecsize + 1) / 2;
 
 	bool is_builtin = is_builtin_variable(var);
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
@@ -3093,6 +3096,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		uint32_t target_components = 0;
 		bool padded_output = false;
 		uint32_t type_id = usable_type->self;
+		if (words)
+			type_id = build_extended_vector_type(get_uint_type_id(), 2 * min(2u, var_type.vecsize - 2 * i));
+		auto &mbr_type = get<SPIRType>(type_id);
 
 		// Check if we need to pad fragment output to match a certain number of components.
 		if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
@@ -3122,7 +3128,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		{
 			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
 			uint32_t comp = get_decoration(var.self, DecorationComponent);
-			if (storage == StorageClassInput)
+			if (storage == StorageClassInput && !words)
 			{
 				var.basetype = ensure_correct_input_type(var.basetype, locn, comp, 0, meta.strip_array);
 				uint32_t mbr_type_id = ensure_correct_input_type(usable_type->self, locn, comp, 0, meta.strip_array);
@@ -3134,7 +3140,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			if (comp)
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, comp);
-			mark_location_as_used_by_shader(locn, *usable_type, storage);
+			mark_location_as_used_by_shader(locn, mbr_type, storage);
 		}
 		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 		{
@@ -3200,6 +3206,13 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 							lerp_call = ".interpolate_at_center()";
 						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, lerp_call, ";");
 					}
+					else if (words)
+					{
+						auto part = var_type;
+						part.vecsize = mbr_type.vecsize / 2;
+						statement(to_name(var.self), interface_word_swizzle(var_type, i), " = as_type<", type_to_glsl(part), ">(",
+						          ib_var_ref, ".", mbr_name, ");");
+					}
 					else
 					{
 						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
@@ -3217,6 +3230,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
 						    ";");
 					}
+					else if (words)
+						statement(ib_var_ref, ".", mbr_name, " = as_type<", type_to_glsl(mbr_type), ">(", to_name(var.self),
+						          interface_word_swizzle(var_type, i), ");");
 					else if (flatten_from_ib_var)
 						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i,
 						          "];");
@@ -4112,7 +4128,9 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	{
 		if (!is_builtin || has_active_builtin(builtin, storage))
 		{
-			bool is_composite_type = is_matrix(var_type) || is_array(var_type);
+			// stripped inputs are read in place, so 64-bit words could not be put back together there.
+			bool is_composite_type = is_matrix(var_type) || is_array(var_type) ||
+			                         (is_64bit_integer_interface(var_type) && !(meta.strip_array && storage == StorageClassInput));
 			bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 			bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 
@@ -14764,6 +14782,18 @@ bool CompilerMSL::is_mesh_output_with_default(BuiltIn builtin, StorageClass stor
 	       (builtin == BuiltInPointSize && msl_options.enable_point_size_builtin && msl_options.enable_point_size_default);
 }
 
+// 64-bit integers can't cross a stage interface in MSL, so they cross as 32-bit words, two per location.
+bool CompilerMSL::is_64bit_integer_interface(const SPIRType &type) const
+{
+	return type_is_integral(type) && type.width == 64 && !is_array(type);
+}
+
+// the components of a 64-bit integer interface value that the location at this index carries.
+string CompilerMSL::interface_word_swizzle(const SPIRType &type, uint32_t index)
+{
+	return type.vecsize > 2 ? vector_swizzle(min(2u, type.vecsize - 2 * index), 2 * index) : "";
+}
+
 bool CompilerMSL::uses_explicit_early_fragment_test()
 {
 	auto &ep_flags = get_entry_point().flags;
@@ -21153,11 +21183,17 @@ void CompilerMSL::emit_mesh_outputs()
 				}
 			}
 
-			if (builtin != BuiltInClipDistance && builtin != BuiltInCullDistance &&
-			    has_member_decoration(type_vert.self, index, DecorationIndex))
-				access += join("[", get_member_decoration(type_vert.self, index, DecorationIndex), "]");
+			auto &elem_type = get_variable_element_type(orig);
+			uint32_t part = get_member_decoration(type_vert.self, index, DecorationIndex);
+			if (!is_64bit_integer_interface(elem_type) && builtin != BuiltInClipDistance &&
+			    builtin != BuiltInCullDistance && has_member_decoration(type_vert.self, index, DecorationIndex))
+				access += join("[", part, "]");
 
-			statement("spvV.", to_member_name(type_vert, index), " = ", to_name(orig_var), "[spvVI]", access, ";");
+			string value = join(to_name(orig_var), "[spvVI]", access);
+			if (is_64bit_integer_interface(elem_type))
+				value = join("as_type<", type_to_glsl(get<SPIRType>(type_vert.member_types[index])), ">(", value,
+				             interface_word_swizzle(elem_type, part), ")");
+			statement("spvV.", to_member_name(type_vert, index), " = ", value, ";");
 			if (options.vertex.flip_vert_y && builtin == BuiltInPosition)
 			{
 				statement("spvV.", to_member_name(type_vert, index), ".y = -(", "spvV.",
@@ -21240,9 +21276,16 @@ void CompilerMSL::emit_mesh_outputs()
 					if (builtin != BuiltInMax && !has_active_builtin(builtin, StorageClassOutput))
 						continue;
 				}
-				if (has_member_decoration(type_prim.self, index, DecorationIndex))
-					access += join("[", get_member_decoration(type_prim.self, index, DecorationIndex), "]");
-				statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
+				auto &elem_type = get_variable_element_type(orig);
+				uint32_t part = get_member_decoration(type_prim.self, index, DecorationIndex);
+				if (!is_64bit_integer_interface(elem_type) && has_member_decoration(type_prim.self, index, DecorationIndex))
+					access += join("[", part, "]");
+
+				string value = join(to_name(orig_var), "[spvPI]", access);
+				if (is_64bit_integer_interface(elem_type))
+					value = join("as_type<", type_to_glsl(get<SPIRType>(type_prim.member_types[index])), ">(", value,
+					             interface_word_swizzle(elem_type, part), ")");
+				statement("spvP.", to_member_name(type_prim, index), " = ", value, ";");
 			}
 			statement("spvMesh.set_primitive(spvPI, spvP);");
 		}
