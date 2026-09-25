@@ -1,0 +1,15 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(4u, 1u, 1u);
+
+[[object]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], mesh_grid_properties spvMgp)
+{
+    uint count = (gl_LocalInvocationIndex == 0u) ? 2u : 0u;
+    if (gl_LocalInvocationIndex == 0)
+        spvMgp.set_threadgroups_per_grid(uint3(count, 1u, 1u));
+    return;
+}
+

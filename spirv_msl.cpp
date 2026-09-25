@@ -274,7 +274,7 @@ void CompilerMSL::build_implicit_builtins()
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
 	bool need_local_invocation_index =
 		(msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId)) || is_mesh_shader() ||
-		needs_workgroup_zero_init || needs_local_invocation_index;
+		get_execution_model() == ExecutionModelTaskEXT || needs_workgroup_zero_init || needs_local_invocation_index;
 	bool need_workgroup_size = is_mesh_shader() || (msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups));
 	bool force_frag_depth_passthrough =
 	    get_execution_model() == ExecutionModelFragment && !uses_explicit_early_fragment_test() && need_subpass_input &&
@@ -2368,7 +2368,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 		}
 
 		if (b.terminator == SPIRBlock::EmitMeshTasks && builtin_task_grid_id != 0)
+		{
 			added_arg_ids.insert(builtin_task_grid_id);
+			added_arg_ids.insert(builtin_local_invocation_index_id);
+		}
 	}
 
 	function_global_vars[func_id] = added_arg_ids;
@@ -21212,7 +21215,9 @@ void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 	// GLSL: Once this instruction is called, the workgroup must be terminated immediately, and the mesh shaders are launched.
 	// TODO: find relieble and clean of terminating shader.
 	flush_variable_declaration(builtin_task_grid_id);
-	statement("spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
+	// the arguments are taken from the first invocation.
+	statement("if (", to_expression(builtin_local_invocation_index_id), " == 0)");
+	statement("    spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
 	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
 	// This is correct if EmitMeshTasks is called in the entry function for shader.
 	// Only viable solutions would be:
