@@ -3155,6 +3155,12 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
+		if (is_mesh_shader() && !is_builtin)
+		{
+			// mesh outputs are copied element by element from the flattened array.
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
+		}
+
 		if (get_decoration_bitset(var.self).get(DecorationIndex))
 		{
 			uint32_t index = get_decoration(var.self, DecorationIndex);
@@ -3409,6 +3415,12 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		{
 			// Declare the Clip/CullDistance as [[user(clip/cullN)]].
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
+		}
+
+		if (is_mesh_shader() && !is_builtin && mbr_is_indexable)
+		{
+			// mesh outputs are copied element by element from the flattened array.
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
@@ -21131,7 +21143,8 @@ void CompilerMSL::emit_mesh_outputs()
 					continue;
 				}
 
-				if (has_member_decoration(type_vert.self, index, DecorationIndex))
+				if ((builtin == BuiltInClipDistance || builtin == BuiltInCullDistance) &&
+				    has_member_decoration(type_vert.self, index, DecorationIndex))
 				{
 					// Declare the Clip/CullDistance as [[user(clip/cullN)]].
 					const uint32_t orig_index = get_member_decoration(type_vert.self, index, DecorationIndex);
@@ -21139,6 +21152,10 @@ void CompilerMSL::emit_mesh_outputs()
 					statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index, "] = ", to_name(orig_var), "[spvVI]", access, ";");
 				}
 			}
+
+			if (builtin != BuiltInClipDistance && builtin != BuiltInCullDistance &&
+			    has_member_decoration(type_vert.self, index, DecorationIndex))
+				access += join("[", get_member_decoration(type_vert.self, index, DecorationIndex), "]");
 
 			statement("spvV.", to_member_name(type_vert, index), " = ", to_name(orig_var), "[spvVI]", access, ";");
 			if (options.vertex.flip_vert_y && builtin == BuiltInPosition)
@@ -21223,6 +21240,8 @@ void CompilerMSL::emit_mesh_outputs()
 					if (builtin != BuiltInMax && !has_active_builtin(builtin, StorageClassOutput))
 						continue;
 				}
+				if (has_member_decoration(type_prim.self, index, DecorationIndex))
+					access += join("[", get_member_decoration(type_prim.self, index, DecorationIndex), "]");
 				statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
 			}
 			statement("spvMesh.set_primitive(spvPI, spvP);");
