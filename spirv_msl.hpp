@@ -1007,6 +1007,7 @@ protected:
 	bool is_tesc_shader() const;
 	bool is_tese_shader() const;
 	bool is_mesh_shader() const;
+	bool is_mesh_output_with_default(spv::BuiltIn builtin, spv::StorageClass storage) const;
 
 	void preprocess_op_codes();
 	void localize_global_variables();

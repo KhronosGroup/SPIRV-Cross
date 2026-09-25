@@ -4028,7 +4028,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 							set_decoration(var_id, DecorationBuiltIn, builtin);
 						}
 					}
-					else if (!is_builtin || has_active_builtin(builtin, storage))
+					else if (!is_builtin || has_active_builtin(builtin, storage) || is_mesh_output_with_default(builtin, storage))
 					{
 						bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type) || mbr_type.basetype == SPIRType::Struct;
 						bool attribute_load_store =
@@ -14131,7 +14131,8 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	BuiltIn builtin = BuiltInMax;
 	if (is_mesh_shader() && is_member_builtin(type, index, &builtin))
 	{
-		if (!has_active_builtin(builtin, StorageClassOutput) && !has_active_builtin(builtin, StorageClassInput))
+		if (!has_active_builtin(builtin, StorageClassOutput) && !has_active_builtin(builtin, StorageClassInput) &&
+		    !is_mesh_output_with_default(builtin, StorageClassOutput))
 		{
 			// Do not emit unused builtins in mesh-output blocks
 			return;
@@ -14740,6 +14741,15 @@ bool CompilerMSL::is_tese_shader() const
 bool CompilerMSL::is_mesh_shader() const
 {
 	return get_execution_model() == ExecutionModelMeshEXT;
+}
+
+// Metal leaves these undefined when a mesh shader omits them, while Vulkan defines them when they are not written.
+bool CompilerMSL::is_mesh_output_with_default(BuiltIn builtin, StorageClass storage) const
+{
+	if (!is_mesh_shader() || storage != StorageClassOutput)
+		return false;
+	return builtin == BuiltInLayer || builtin == BuiltInViewportIndex ||
+	       (builtin == BuiltInPointSize && msl_options.enable_point_size_builtin && msl_options.enable_point_size_default);
 }
 
 bool CompilerMSL::uses_explicit_early_fragment_test()
@@ -21113,6 +21123,14 @@ void CompilerMSL::emit_mesh_outputs()
 					break;
 				}
 
+				// the shader declares this output but never writes it, so it keeps its default.
+				if (builtin != BuiltInMax && !has_active_builtin(builtin, StorageClassOutput))
+				{
+					if (builtin == BuiltInPointSize)
+						statement("spvV.", to_member_name(type_vert, index), " = ", format_float(msl_options.default_point_size), ";");
+					continue;
+				}
+
 				if (has_member_decoration(type_vert.self, index, DecorationIndex))
 				{
 					// Declare the Clip/CullDistance as [[user(clip/cullN)]].
@@ -21200,6 +21218,10 @@ void CompilerMSL::emit_mesh_outputs()
 					default:
 						access = "." + to_member_name(orig_type, orig_id);
 					}
+
+					// the shader declares this output but never writes it, so it keeps its zero default.
+					if (builtin != BuiltInMax && !has_active_builtin(builtin, StorageClassOutput))
+						continue;
 				}
 				statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
 			}

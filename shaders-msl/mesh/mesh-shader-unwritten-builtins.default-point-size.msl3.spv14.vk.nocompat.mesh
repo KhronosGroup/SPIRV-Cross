@@ -1,0 +1,18 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(points, max_vertices = 1, max_primitives = 1) out;
+
+perprimitiveEXT out gl_MeshPerPrimitiveEXT
+{
+	int gl_Layer;
+	int gl_ViewportIndex;
+} gl_MeshPrimitivesEXT[];
+
+void main()
+{
+	SetMeshOutputsEXT(1, 1);
+	gl_MeshVerticesEXT[0].gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+	gl_PrimitivePointIndicesEXT[0] = 0;
+}
