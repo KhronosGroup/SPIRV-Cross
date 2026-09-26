@@ -10866,7 +10866,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				op = join("as_type<", type_to_glsl(type), ">(reinterpret_cast<ulong>(", input_expr, "))");
 
 			auto &expr = emit_op(ops[0], ops[1], op, should_forward(ops[2]));
-			if (is_pointer(type))
+			if (is_pointer(type) && is_pointer(input_type))
 			{
 				if (auto *backing_var = maybe_get_backing_variable(ops[2]))
 					expr.loaded_from = backing_var->self;
