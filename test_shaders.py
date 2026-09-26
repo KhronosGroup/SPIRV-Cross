@@ -255,6 +255,14 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     msl_args = [spirv_cross_path, '--output', msl_path, spirv_path, '--msl', '--iterations', str(iterations)]
     msl_args.append('--msl-version')
     msl_args.append(path_to_msl_standard_cli(shader))
+    if '.pervertex.' in shader:
+        msl_args.append('--msl-supports-per-vertex-fragment-input')
+        if '.pervertex-lines.' in shader:
+            msl_args.append('--msl-per-vertex-primitive-vertex-count')
+            msl_args.append('2')
+        elif '.pervertex-points.' in shader:
+            msl_args.append('--msl-per-vertex-primitive-vertex-count')
+            msl_args.append('1')
     if not '.nomain.' in shader:
         msl_args.append('--entry')
         msl_args.append('main')
@@ -433,6 +441,18 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-default-point-size')
         msl_args.append('1.0')
 
+    if '.pervertex.' in shader:
+        # Language version and hardware capability are independent requirements.
+        version_index = msl_args.index('--msl-version') + 1
+        for enabled, version, diagnostic in [(False, msl_args[version_index], b'supports_per_vertex_fragment_input'), (True, '30200', b'MSL 4.0')]:
+            rejected_args = list(msl_args)
+            rejected_args[version_index] = version
+            if not enabled:
+                rejected_args.remove('--msl-supports-per-vertex-fragment-input')
+            with subprocess.Popen(rejected_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+                _, stderr = process.communicate()
+                if process.returncode == 0 or diagnostic not in stderr:
+                    raise RuntimeError('Expected explicit PerVertexKHR capability/version rejection: ' + stderr.decode('utf-8'))
     subprocess.check_call(msl_args)
 
     if not shader_is_invalid_spirv(msl_path):
