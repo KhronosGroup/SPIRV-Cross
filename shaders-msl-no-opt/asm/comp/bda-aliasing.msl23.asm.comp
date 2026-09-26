@@ -1,0 +1,59 @@
+; Loads through pointers synthesized from integer addresses must not be forwarded past stores
+; through other synthesized pointers, since they may alias. Covers OpConvertUToPtr and OpBitcast from uvec2.
+OpCapability Shader
+OpCapability Int64
+OpCapability PhysicalStorageBufferAddresses
+OpExtension "SPV_KHR_physical_storage_buffer"
+OpMemoryModel PhysicalStorageBuffer64 GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %push_block Block
+OpMemberDecorate %push_block 0 Offset 0
+OpMemberDecorate %push_block 1 Offset 8
+OpMemberDecorate %push_block 2 Offset 16
+OpMemberDecorate %push_block 3 Offset 24
+OpMemberDecorate %push_block 4 Offset 32
+OpDecorate %physical_uint_ptr ArrayStride 4
+%void = OpTypeVoid
+%void_fn = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+%ulong = OpTypeInt 64 0
+%uvec2 = OpTypeVector %uint 2
+%zero = OpConstant %uint 0
+%one = OpConstant %uint 1
+%two = OpConstant %uint 2
+%three = OpConstant %uint 3
+%four = OpConstant %uint 4
+%ninety_nine = OpConstant %uint 99
+%hundred = OpConstant %uint 100
+%push_block = OpTypeStruct %ulong %ulong %ulong %uvec2 %ulong
+%push_ptr = OpTypePointer PushConstant %push_block
+%push_ulong_ptr = OpTypePointer PushConstant %ulong
+%push_uvec2_ptr = OpTypePointer PushConstant %uvec2
+%physical_uint_ptr = OpTypePointer PhysicalStorageBuffer %uint
+%push = OpVariable %push_ptr PushConstant
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%source_field = OpAccessChain %push_ulong_ptr %push %zero
+%source_address = OpLoad %ulong %source_field
+%source = OpConvertUToPtr %physical_uint_ptr %source_address
+%old = OpLoad %uint %source Aligned 4
+%alias_field = OpAccessChain %push_ulong_ptr %push %one
+%alias_address = OpLoad %ulong %alias_field
+%alias = OpConvertUToPtr %physical_uint_ptr %alias_address
+OpStore %alias %ninety_nine Aligned 4
+%output_field = OpAccessChain %push_ulong_ptr %push %two
+%output_address = OpLoad %ulong %output_field
+%output = OpConvertUToPtr %physical_uint_ptr %output_address
+OpStore %output %old Aligned 4
+%source2_field = OpAccessChain %push_uvec2_ptr %push %three
+%source2_address = OpLoad %uvec2 %source2_field
+%source2 = OpBitcast %physical_uint_ptr %source2_address
+%old2 = OpLoad %uint %source2 Aligned 4
+OpStore %alias %hundred Aligned 4
+%output2_field = OpAccessChain %push_ulong_ptr %push %four
+%output2_address = OpLoad %ulong %output2_field
+%output2 = OpConvertUToPtr %physical_uint_ptr %output2_address
+OpStore %output2 %old2 Aligned 4
+OpReturn
+OpFunctionEnd
