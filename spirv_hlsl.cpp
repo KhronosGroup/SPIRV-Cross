@@ -1019,7 +1019,13 @@ std::string CompilerHLSL::to_semantic(uint32_t location, ExecutionModel em, Stor
 				return attribute.semantic;
 	}
 
-	// Not a vertex attribute, or no remap_vertex_attributes entry.
+	if (em == ExecutionModelFragment && sc == StorageClassOutput)
+	{
+		bool legacy = hlsl_options.shader_model <= 30;
+		return join(legacy ? "COLOR" : "SV_Target", location);
+	}
+
+	// Not a vertex attribute, fragment output or no remap_vertex_attributes entry.
 	return join("TEXCOORD", location);
 }
 
