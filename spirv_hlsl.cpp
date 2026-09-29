@@ -5443,6 +5443,20 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 void CompilerHLSL::emit_store(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
+
+	// PointSize is not part of the mesh output struct, so with point_size_compat,
+	// ignore writes to it like we do for other stages.
+	if (get_execution_model() == ExecutionModelMeshEXT && hlsl_options.point_size_compat)
+	{
+		auto *var = maybe_get_backing_variable(ops[0]);
+		bool is_point_size =
+		    (has_decoration(ops[0], DecorationBuiltIn) && get_decoration(ops[0], DecorationBuiltIn) == BuiltInPointSize) ||
+		    (var && has_decoration(var->self, DecorationBuiltIn) &&
+		     get_decoration(var->self, DecorationBuiltIn) == BuiltInPointSize);
+		if (is_point_size)
+			return;
+	}
+
 	if (options.vertex.flip_vert_y)
 	{
 		auto *expr = maybe_get<SPIRExpression>(ops[0]);
