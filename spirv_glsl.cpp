@@ -20414,7 +20414,11 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 	auto &lhs_type = get<SPIRType>(lhs_type_id);
 	auto &rhs_type = get<SPIRType>(rhs_type_id);
 
-	if (!lhs_type.array.empty())
+	// Copy physical pointers as values. Following them could loop forever
+	// when a struct points back to itself.
+	bool is_pointer = is_physical_pointer(lhs_type);
+
+	if (!lhs_type.array.empty() && !is_pointer)
 	{
 		// Could use a loop here to support specialization constants, but it gets rather complicated with nested array types,
 		// and this is a rather obscure opcode anyways, keep it simple unless we are forced to.
@@ -20427,7 +20431,7 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 			emit_copy_logical_type(lhs_id, lhs_type.parent_type, rhs_id, rhs_type.parent_type, chain);
 		}
 	}
-	else if (lhs_type.basetype == SPIRType::Struct)
+	else if (lhs_type.basetype == SPIRType::Struct && !is_pointer)
 	{
 		chain.push_back(0);
 		uint32_t member_count = uint32_t(lhs_type.member_types.size());

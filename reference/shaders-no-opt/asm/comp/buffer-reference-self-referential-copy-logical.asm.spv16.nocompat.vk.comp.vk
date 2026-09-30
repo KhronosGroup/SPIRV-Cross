@@ -1,0 +1,36 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(buffer_reference) buffer Node;
+
+struct Link
+{
+    Node next;
+    float value;
+};
+
+layout(buffer_reference, buffer_reference_align = 16, std430) buffer Node
+{
+    Link link;
+};
+
+layout(push_constant, std430) uniform Registers
+{
+    Node node;
+} _4;
+
+void main()
+{
+    Link _24;
+    _24.next = _4.node.link.next;
+    _24.value = _4.node.link.value;
+    Link tmp = _24;
+    tmp.value += 1.0;
+    Link _34 = tmp;
+    Link _36;
+    _36.next = _34.next;
+    _36.value = _34.value;
+    _4.node.link = _36;
+}
+
