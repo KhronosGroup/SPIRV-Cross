@@ -1,0 +1,73 @@
+; SPIR-V
+; Version: 1.6
+               OpCapability Shader
+               OpCapability PhysicalStorageBufferAddresses
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel PhysicalStorageBuffer64 GLSL450
+               OpEntryPoint GLCompute %main "main" %_
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %Link "Link"
+               OpMemberName %Link 0 "next"
+               OpMemberName %Link 1 "value"
+               OpName %Link_0 "Link"
+               OpMemberName %Link_0 0 "next"
+               OpMemberName %Link_0 1 "value"
+               OpName %Node "Node"
+               OpMemberName %Node 0 "link"
+               OpName %tmp "tmp"
+               OpName %Registers "Registers"
+               OpMemberName %Registers 0 "node"
+               OpName %_ ""
+               OpMemberDecorate %Link_0 0 Offset 0
+               OpMemberDecorate %Link_0 1 Offset 8
+               OpDecorate %Node Block
+               OpMemberDecorate %Node 0 Offset 0
+               OpDecorate %tmp AliasedPointer
+               OpDecorate %Registers Block
+               OpMemberDecorate %Registers 0 Offset 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+               OpTypeForwardPointer %_ptr_PhysicalStorageBuffer_Node PhysicalStorageBuffer
+      %float = OpTypeFloat 32
+       %Link = OpTypeStruct %_ptr_PhysicalStorageBuffer_Node %float
+     %Link_0 = OpTypeStruct %_ptr_PhysicalStorageBuffer_Node %float
+       %Node = OpTypeStruct %Link_0
+%_ptr_PhysicalStorageBuffer_Node = OpTypePointer PhysicalStorageBuffer %Node
+%_ptr_Function_Link = OpTypePointer Function %Link
+  %Registers = OpTypeStruct %_ptr_PhysicalStorageBuffer_Node
+%_ptr_PushConstant_Registers = OpTypePointer PushConstant %Registers
+          %_ = OpVariable %_ptr_PushConstant_Registers PushConstant
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_PushConstant__ptr_PhysicalStorageBuffer_Node = OpTypePointer PushConstant %_ptr_PhysicalStorageBuffer_Node
+%_ptr_PhysicalStorageBuffer_Link_0 = OpTypePointer PhysicalStorageBuffer %Link_0
+      %int_1 = OpConstant %int 1
+    %float_1 = OpConstant %float 1
+%_ptr_Function_float = OpTypePointer Function %float
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+     %uint_1 = OpConstant %uint 1
+         %40 = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+        %tmp = OpVariable %_ptr_Function_Link Function
+         %19 = OpAccessChain %_ptr_PushConstant__ptr_PhysicalStorageBuffer_Node %_ %int_0
+         %20 = OpLoad %_ptr_PhysicalStorageBuffer_Node %19
+         %22 = OpAccessChain %_ptr_PhysicalStorageBuffer_Link_0 %20 %int_0
+         %23 = OpLoad %Link_0 %22 Aligned 16
+         %24 = OpCopyLogical %Link %23
+               OpStore %tmp %24
+         %28 = OpAccessChain %_ptr_Function_float %tmp %int_1
+         %29 = OpLoad %float %28
+         %30 = OpFAdd %float %29 %float_1
+         %31 = OpAccessChain %_ptr_Function_float %tmp %int_1
+               OpStore %31 %30
+         %32 = OpAccessChain %_ptr_PushConstant__ptr_PhysicalStorageBuffer_Node %_ %int_0
+         %33 = OpLoad %_ptr_PhysicalStorageBuffer_Node %32
+         %34 = OpLoad %Link %tmp
+         %35 = OpAccessChain %_ptr_PhysicalStorageBuffer_Link_0 %33 %int_0
+         %36 = OpCopyLogical %Link_0 %34
+               OpStore %35 %36 Aligned 16
+               OpReturn
+               OpFunctionEnd
