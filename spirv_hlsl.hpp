@@ -251,6 +251,14 @@ private:
 	uint32_t tessellation_input_control_points() const;
 	bool is_tess_patch_variable(const SPIRVariable &var) const;
 	void emit_tess_factors_in_struct();
+	struct TessControlPointIO
+	{
+		std::string global;
+		std::string suffix;
+		std::string member;
+	};
+	SmallVector<TessControlPointIO> tesc_control_point_io(spv::StorageClass storage);
+	void emit_hlsl_tesc_entry_point();
 	std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
