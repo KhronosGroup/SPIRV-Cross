@@ -545,7 +545,20 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	auto &flags = ir.meta[var.self].decoration.decoration_flags;
 	auto old_flags = flags;
 	flags.reset();
-	statement("static ", variable_decl(var), ";");
+	if (get_execution_model() == ExecutionModelTessellationEvaluation && var.storage == StorageClassInput &&
+	    !is_tese_patch_input(var))
+	{
+		// glslang sizes per-control-point inputs to gl_MaxPatchVertices; only the patch size is used.
+		auto type = get<SPIRType>(var.basetype);
+		if (!type.array.empty())
+		{
+			type.array.back() = tessellation_patch_vertices();
+			type.array_size_literal.back() = true;
+		}
+		statement("static ", variable_decl(type, to_name(var.self), var.self), ";");
+	}
+	else
+		statement("static ", variable_decl(var), ";");
 	flags = old_flags;
 }
 

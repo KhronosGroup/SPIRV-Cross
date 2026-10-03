@@ -4,7 +4,7 @@ static float gl_TessLevelOuter[4];
 static float gl_TessLevelInner[2];
 static float3 gl_TessCoord;
 static int gl_PatchVerticesIn;
-static float4 vPos[32];
+static float4 vPos[4];
 static float4 oColor;
 static float4 vColor;
 

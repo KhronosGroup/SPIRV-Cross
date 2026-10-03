@@ -2,7 +2,7 @@ static float4 gl_PositionIn[3];
 static float4 gl_Position;
 static float3 gl_TessCoord;
 static float2 oUV;
-static float2 vUV[32];
+static float2 vUV[3];
 
 struct SPIRV_Cross_Input
 {
