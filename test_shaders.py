@@ -615,6 +615,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--flip-vert-y')
     if '.user-semantic.' in shader:
         hlsl_args.append('--hlsl-user-semantic')
+    if '.domain.' in shader:
+        hlsl_args.append('--hlsl-domain-lower-left')
     output_vertices = re.search(r'\.ov(\d+)\.', shader)
     if output_vertices:
         hlsl_args += ['--set-output-vertices', output_vertices.group(1)]
