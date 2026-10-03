@@ -24,11 +24,11 @@ void tese_main()
 [domain("isoline")]
 SPIRV_Cross_Output main(const OutputPatch<SPIRV_Cross_Input, 2> stage_input, const SPIRV_Cross_PatchConstant patch_input, float2 gl_TessCoordIn : SV_DomainLocation)
 {
+    gl_TessCoord = float3(gl_TessCoordIn, 0.0f);
     for (int i = 0; i < 2; i++)
     {
         gl_PositionIn[i] = stage_input[i].gl_PositionIn;
     }
-    gl_TessCoord = float3(gl_TessCoordIn, 0.0f);
     tese_main();
     SPIRV_Cross_Output stage_output;
     stage_output.gl_Position = gl_Position;

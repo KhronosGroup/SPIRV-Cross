@@ -31,13 +31,10 @@ void tese_main()
 [domain("tri")]
 SPIRV_Cross_Output main(const OutputPatch<SPIRV_Cross_Input, 3> stage_input, const SPIRV_Cross_PatchConstant patch_input, float3 gl_TessCoordIn : SV_DomainLocation)
 {
-    for (int i = 0; i < 3; i++)
-    {
-        gl_PositionIn[i] = stage_input[i].gl_PositionIn;
-    }
     gl_TessCoord = gl_TessCoordIn;
     for (int i = 0; i < 3; i++)
     {
+        gl_PositionIn[i] = stage_input[i].gl_PositionIn;
         vUV[i] = stage_input[i].vUV;
     }
     tese_main();

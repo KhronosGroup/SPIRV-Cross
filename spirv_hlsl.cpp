@@ -3576,6 +3576,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	begin_scope();
 	bool legacy = hlsl_options.shader_model <= 30;
 
+	// Geometry and domain shaders copy every per-vertex / per-control-point input in one loop below, so
+	// FXC does not see several 'for (int i ...)' loops in one scope (warning X3078).
+	SmallVector<string> per_vertex_copies;
+
 	// Copy builtins from entry point arguments to globals.
 	active_input_builtins.for_each_bit([&](uint32_t i) {
 		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
@@ -3583,12 +3587,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		{
 		case BuiltInPosition:
 			if (execution.model == ExecutionModelGeometry || execution.model == ExecutionModelTessellationEvaluation)
-			{
-				statement("for (int i = 0; i < ", input_vertices, "; i++)");
-				begin_scope();
-				statement(builtin, "[i] = stage_input[i].", builtin, ";");
-				end_scope();
-			}
+				per_vertex_copies.push_back(join(builtin, "[i] = stage_input[i].", builtin, ";"));
 			else
 				statement(builtin, " = stage_input.", builtin, ";");
 			break;
@@ -3838,10 +3837,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					}
 					else if (execution.model == ExecutionModelTessellationEvaluation)
 					{
-						statement("for (int i = 0; i < ", input_vertices, "; i++)");
-						begin_scope();
-						statement(var_name, "[i].", mbr_name, " = stage_input[i].", flat_name, ";");
-						end_scope();
+						per_vertex_copies.push_back(join(var_name, "[i].", mbr_name, " = stage_input[i].", flat_name, ";"));
 					}
 					else
 					{
@@ -3872,10 +3868,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					else if (execution.model == ExecutionModelGeometry ||
 					         execution.model == ExecutionModelTessellationEvaluation)
 					{
-						statement("for (int i = 0; i < ", input_vertices, "; i++)");
-						begin_scope();
-						statement(name, "[i] = stage_input[i].", name, ";");
-						end_scope();
+						per_vertex_copies.push_back(join(name, "[i] = stage_input[i].", name, ";"));
 					}
 					else
 						statement(name, " = stage_input.", name, ";");
@@ -3883,6 +3876,15 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			}
 		}
 	});
+
+	if (!per_vertex_copies.empty())
+	{
+		statement("for (int i = 0; i < ", input_vertices, "; i++)");
+		begin_scope();
+		for (auto &copy : per_vertex_copies)
+			statement(copy);
+		end_scope();
+	}
 
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex || execution.model == ExecutionModelFragment ||
