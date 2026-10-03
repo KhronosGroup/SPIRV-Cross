@@ -3540,9 +3540,9 @@ void CompilerHLSL::emit_hlsl_tesc_entry_point()
 		SPIRV_CROSS_THROW("Tessellation control shader without a spacing execution mode. "
 		                  "Set the tessellation evaluation shader's execution modes on it.");
 
-	// With a lower-left domain origin, the triangle domain is mirrored, which reverses the winding.
-	// Quad and isoline domains flip gl_TessCoord.y in the domain shader instead.
-	bool reverse_winding = hlsl_options.tess_domain_origin_lower_left && execution.flags.get(ExecutionModeTriangles);
+	// A lower-left domain origin mirrors the domain: the generated triangles have the opposite winding,
+	// with the same domain coordinates and the same edges per tessellation factor.
+	bool reverse_winding = hlsl_options.tess_domain_origin_lower_left;
 	const char *topology;
 	if (execution.flags.get(ExecutionModePointMode))
 		topology = "point";
