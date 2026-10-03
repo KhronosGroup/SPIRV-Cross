@@ -546,7 +546,7 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	auto old_flags = flags;
 	flags.reset();
 	bool tese_cp_input = get_execution_model() == ExecutionModelTessellationEvaluation &&
-	                     var.storage == StorageClassInput && !is_tese_patch_input(var);
+	                     var.storage == StorageClassInput && !is_tess_patch_variable(var);
 	bool tesc_cp_input = get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassInput;
 	if (tese_cp_input || tesc_cp_input)
 	{
@@ -1083,7 +1083,7 @@ void CompilerHLSL::emit_interface_block_member_in_struct(const SPIRVariable &var
 	std::string semantic;
 	if (hlsl_options.user_semantic && has_member_decoration(var.self, member_index, DecorationUserSemantic))
 		semantic = get_member_decoration_string(var.self, member_index, DecorationUserSemantic);
-	else if (is_tese_patch_input(var))
+	else if (is_tess_patch_variable(var))
 		semantic = join("PATCH", location);
 	else
 		semantic = to_semantic(location, execution.model, var.storage);
@@ -1165,9 +1165,9 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			else
 				location_number = get_vacant_location();
 
-			// Allow semantic remap if specified. Patch inputs of a domain shader get their own
+			// Allow semantic remap if specified. Patch variables of tessellation stages get their own
 			// PATCH<N> namespace, separate from the per-control-point TEXCOORD<N> semantics.
-			if (is_tese_patch_input(var))
+			if (is_tess_patch_variable(var))
 				semantic = join("PATCH", location_number);
 			else
 				semantic = to_semantic(location_number, execution.model, var.storage);
@@ -1202,7 +1202,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			if (execution.model == ExecutionModelMeshEXT ||
 			    (execution.model == ExecutionModelGeometry && var.storage == StorageClassInput) ||
 			    (execution.model == ExecutionModelTessellationEvaluation && var.storage == StorageClassInput &&
-			     !is_tese_patch_input(var)) ||
+			     !is_tess_patch_variable(var)) ||
+			    (execution.model == ExecutionModelTessellationControl && !is_tess_patch_variable(var)) ||
 			    has_decoration(var.self, DecorationPerVertexKHR))
 			{
 				// The per-vertex/per-CP dimension is the outermost (last element in array vector).
@@ -1881,7 +1882,7 @@ void CompilerHLSL::emit_resources()
 
 	SmallVector<IOVariable> input_variables;
 	SmallVector<IOVariable> output_variables;
-	SmallVector<IOVariable> patch_input_variables;
+	SmallVector<IOVariable> patch_variables;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
@@ -1900,8 +1901,8 @@ void CompilerHLSL::emit_resources()
 				for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 				{
 					uint32_t location = get_declared_member_location(var, i, false);
-					if (is_tese_patch_input(var))
-						patch_input_variables.push_back({ &var, location, i, true });
+					if (is_tess_patch_variable(var))
+						patch_variables.push_back({ &var, location, i, true });
 					else if (var.storage == StorageClassInput)
 						input_variables.push_back({ &var, location, i, true });
 					else
@@ -1911,8 +1912,8 @@ void CompilerHLSL::emit_resources()
 			else
 			{
 				uint32_t location = get_decoration(var.self, DecorationLocation);
-				if (is_tese_patch_input(var))
-					patch_input_variables.push_back({ &var, location, 0, false });
+				if (is_tess_patch_variable(var))
+					patch_variables.push_back({ &var, location, 0, false });
 				else if (var.storage == StorageClassInput)
 					input_variables.push_back({ &var, location, 0, false });
 				else
@@ -1984,16 +1985,16 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
-	// Domain shader: everything per patch - the tessellation factors (always present, the hull
-	// shader's patch constant function must output them) and the patch inputs.
-	if (execution.model == ExecutionModelTessellationEvaluation)
+	// Everything per patch - the tessellation factors (always present: the hull shader's patch constant
+	// function must output them) and the patch outputs (hull) / inputs (domain), in one layout for both.
+	if (execution.model == ExecutionModelTessellationControl || execution.model == ExecutionModelTessellationEvaluation)
 	{
 		statement("struct SPIRV_Cross_PatchConstant");
 		begin_scope();
 		emit_tess_factors_in_struct();
 		unordered_set<uint32_t> active_patch_inputs;
-		sort(patch_input_variables.begin(), patch_input_variables.end(), variable_compare);
-		for (auto &var : patch_input_variables)
+		sort(patch_variables.begin(), patch_variables.end(), variable_compare);
+		for (auto &var : patch_variables)
 		{
 			if (var.block)
 				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location,
@@ -3246,10 +3247,14 @@ string CompilerHLSL::flattened_arrayed_builtin_name(uint32_t base, BuiltIn built
 	return builtin_to_glsl(builtin, StorageClassInput);
 }
 
-// Patch-decorated input of a domain shader: read from SPIRV_Cross_PatchConstant, not per control point.
-bool CompilerHLSL::is_tese_patch_input(const SPIRVariable &var) const
+// Patch-decorated variable of a tessellation stage - a hull shader's patch outputs, a domain shader's
+// patch inputs. Both live in SPIRV_Cross_PatchConstant, not per control point.
+bool CompilerHLSL::is_tess_patch_variable(const SPIRVariable &var) const
 {
-	if (get_execution_model() != ExecutionModelTessellationEvaluation || var.storage != StorageClassInput)
+	auto model = get_execution_model();
+	bool patch_storage = (model == ExecutionModelTessellationEvaluation && var.storage == StorageClassInput) ||
+	                     (model == ExecutionModelTessellationControl && var.storage == StorageClassOutput);
+	if (!patch_storage)
 		return false;
 	if (has_decoration(var.self, DecorationPatch))
 		return true;
@@ -3870,7 +3875,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 						for (uint32_t i = 0; i < array_size; i++)
 							statement(var_name, "[", i, "].", mbr_name, " = GetAttributeAtVertex(stage_input.", flat_name, ", ", i, ");");
 					}
-					else if (is_tese_patch_input(var))
+					else if (is_tess_patch_variable(var))
 					{
 						statement(var_name, ".", mbr_name, " = patch_input.", flat_name, ";");
 					}
@@ -3902,7 +3907,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				}
 				else
 				{
-					if (is_tese_patch_input(var))
+					if (is_tess_patch_variable(var))
 						statement(name, " = patch_input.", name, ";");
 					else if (execution.model == ExecutionModelGeometry ||
 					         execution.model == ExecutionModelTessellationEvaluation)
