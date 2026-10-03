@@ -787,13 +787,20 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			break;
 
 		case BuiltInPrimitiveId:
-			// For geometry shaders, PrimitiveId is a direct function parameter
-			// (SV_PrimitiveID), not part of the input struct.
-			if (get_entry_point().model != ExecutionModelGeometry)
+			// For geometry and domain shaders, PrimitiveId is a direct function parameter
+			// (SV_PrimitiveID), not part of the (per-vertex / per-control-point) input struct.
+			if (get_entry_point().model != ExecutionModelGeometry &&
+			    get_entry_point().model != ExecutionModelTessellationEvaluation)
 			{
 				type = "uint";
 				semantic = "SV_PrimitiveID";
 			}
+			break;
+
+		case BuiltInTessCoord:
+		case BuiltInPatchVertices:
+			// Domain shader: SV_DomainLocation is an entry point parameter, and the patch
+			// size is the constant N of OutputPatch<..., N>.
 			break;
 
 		case BuiltInInvocationId:
@@ -1320,6 +1327,17 @@ void CompilerHLSL::emit_builtin_variables()
 				    (get_execution_model() == ExecutionModelGeometry ||
 				        get_execution_model() == ExecutionModelTessellationControl))
 					array_size = input_vertices_from_execution_mode(get_entry_point());
+				else if (storage == StorageClass::StorageClassInput &&
+				         get_execution_model() == ExecutionModelTessellationEvaluation)
+					array_size = tessellation_patch_vertices();
+				break;
+
+			case BuiltInTessCoord:
+				type = "float3";
+				break;
+
+			case BuiltInPatchVertices:
+				type = "int";
 				break;
 
 			case BuiltInFragDepth:
@@ -3100,6 +3118,8 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		return "comp_main";
 	else if (execution.model == ExecutionModelGeometry)
 		return "geom_main";
+	else if (execution.model == ExecutionModelTessellationEvaluation)
+		return "tese_main";
 	else if (execution.model == ExecutionModelMeshEXT)
 		return "mesh_main";
 	else if (execution.model == ExecutionModelTaskEXT)
@@ -3127,16 +3147,30 @@ uint32_t CompilerHLSL::input_vertices_from_execution_mode(SPIREntryPoint &execut
 	return input_vertices;
 }
 
-// Geometry shaders declare their arrayed position input as one static array
+// Geometry and domain shaders declare their arrayed position input as one static array
 // (gl_PositionIn[N], filled from stage_input[i]), not as a gl_in[] block of structs.
 string CompilerHLSL::flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin)
 {
-	if (builtin != BuiltInPosition || get_execution_model() != ExecutionModelGeometry)
+	auto model = get_execution_model();
+	if (builtin != BuiltInPosition ||
+	    (model != ExecutionModelGeometry && model != ExecutionModelTessellationEvaluation))
 		return {};
 	auto *var = maybe_get_backing_variable(base);
 	if (!var || var->storage != StorageClassInput)
 		return {};
 	return builtin_to_glsl(builtin, StorageClassInput);
+}
+
+// Control points per patch seen by a domain shader (the N of OutputPatch<T, N>). SPIR-V carries it in
+// OutputVertices on the tessellation control stage only, so the caller has to set it on the
+// tessellation evaluation module, as with MSL (Compiler::set_execution_mode).
+uint32_t CompilerHLSL::tessellation_patch_vertices() const
+{
+	auto &execution = get_entry_point();
+	if (!execution.flags.get(ExecutionModeOutputVertices) || execution.output_vertices == 0)
+		SPIRV_CROSS_THROW("HLSL domain shaders need the patch size: set ExecutionModeOutputVertices "
+		                  "(the hull shader's output control points) on the tessellation evaluation entry point.");
+	return execution.output_vertices;
 }
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
@@ -3324,6 +3358,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		arguments.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", "geometry_stream"));
 		break;
 	}
+	case ExecutionModelTessellationEvaluation:
+		input_vertices = tessellation_patch_vertices();
+		break;
+
 	case ExecutionModelTaskEXT:
 	case ExecutionModelMeshEXT:
 	case ExecutionModelGLCompute:
@@ -3424,7 +3462,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		switch (static_cast<BuiltIn>(i))
 		{
 		case BuiltInPosition:
-			if (execution.model == ExecutionModelGeometry)
+			if (execution.model == ExecutionModelGeometry || execution.model == ExecutionModelTessellationEvaluation)
 			{
 				statement("for (int i = 0; i < ", input_vertices, "; i++)");
 				begin_scope();
@@ -3504,9 +3542,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInPrimitiveId:
-			if (execution.model == ExecutionModelGeometry)
+			if (execution.model == ExecutionModelGeometry || execution.model == ExecutionModelTessellationEvaluation)
 			{
-				// PrimitiveId is a separate function parameter for GS.
+				// PrimitiveId is a separate function parameter for GS and DS.
 				// The global is named gl_PrimitiveIDIn (GLSL convention).
 				statement(builtin, " = gl_PrimitiveID;");
 			}
@@ -3601,6 +3639,18 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				          ";");
 			break;
 
+		case BuiltInTessCoord:
+			// SV_DomainLocation is float2 for quads and isolines; SPIR-V always has a vec3.
+			if (execution.flags.get(ExecutionModeTriangles))
+				statement(builtin, " = gl_TessCoordIn;");
+			else
+				statement(builtin, " = float3(gl_TessCoordIn, 0.0f);");
+			break;
+
+		case BuiltInPatchVertices:
+			statement(builtin, " = ", tessellation_patch_vertices(), ";");
+			break;
+
 		default:
 			statement(builtin, " = stage_input.", builtin, ";");
 			break;
@@ -3680,7 +3730,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex || execution.model == ExecutionModelFragment ||
 	    execution.model == ExecutionModelGLCompute || execution.model == ExecutionModelMeshEXT ||
-	    execution.model == ExecutionModelGeometry || execution.model == ExecutionModelTaskEXT)
+	    execution.model == ExecutionModelGeometry || execution.model == ExecutionModelTaskEXT ||
+	    execution.model == ExecutionModelTessellationEvaluation)
 	{
 		// For mesh shaders, we receive special arguments that we must pass down as function arguments.
 		// HLSL does not support proper reference types for passing these IO blocks,

@@ -236,6 +236,7 @@ private:
 	std::string image_type_hlsl_modern(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
+	uint32_t tessellation_patch_vertices() const;
 	std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
