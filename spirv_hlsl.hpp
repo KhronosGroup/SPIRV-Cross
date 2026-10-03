@@ -160,6 +160,11 @@ public:
 		// tessellation factors to the same edges either way; only the winding of the generated triangles
 		// differs. This is the hull shader's business, so domain shaders do not change.
 		bool tess_domain_origin_lower_left = false;
+
+		// Tessellation control shaders: control points per input patch (InputPatch<T, N>), i.e. the patch
+		// topology of the draw. SPIR-V does not carry it. 0 means the same as the output control points
+		// (OutputVertices).
+		uint32_t tess_input_control_points = 0;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)

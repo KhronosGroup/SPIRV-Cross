@@ -752,6 +752,7 @@ struct CLIArguments
 	bool hlsl_preserve_structured_buffers = false;
 	bool hlsl_user_semantic = false;
 	bool hlsl_domain_lower_left = false;
+	uint32_t hlsl_tess_input_control_points = 0;
 	HLSLBindingFlags hlsl_binding_flags = 0;
 	bool vulkan_semantics = false;
 	bool flatten_multidimensional_arrays = false;
@@ -863,6 +864,7 @@ static void print_help_hlsl()
 	                "\t[--hlsl-preserve-structured-buffers]:\n\t\tEmit SturucturedBuffer<T> rather than ByteAddressBuffer. Requires UserTypeGOOGLE to be emitted. Intended for DXC roundtrips.\n"
 	                "\t[--hlsl-user-semantic]:\n\t\tUses UserSemantic decoration to generate vertex input and output semantics.\n"
 	                "\t[--hlsl-domain-lower-left]:\n\t\tTessellation: use a lower-left domain origin (OpenGL) instead of upper-left (Vulkan / D3D).\n"
+	                "\t[--hlsl-tess-input-control-points <count>]:\n\t\tTessellation control: control points per input patch (InputPatch<T, N>). Defaults to the output control points.\n"
 	);
 	// clang-format on
 }
@@ -1537,6 +1539,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		hlsl_opts.preserve_structured_buffers = args.hlsl_preserve_structured_buffers;
 		hlsl_opts.user_semantic = args.hlsl_user_semantic;
 		hlsl_opts.tess_domain_origin_lower_left = args.hlsl_domain_lower_left;
+		hlsl_opts.tess_input_control_points = args.hlsl_tess_input_control_points;
 		hlsl->set_hlsl_options(hlsl_opts);
 		hlsl->set_resource_binding_flags(args.hlsl_binding_flags);
 		if (args.hlsl_base_vertex_index_explicit_binding)
@@ -1775,6 +1778,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--hlsl-preserve-structured-buffers", [&args](CLIParser &) { args.hlsl_preserve_structured_buffers = true; });
 	cbs.add("--hlsl-user-semantic", [&args](CLIParser &) { args.hlsl_user_semantic = true; });
 	cbs.add("--hlsl-domain-lower-left", [&args](CLIParser &) { args.hlsl_domain_lower_left = true; });
+	cbs.add("--hlsl-tess-input-control-points",
+	        [&args](CLIParser &parser) { args.hlsl_tess_input_control_points = parser.next_uint(); });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });

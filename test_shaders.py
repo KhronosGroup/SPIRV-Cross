@@ -617,6 +617,9 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--hlsl-user-semantic')
     if '.domain.' in shader:
         hlsl_args.append('--hlsl-domain-lower-left')
+    input_control_points = re.search(r'\.icp(\d+)\.', shader)
+    if input_control_points:
+        hlsl_args += ['--hlsl-tess-input-control-points', input_control_points.group(1)]
     output_vertices = re.search(r'\.ov(\d+)\.', shader)
     if output_vertices:
         hlsl_args += ['--set-output-vertices', output_vertices.group(1)]

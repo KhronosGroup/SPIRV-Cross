@@ -537,6 +537,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_HLSL_TESS_DOMAIN_ORIGIN_LOWER_LEFT:
 		options->hlsl.tess_domain_origin_lower_left = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_HLSL_TESS_INPUT_CONTROL_POINTS:
+		options->hlsl.tess_input_control_points = value;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_MSL
