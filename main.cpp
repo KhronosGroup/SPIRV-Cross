@@ -733,6 +733,7 @@ struct CLIArguments
 	SmallVector<Rename> entry_point_rename;
 
 	uint32_t iterations = 1;
+	uint32_t output_vertices = 0;
 	bool cpp = false;
 	string reflect;
 	bool msl = false;
@@ -1025,6 +1026,8 @@ static void print_help_common()
 	                "\t\tGLSL: Rewrites [0, w] Z range (D3D/Metal/Vulkan) to GL-style [-w, w].\n"
 	                "\t\tHLSL/MSL: Rewrites [-w, w] Z range (GL) to D3D/Metal/Vulkan-style [0, w].\n"
 	                "\t[--flip-vert-y]:\n\t\tInverts gl_Position.y (or equivalent) at the end of a vertex shader. This is equivalent to using negative viewport height.\n"
+	                "\t[--set-output-vertices <count>]:\n\t\tSets ExecutionModeOutputVertices on the entry point. A tessellation evaluation shader usually does not\n"
+	                "\t\tdeclare it, but HLSL and MSL need the patch size of its input (the output control points of the hull shader).\n"
 	                "\t[--mask-stage-output-location <location> <component>]:\n"
 	                "\t\tIf a stage output variable with matching location and component is active, optimize away the variable if applicable.\n"
 	                "\t[--mask-stage-output-builtin <Position|PointSize|ClipDistance|CullDistance>]:\n"
@@ -1450,6 +1453,9 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		}
 	}
 
+	if (args.output_vertices)
+		compiler->set_execution_mode(ExecutionModeOutputVertices, args.output_vertices);
+
 	if (!args.set_version && !compiler->get_common_options().version)
 	{
 		fprintf(stderr, "Didn't specify GLSL version and SPIR-V did not specify language.\n");
@@ -1715,6 +1721,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--fixup-clipspace", [&args](CLIParser &) { args.fixup = true; });
 	cbs.add("--flip-vert-y", [&args](CLIParser &) { args.yflip = true; });
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
+	cbs.add("--set-output-vertices", [&args](CLIParser &parser) { args.output_vertices = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--reflect", [&args](CLIParser &parser) { args.reflect = parser.next_value_string("json"); });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
