@@ -3392,7 +3392,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 {
 	SmallVector<string> arguments;
 
-	if (require_input && get_entry_point().model != ExecutionModelGeometry)
+	if (require_input && get_entry_point().model != ExecutionModelGeometry &&
+	    get_entry_point().model != ExecutionModelTessellationEvaluation)
 		arguments.push_back("SPIRV_Cross_Input stage_input");
 
 	auto &execution = get_entry_point();
@@ -3439,8 +3440,34 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		break;
 	}
 	case ExecutionModelTessellationEvaluation:
+	{
 		input_vertices = tessellation_patch_vertices();
+
+		const char *domain;
+		if (execution.flags.get(ExecutionModeTriangles))
+			domain = "tri";
+		else if (execution.flags.get(ExecutionModeQuads))
+			domain = "quad";
+		else if (execution.flags.get(ExecutionModeIsolines))
+			domain = "isoline";
+		else
+			SPIRV_CROSS_THROW("Tessellation evaluation shader without a Triangles, Quads or Isolines execution mode.");
+		statement("[domain(\"", domain, "\")]");
+
+		// The control points written by the hull shader, the per-patch data of its patch constant
+		// function and the position in the domain.
+		if (require_input)
+			arguments.push_back(join("const OutputPatch<SPIRV_Cross_Input, ", input_vertices, "> stage_input"));
+		arguments.push_back("const SPIRV_Cross_PatchConstant patch_input");
+		if (active_input_builtins.get(BuiltInTessCoord))
+		{
+			arguments.push_back(join(execution.flags.get(ExecutionModeTriangles) ? "float3" : "float2",
+			                         " gl_TessCoordIn : SV_DomainLocation"));
+		}
+		if (active_input_builtins.get(BuiltInPrimitiveId))
+			arguments.push_back("uint gl_PrimitiveIDIn : SV_PrimitiveID");
 		break;
+	}
 
 	case ExecutionModelTaskEXT:
 	case ExecutionModelMeshEXT:
