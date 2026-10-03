@@ -28,7 +28,6 @@ void tese_main()
 SPIRV_Cross_Output main(const OutputPatch<SPIRV_Cross_Input, 4> stage_input, const SPIRV_Cross_PatchConstant patch_input, float2 gl_TessCoordIn : SV_DomainLocation)
 {
     gl_TessCoord = float3(gl_TessCoordIn, 0.0f);
-    gl_TessCoord.y = 1.0f - gl_TessCoord.y;
     for (int i = 0; i < 4; i++)
     {
         vPos[i] = stage_input[i].vPos;

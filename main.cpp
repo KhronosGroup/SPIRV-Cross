@@ -862,7 +862,7 @@ static void print_help_hlsl()
 	                "\t[--hlsl-flatten-matrix-vertex-input-semantics]:\n\t\tEmits matrix vertex inputs with input semantics as if they were independent vectors, e.g. TEXCOORD{2,3,4} rather than matrix form TEXCOORD2_{0,1,2}.\n"
 	                "\t[--hlsl-preserve-structured-buffers]:\n\t\tEmit SturucturedBuffer<T> rather than ByteAddressBuffer. Requires UserTypeGOOGLE to be emitted. Intended for DXC roundtrips.\n"
 	                "\t[--hlsl-user-semantic]:\n\t\tUses UserSemantic decoration to generate vertex input and output semantics.\n"
-	                "\t[--hlsl-domain-lower-left]:\n\t\tTessellation evaluation: use a lower-left domain origin (OpenGL) instead of upper-left (Vulkan / D3D).\n"
+	                "\t[--hlsl-domain-lower-left]:\n\t\tTessellation: use a lower-left domain origin (OpenGL) instead of upper-left (Vulkan / D3D).\n"
 	);
 	// clang-format on
 }

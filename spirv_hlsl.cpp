@@ -3767,11 +3767,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (execution.flags.get(ExecutionModeTriangles))
 				statement(builtin, " = gl_TessCoordIn;");
 			else
-			{
 				statement(builtin, " = float3(gl_TessCoordIn, 0.0f);");
-				if (hlsl_options.tess_domain_origin_lower_left)
-					statement(builtin, ".y = 1.0f - ", builtin, ".y;");
-			}
 			break;
 
 		case BuiltInPatchVertices:

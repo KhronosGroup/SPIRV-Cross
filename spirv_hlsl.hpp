@@ -155,9 +155,10 @@ public:
 		// Use UserSemantic decoration info (if specified), otherwise use default mechanism (such as add_vertex_attribute_remap or TEXCOORD#).
 		bool user_semantic = false;
 
-		// Tessellation evaluation shaders: the tessellator's domain origin is the lower left corner (OpenGL)
-		// rather than the upper left (Vulkan, D3D). gl_TessCoord.y is flipped for quad and isoline domains;
-		// for triangles the winding order is reversed in the hull shader instead, as in the MSL backend.
+		// Tessellation: the tessellator's domain origin is the lower left corner (OpenGL) rather than the
+		// upper left (Vulkan, D3D). The D3D tessellator produces the same domain coordinates and applies the
+		// tessellation factors to the same edges either way; only the winding of the generated triangles
+		// differs. This is the hull shader's business, so domain shaders do not change.
 		bool tess_domain_origin_lower_left = false;
 	};
 
