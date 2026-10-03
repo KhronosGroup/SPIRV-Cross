@@ -3950,16 +3950,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInInvocationId:
-			if (execution.model == ExecutionModelTessellationControl)
-			{
-				// Copy from function parameter to global.
-				statement(builtin, " = uCPID;");
-			}
-			else
-			{
-				// For geometry shaders, copy from struct as usual.
-				statement(builtin, " = stage_input[0].", builtin, ";");
-			}
+			// Geometry shaders: copy from the struct as usual. Hull shaders have their own entry point.
+			statement(builtin, " = stage_input[0].", builtin, ";");
 			break;
 
 		case BuiltInSubgroupEqMask:
