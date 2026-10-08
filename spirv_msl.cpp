@@ -6447,14 +6447,14 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T>");
 			statement("[[clang::optnone]] T spvFMul(T l, T r)");
 			begin_scope();
-			statement("return fma(l, r, T(0));");
+			statement("return fma(l, r, T(-0.0));");
 			end_scope();
 			statement("");
 
 			statement("template<typename T, int Cols, int Rows>");
 			statement("[[clang::optnone]] vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)");
 			begin_scope();
-			statement("vec<T, Cols> res = vec<T, Cols>(0);");
+			statement("vec<T, Cols> res = vec<T, Cols>(T(-0.0));");
 			statement("for (uint i = Rows; i > 0; --i)");
 			begin_scope();
 			statement("vec<T, Cols> tmp(0);");
@@ -6471,7 +6471,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T, int Cols, int Rows>");
 			statement("[[clang::optnone]] vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)");
 			begin_scope();
-			statement("vec<T, Rows> res = vec<T, Rows>(0);");
+			statement("vec<T, Rows> res = vec<T, Rows>(T(-0.0));");
 			statement("for (uint i = Cols; i > 0; --i)");
 			begin_scope();
 			statement("res = fma(m[i - 1], vec<T, Rows>(v[i - 1]), res);");
@@ -6487,7 +6487,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("matrix<T, RCols, LRows> res;");
 			statement("for (uint i = 0; i < RCols; i++)");
 			begin_scope();
-			statement("vec<T, LRows> tmp(0);");
+			statement("vec<T, LRows> tmp(T(-0.0));");
 			statement("for (uint j = 0; j < LCols; j++)");
 			begin_scope();
 			statement("tmp = fma(vec<T, LRows>(r[i][j]), l[j], tmp);");

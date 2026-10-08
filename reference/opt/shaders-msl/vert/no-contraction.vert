@@ -8,13 +8,13 @@ using namespace metal;
 template<typename T>
 [[clang::optnone]] T spvFMul(T l, T r)
 {
-    return fma(l, r, T(0));
+    return fma(l, r, T(-0.0));
 }
 
 template<typename T, int Cols, int Rows>
 [[clang::optnone]] vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)
 {
-    vec<T, Cols> res = vec<T, Cols>(0);
+    vec<T, Cols> res = vec<T, Cols>(T(-0.0));
     for (uint i = Rows; i > 0; --i)
     {
         vec<T, Cols> tmp(0);
@@ -30,7 +30,7 @@ template<typename T, int Cols, int Rows>
 template<typename T, int Cols, int Rows>
 [[clang::optnone]] vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)
 {
-    vec<T, Rows> res = vec<T, Rows>(0);
+    vec<T, Rows> res = vec<T, Rows>(T(-0.0));
     for (uint i = Cols; i > 0; --i)
     {
         res = fma(m[i - 1], vec<T, Rows>(v[i - 1]), res);
@@ -45,7 +45,7 @@ template<typename T, int LCols, int LRows, int RCols, int RRows>
     matrix<T, RCols, LRows> res;
     for (uint i = 0; i < RCols; i++)
     {
-        vec<T, LRows> tmp(0);
+        vec<T, LRows> tmp(T(-0.0));
         for (uint j = 0; j < LCols; j++)
         {
             tmp = fma(vec<T, LRows>(r[i][j]), l[j], tmp);
