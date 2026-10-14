@@ -9469,7 +9469,7 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	uint32_t interface_index;
 	auto &var_type = get_variable_data_type(*var);
 	auto &result_type = get<SPIRType>(ops[0]);
-	auto *type = &var_type;
+	auto *type = &get_pointee_type(expression_type(ops[2]));
 	if (has_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex))
 	{
 		interface_index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
@@ -9484,6 +9484,8 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	}
 	// Accumulate indices. We'll have to skip over the one for the struct, if present, because we already accounted
 	// for that getting the base index.
+	if (has_extended_decoration(ops[2], SPIRVCrossDecorationInterpolantComponentExpr))
+		set_extended_decoration(ops[1], SPIRVCrossDecorationInterpolantComponentExpr, get_extended_decoration(ops[2], SPIRVCrossDecorationInterpolantComponentExpr));
 	for (uint32_t i = 3; i < length; ++i)
 	{
 		if (is_vector(*type) && !is_array(*type) && is_scalar(result_type))
