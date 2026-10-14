@@ -1,0 +1,25 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct _2
+{
+    ulong _m0;
+    ulong _m1;
+    ulong _m2;
+    uint2 _m3;
+    ulong _m4;
+};
+
+kernel void main0(constant _2& _19 [[buffer(0)]])
+{
+    uint _24 = *(reinterpret_cast<device uint*>(_19._m0));
+    device uint* _27 = reinterpret_cast<device uint*>(_19._m1);
+    *_27 = 99u;
+    *(reinterpret_cast<device uint*>(_19._m2)) = _24;
+    uint _34 = *(reinterpret_cast<device uint*>(as_type<ulong>(_19._m3)));
+    *_27 = 100u;
+    *(reinterpret_cast<device uint*>(_19._m4)) = _34;
+}
+

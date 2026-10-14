@@ -59,7 +59,8 @@ fragment main0_out main0(constant type_ConstantBuffer_PushConstants& g_PushConst
     {
         _77 = g_Texture2DDescriptorHeap[_47].read(uint2(int3(select(_55, int2(0), bool2(_66)), 0).xy), 0);
     }
-    float3 _81 = powr(_77.xyz, *(reinterpret_cast<const device float3*>(g_PushConstants.SharedConstants)));
+    float3 _80 = *(reinterpret_cast<const device float3*>(g_PushConstants.SharedConstants));
+    float3 _81 = powr(_77.xyz, _80);
     out.out_var_SV_Target = float4(_81.x, _81.y, _81.z, _77.w);
     return out;
 }
