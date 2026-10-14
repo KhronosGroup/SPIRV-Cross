@@ -3232,6 +3232,9 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
                                                                    uint32_t &location, uint32_t &var_mbr_idx,
                                                                    const Bitset &interpolation_qual)
 {
+	if (is_tessellation_shader() && has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
+		SPIRV_CROSS_THROW("Component decoration is not supported in tessellation shaders.");
+
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
@@ -3308,6 +3311,13 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			return;
 	}
 
+	// Resolve the member's base before descending into nested structures. An explicit
+	// Location starts a new range even when a previous member established a location.
+	if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
+		location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+	else if (location == UINT32_MAX && has_decoration(var.self, DecorationLocation))
+		location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+
 	// Recursively handle nested structures.
 	if (mbr_type.basetype == SPIRType::Struct)
 	{
@@ -3342,44 +3352,25 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : ""), "m");
 		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
-		// The SPIRV location of interface variable, used to obtain the initial
-		// MSL location (the location variable) and interface matching
 		uint32_t ir_location = UINT32_MAX;
-		bool has_member_loc_decor = has_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-		bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
 		uint32_t orig_vecsize = UINT32_MAX;
 
-		// If we haven't established a location base yet, do so here.
-		if (location == UINT32_MAX)
+		// Builtins can receive locations from the application for buffer interfaces.
+		if (location == UINT32_MAX && is_builtin)
 		{
-			if (has_member_loc_decor)
-				ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-			else if (has_var_loc_decor)
-				ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
-			else if (is_builtin)
-			{
-				if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
-					ir_location = inputs_by_builtin[builtin].location;
-				else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
-					ir_location = outputs_by_builtin[builtin].location;
-			}
+			if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+				ir_location = inputs_by_builtin[builtin].location;
+			else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+				ir_location = outputs_by_builtin[builtin].location;
 		}
 
-		// Once we determine the location of the first member within nested structures,
-		// from a var of the topmost structure, the remaining flattened members of
-		// the nested structures will have consecutive location values. At this point,
-		// we've recursively tunnelled into structs, arrays, and matrices, and are
-		// down to a single location for each member now.
 		if (location == UINT32_MAX && ir_location != UINT32_MAX)
 			location = ir_location + i;
 
-		if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
+		if (storage == StorageClassInput && !is_builtin && location != UINT32_MAX)
 		{
-			uint32_t component = 0;
+			uint32_t component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
 			uint32_t orig_mbr_type_id = usable_type->self;
-
-			if (has_member_loc_decor)
-				component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
 
 			var.basetype = ensure_correct_input_type(var.basetype, location, component, 0, meta.strip_array);
 			mbr_type_id = ensure_correct_input_type(usable_type->self, location, component, 0, meta.strip_array);
@@ -3410,7 +3401,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
-			SPIRV_CROSS_THROW("DecorationComponent on matrices and arrays is not supported.");
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, get_member_decoration(var_type.self, mbr_idx, DecorationComponent));
 
 		if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
 		{
@@ -3536,12 +3527,9 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			ir_location = outputs_by_builtin[builtin].location;
 	}
 
-	// Once we determine the location of the first member within nested structures,
-	// from a var of the topmost structure, the remaining flattened members of
-	// the nested structures will have consecutive location values. At this point,
-	// we've recursively tunnelled into structs, arrays, and matrices, and are
-	// down to a single location for each member now.
-	if (location == UINT32_MAX && ir_location != UINT32_MAX)
+	// An explicit member Location overrides the running location, including for
+	// composites retained in a capture record rather than flattened into stage I/O.
+	if ((has_member_loc_decor || location == UINT32_MAX) && ir_location != UINT32_MAX)
 		location = ir_location;
 
 	if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
