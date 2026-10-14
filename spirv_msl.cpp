@@ -16731,6 +16731,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 		}
 	}
+	else if (builtin && builtin_type == BuiltInSampleMask && type_storage == StorageClassInput)
+		decl += join(" ", to_expression(name_id));
 	else if (is_array(type) && !type_is_image)
 	{
 		// Arrays of opaque types are special cased.
