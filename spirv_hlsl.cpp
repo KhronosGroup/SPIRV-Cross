@@ -3117,6 +3117,18 @@ uint32_t CompilerHLSL::input_vertices_from_execution_mode(SPIREntryPoint &execut
 	return input_vertices;
 }
 
+// Geometry shaders declare their arrayed position input as one static array
+// (gl_PositionIn[N], filled from stage_input[i]), not as a gl_in[] block of structs.
+string CompilerHLSL::flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin)
+{
+	if (builtin != BuiltInPosition || get_execution_model() != ExecutionModelGeometry)
+		return {};
+	auto *var = maybe_get_backing_variable(base);
+	if (!var || var->storage != StorageClassInput)
+		return {};
+	return builtin_to_glsl(builtin, StorageClassInput);
+}
+
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
 	// In library mode default_entry_point points at the first exported
