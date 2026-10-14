@@ -1,0 +1,29 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct Table_natural;
+struct Item_natural;
+
+struct PushConstants_std430
+{
+    device Table_natural* table;
+    device float* _output;
+};
+
+struct Table_natural
+{
+    device Item_natural* items;
+};
+
+struct Item_natural
+{
+    float value;
+};
+
+kernel void main0(constant PushConstants_std430& pc [[buffer(0)]])
+{
+    pc._output[0] = pc.table[0].items[1].value;
+}
+
