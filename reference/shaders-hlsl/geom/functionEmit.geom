@@ -72,9 +72,6 @@ void main(point SPIRV_Cross_Input stage_input[1], inout TriangleStream<SPIRV_Cro
     for (int i = 0; i < 1; i++)
     {
         vColorIn[i] = stage_input[i].vColorIn;
-    }
-    for (int i = 0; i < 1; i++)
-    {
         vPositionIn[i] = stage_input[i].vPositionIn;
     }
     geom_main(stage_input, geometry_stream);

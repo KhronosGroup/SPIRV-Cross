@@ -10985,6 +10985,11 @@ bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
 	return true;
 }
 
+string CompilerGLSL::flattened_arrayed_builtin_name(uint32_t, BuiltIn)
+{
+	return {};
+}
+
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
                                            AccessChainFlags flags, AccessChainMeta *meta,
                                            const SPIRType *untyped_data_type)
@@ -11341,7 +11346,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				BuiltIn builtin = BuiltInMax;
 				if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 				{
-					if (access_chain_is_arrayed)
+					string flat_name = access_chain_is_arrayed ? flattened_arrayed_builtin_name(base, builtin) : string();
+					auto *flat_var = flat_name.empty() ? nullptr : maybe_get_backing_variable(base);
+					string block_name = flat_var ? to_name(flat_var->self) : string();
+					if (!block_name.empty() && expr.compare(0, block_name.size(), block_name) == 0)
+					{
+						// gl_in[i].gl_Position -> gl_PositionIn[i]: keep the subscripts, swap the block name.
+						expr = flat_name + expr.substr(block_name.size());
+					}
+					else if (access_chain_is_arrayed)
 					{
 						expr += ".";
 						expr += builtin_to_glsl(builtin, type->storage);

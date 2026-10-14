@@ -154,6 +154,12 @@ public:
 
 		// Use UserSemantic decoration info (if specified), otherwise use default mechanism (such as add_vertex_attribute_remap or TEXCOORD#).
 		bool user_semantic = false;
+
+		// Tessellation: the tessellator's domain origin is the lower left corner (OpenGL) rather than the
+		// upper left (Vulkan, D3D). The D3D tessellator produces the same domain coordinates and applies the
+		// tessellation factors to the same edges either way; only the winding of the generated triangles
+		// differs. This is the hull shader's business, so domain shaders do not change.
+		bool tess_domain_origin_lower_left = false;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)
@@ -236,6 +242,10 @@ private:
 	std::string image_type_hlsl_modern(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
+	uint32_t tessellation_patch_vertices() const;
+	bool is_tese_patch_input(const SPIRVariable &var) const;
+	void emit_tess_factors_in_struct();
+	std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;
