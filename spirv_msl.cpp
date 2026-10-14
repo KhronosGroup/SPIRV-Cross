@@ -251,7 +251,7 @@ void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
 	bool need_vertex_params = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
-	                          !msl_options.vertex_for_tessellation;
+	                          (!msl_options.vertex_for_tessellation || msl_options.enable_base_index_zero);
 	bool need_tesc_params = is_tesc_shader();
 	bool need_tese_params = is_tese_shader() && msl_options.raw_buffer_tese_input;
 	bool need_subgroup_mask =
@@ -269,7 +269,7 @@ void CompilerMSL::build_implicit_builtins()
 	bool need_grid_params = get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation;
 	bool need_vertex_base_params =
 	    need_grid_params &&
-	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
+	    (need_vertex_params || need_multiview || active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
 	bool need_local_invocation_index =
@@ -16244,14 +16244,21 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// Metal provides no special support for multiview, so we smuggle
 					// the view index in the instance index.
 					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-						          to_expression(view_mask_buffer_id), "[0] + (", to_expression(builtin_instance_idx_id),
-						          " - ", to_expression(builtin_base_instance_id), ") % ",
-						          to_expression(view_mask_buffer_id), "[1];");
-						statement(to_expression(builtin_instance_idx_id), " = (",
-						          to_expression(builtin_instance_idx_id), " - ",
-						          to_expression(builtin_base_instance_id), ") / ", to_expression(view_mask_buffer_id),
-						          "[1] + ", to_expression(builtin_base_instance_id), ";");
+						if (msl_options.vertex_for_tessellation)
+						{
+							// Grid y is the physical instance ordinal. Do not depend on the
+							// declaration order of application InstanceIndex/BaseInstance.
+							statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ", to_expression(view_mask_buffer_id), "[0] + ", to_expression(builtin_invocation_id_id), ".y % ", to_expression(view_mask_buffer_id), "[1];");
+						}
+						else
+						{
+							// Remap the raw Metal ID once; zero-base emulation is applied
+							// when application expressions subsequently read the builtin.
+							builtin_declaration = true;
+							statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ", to_expression(view_mask_buffer_id), "[0] + (", to_expression(builtin_instance_idx_id), " - ", to_expression(builtin_base_instance_id), ") % ", to_expression(view_mask_buffer_id), "[1];");
+							statement(to_expression(builtin_instance_idx_id), " = (", to_expression(builtin_instance_idx_id), " - ", to_expression(builtin_base_instance_id), ") / ", to_expression(view_mask_buffer_id), "[1] + ", to_expression(builtin_base_instance_id), ";");
+							builtin_declaration = false;
+						}
 					});
 					// In addition to setting the variable itself, we also need to
 					// set the render_target_array_index with it on output. We have to
@@ -16344,8 +16351,11 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 
 				entry_func.fixup_hooks_in.push_back([=]() {
 					builtin_declaration = true;
+					string view_divisor;
+					if (msl_options.multiview && msl_options.multiview_layered_rendering && !msl_options.view_index_from_device_index)
+						view_divisor = join(" / ", to_expression(view_mask_buffer_id), "[1]");
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-					          to_expression(builtin_invocation_id_id), ".y + ", to_expression(builtin_dispatch_base_id),
+					          to_expression(builtin_invocation_id_id), ".y", view_divisor, " + ", to_expression(builtin_dispatch_base_id),
 					          ".y;");
 					builtin_declaration = false;
 				});
