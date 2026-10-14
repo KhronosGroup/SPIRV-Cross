@@ -539,6 +539,10 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-msl-resource-binding-test spirv-cross-c)
 				set_target_properties(spirv-cross-msl-resource-binding-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				add_executable(spirv-cross-msl-per-vertex-member-test tests-other/msl_per_vertex_member_test.cpp)
+				target_link_libraries(spirv-cross-msl-per-vertex-member-test spirv-cross-c)
+				set_target_properties(spirv-cross-msl-per-vertex-member-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				add_executable(spirv-cross-hlsl-resource-binding-test tests-other/hlsl_resource_bindings.cpp)
 				target_link_libraries(spirv-cross-hlsl-resource-binding-test spirv-cross-c)
 				set_target_properties(spirv-cross-hlsl-resource-binding-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
@@ -573,6 +577,8 @@ if (SPIRV_CROSS_CLI)
 						COMMAND $<TARGET_FILE:spirv-cross-msl-constexpr-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_constexpr_test.spv)
 				add_test(NAME spirv-cross-msl-resource-binding-test
 						COMMAND $<TARGET_FILE:spirv-cross-msl-resource-binding-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_resource_binding.spv)
+				add_test(NAME spirv-cross-msl-per-vertex-member-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-per-vertex-member-test>)
 				add_test(NAME spirv-cross-hlsl-resource-binding-test
 						COMMAND $<TARGET_FILE:spirv-cross-hlsl-resource-binding-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/hlsl_resource_binding.spv)
 				add_test(NAME spirv-cross-msl-ycbcr-conversion-test
