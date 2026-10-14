@@ -1,0 +1,19 @@
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F32, 8, 8, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF32_8x8_A_Wave;
+
+groupshared float _2[64];
+
+void comp_main()
+{
+    spvCoopMatF32_8x8_A_Wave _18 = spvCoopMatF32_8x8_A_Wave::Load(_2, 0u, 8u, dx::linalg::MatrixLayout::RowMajor);
+    spvCoopMatF32_8x8_A_Wave _21 = _18.Cast<dx::linalg::ComponentType::F32>();
+    _21.Set(0u, 1.0f);
+    _21.Store(_2, 0u, 8u, dx::linalg::MatrixLayout::RowMajor);
+    _2[0u] = _18.Get(0u);
+    _2[0u] = _18.Get(1u);
+}
+
+[numthreads(32, 1, 1)]
+void main()
+{
+    comp_main();
+}

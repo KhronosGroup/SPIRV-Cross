@@ -1,0 +1,44 @@
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::B, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_B_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F32, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::Wave> spvCoopMatF32_16x16_Accumulator_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_Accumulator_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::I8, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatI8_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::I8, 16, 16, dx::linalg::MatrixUse::B, dx::linalg::MatrixScope::Wave> spvCoopMatI8_16x16_B_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::I32, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::Wave> spvCoopMatI32_16x16_Accumulator_Wave;
+
+static const uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
+
+RWByteAddressBuffer ssbo : register(u0, space0);
+RWByteAddressBuffer ssbo_int : register(u1, space0);
+
+void comp_main()
+{
+    spvCoopMatF16_16x16_A_Wave a = spvCoopMatF16_16x16_A_Wave::Splat(half(1.5));
+    spvCoopMatF16_16x16_B_Wave b = spvCoopMatF16_16x16_B_Wave::Splat(half(ssbo.Load<float>(8)));
+    spvCoopMatF32_16x16_Accumulator_Wave _39 = spvCoopMatF32_16x16_Accumulator_Wave::Load(ssbo, 16, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    spvCoopMatF32_16x16_Accumulator_Wave c = _39;
+    spvCoopMatF32_16x16_Accumulator_Wave _44 = c.Cast<dx::linalg::ComponentType::F32>();
+    _44.MultiplyAccumulate(a, b);
+    spvCoopMatF32_16x16_Accumulator_Wave d = _44;
+    spvCoopMatF16_16x16_Accumulator_Wave c16 = spvCoopMatF16_16x16_Accumulator_Wave::Splat(half(0.0));
+    spvCoopMatF16_16x16_Accumulator_Wave _54 = c16.Cast<dx::linalg::ComponentType::F16>();
+    _54.MultiplyAccumulate(a, b);
+    spvCoopMatF16_16x16_Accumulator_Wave d16 = _54;
+    d.Store(ssbo, 1040, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    d16.Store(ssbo, 2064, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    spvCoopMatI8_16x16_A_Wave ia = spvCoopMatI8_16x16_A_Wave::Splat(-3);
+    spvCoopMatI8_16x16_B_Wave ib = spvCoopMatI8_16x16_B_Wave::Splat(7);
+    spvCoopMatI32_16x16_Accumulator_Wave ic = spvCoopMatI32_16x16_Accumulator_Wave::Splat(0);
+    spvCoopMatI32_16x16_Accumulator_Wave _79 = ic.Cast<dx::linalg::ComponentType::I32>();
+    _79.MultiplyAccumulate(ia, ib);
+    ic = _79;
+    ic.Store(ssbo_int, 0, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    ssbo.Store<uint>(0, uint(int(spvCoopMatF16_16x16_A_Wave::Splat(0).Length())));
+    ssbo.Store<uint>(4, uint(int(spvCoopMatF32_16x16_Accumulator_Wave::Splat(0).Length())));
+}
+
+[numthreads(32, 1, 1)]
+void main()
+{
+    comp_main();
+}

@@ -468,6 +468,8 @@ protected:
 	                                bool inside_block_like_struct_scope = false,
 	                                bool inside_struct_scope = false);
 	virtual std::string constant_op_expression(const SPIRConstantOp &cop);
+	// A cooperative matrix constant fills every component with one value.
+	virtual std::string constant_cooperative_matrix_expression(const SPIRConstant &c);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0);
@@ -836,6 +838,10 @@ protected:
 			uint32_t id,
 			const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
 			bool register_expression_read = true);
+
+	// Splits "array[index]" into the array and the index expression.
+	static std::pair<std::string, std::string> split_coopmat_pointer(const std::string &expr);
+
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
 	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);

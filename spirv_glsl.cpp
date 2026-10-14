@@ -6592,6 +6592,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 
 		return res;
 	}
+	else if (type.op == OpTypeCooperativeMatrixKHR)
+	{
+		return constant_cooperative_matrix_expression(c);
+	}
 	else
 	{
 		string res = type_to_glsl(type) + "(";
@@ -6618,6 +6622,14 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 
 		return res;
 	}
+}
+
+string CompilerGLSL::constant_cooperative_matrix_expression(const SPIRConstant &c)
+{
+	// GLSL and MSL construct the matrix from the value.
+	string value = c.specialization_constant_id(0) != 0 ? to_name(c.specialization_constant_id(0)) :
+	                                                      constant_expression_vector(c, 0);
+	return join(type_to_glsl(get<SPIRType>(c.constant_type)), "(", value, ")");
 }
 
 #ifdef _MSC_VER
@@ -13022,7 +13034,7 @@ CompilerGLSL::TemporaryCopy CompilerGLSL::handle_instruction_precision(const Ins
 	return {};
 }
 
-static pair<string, string> split_coopmat_pointer(const string &expr)
+pair<string, string> CompilerGLSL::split_coopmat_pointer(const string &expr)
 {
 	auto ptr_expr = expr;
 	string index_expr;

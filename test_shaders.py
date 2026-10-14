@@ -514,8 +514,73 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
             print('Failed compiling HLSL shader:', shader, 'with FXC.')
             raise RuntimeError('Failed compiling HLSL shader')
 
+    validate_shader_dxc(shader, force_no_external_validation)
+
+def shader_model_dxc(shader):
+    # DXC profile from the stage extension and the .smNN. tag; None below shader model 6.
+    sm = shader_to_sm(shader)
+    if int(sm[0]) < 6:
+        return None
+    for ext, stage in (('.vert', 'vs'), ('.frag', 'ps'), ('.comp', 'cs'), ('.geom', 'gs'),
+                       ('.tesc', 'hs'), ('.tese', 'ds'), ('.mesh', 'ms'), ('.task', 'as')):
+        if ext in shader:
+            return '{}_{}_{}'.format(stage, sm[0], sm[1:])
+    return None
+
+ignore_dxc = False
+ignore_dxc_linalg = False
+def validate_shader_dxc(shader, force_no_external_validation):
+    # Shader model 6 output cannot go through FXC; compile it with DXC when one is on the PATH.
+    global ignore_dxc, ignore_dxc_linalg
+    profile = shader_model_dxc(shader)
+    if ignore_dxc or force_no_external_validation or (not profile) or ('.nodxc.' in shader) or shader_is_library(shader):
+        return
+
+    dxc = shutil.which('dxc')
+    if not dxc:
+        print('Could not find DXC.')
+        ignore_dxc = True
+        return
+
+    # DXC release packages ship dx/linalg.h in inc/hlsl next to bin/<arch>.
+    inc = os.path.join(os.path.dirname(dxc), '..', '..', 'inc', 'hlsl')
+
+    source = shader
+    wrapper = None
+    if profile.endswith('_6_10'):
+        # A DXC without dx/linalg.h (e.g. the one in the Vulkan SDK) cannot compile linear algebra output.
+        if ignore_dxc_linalg:
+            return
+        if not os.path.isfile(os.path.join(inc, 'dx', 'linalg.h')):
+            print('DXC has no dx/linalg.h next to it, skipping shader model 6.10 validation.')
+            ignore_dxc_linalg = True
+            return
+        # Linear algebra output names dx::linalg types and leaves including the header to the caller.
+        wrapper = create_temporary(os.path.basename(shader) + '.hlsl')
+        with open(wrapper, 'w') as f:
+            f.write('#include <dx/linalg.h>\n#include "{}"\n'.format(os.path.abspath(shader).replace('\\', '/')))
+        source = wrapper
+
+    args = [dxc, '-nologo', '-T', profile, '-E', 'main']
+    if '.native-16bit.' in shader:
+        args.append('-enable-16bit-types')
+    if os.path.isdir(inc):
+        args += ['-I', inc]
+    args.append(source)
+
+    try:
+        subprocess.check_call(args, stdout = subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        print('Failed compiling HLSL shader:', shader, 'with DXC.')
+        raise RuntimeError('Failed compiling HLSL shader')
+    finally:
+        if wrapper:
+            remove_file(wrapper)
+
 def shader_to_sm(shader):
-    if '.sm62.' in shader:
+    if '.sm610.' in shader:
+        return '610'
+    elif '.sm62.' in shader:
         return '62'
     elif '.sm61.' in shader:
         return '61'
