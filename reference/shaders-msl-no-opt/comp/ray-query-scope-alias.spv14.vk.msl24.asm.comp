@@ -1,0 +1,70 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct _8
+{
+    uint _m0;
+};
+
+static inline __attribute__((always_inline))
+uint _40(uint i, uint j, const raytracing::acceleration_structure<raytracing::instancing> _2, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> (&queries)[2][3])
+{
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> branch_query;
+    if (i == 0u)
+    {
+        branch_query.reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), _2, 255u, spvMakeIntersectionParams(0u));
+    }
+    else
+    {
+        branch_query.reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), _2, 255u, spvMakeIntersectionParams(0u));
+    }
+    bool _50 = branch_query.next();
+    queries[i][j].reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), _2, 255u, spvMakeIntersectionParams(0u));
+    bool _51 = queries[i][j].next();
+    if (_51)
+    {
+        uint _54 = uint(queries[i][j].get_committed_intersection_type());
+        return _54;
+    }
+    return 0u;
+}
+
+kernel void main0(device _8& _4 [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> _2 [[buffer(0)]])
+{
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> queries[2][3];
+    uint _39 = _40(1u, 2u, _2, queries);
+    _4._m0 = _39;
+}
+

@@ -1060,7 +1060,7 @@ protected:
 		void set_current_block(const SPIRBlock &block) override;
 
 		void notify_variable_access(uint32_t id, uint32_t block);
-		bool id_is_phi_variable(uint32_t id) const;
+		bool id_is_phi_or_ray_query(uint32_t id) const;
 		bool id_is_potential_temporary(uint32_t id) const;
 		bool handle(Op op, const uint32_t *args, uint32_t length) override;
 		bool handle_terminator(const SPIRBlock &block) override;

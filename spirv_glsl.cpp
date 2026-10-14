@@ -11037,6 +11037,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool is_packed = has_extended_decoration(base, SPIRVCrossDecorationPhysicalTypePacked);
 	uint32_t physical_type = get_extended_decoration(base, SPIRVCrossDecorationPhysicalTypeID);
+	bool physical_struct = physical_type && get<SPIRType>(physical_type).basetype == SPIRType::Struct;
+	if (physical_struct)
+	{
+		type_id = physical_type;
+		type = &get<SPIRType>(type_id);
+		physical_type = 0;
+	}
 	bool is_invariant = has_decoration(base, DecorationInvariant);
 	bool relaxed_precision = has_decoration(base, DecorationRelaxedPrecision);
 	bool pending_array_enclose = false;
@@ -11580,7 +11587,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		meta->need_transpose = row_major_matrix_needs_conversion;
 		meta->storage_is_packed = is_packed;
 		meta->storage_is_invariant = is_invariant;
-		meta->storage_physical_type = physical_type;
+		meta->storage_physical_type = physical_type ? physical_type : (physical_struct ? type_id : 0);
 		meta->relaxed_precision = relaxed_precision;
 		meta->access_meshlet_position_y = access_meshlet_position_y;
 		meta->chain_is_builtin = chain_is_builtin;
@@ -13093,6 +13100,17 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];
 
 		flush_variable_declaration(ptr);
+		auto &type = get<SPIRType>(result_type);
+		if (((type.basetype == SPIRType::Struct &&
+		      has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID)) ||
+		     has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked)) &&
+		    (type.basetype == SPIRType::Struct || !type.array.empty()))
+		{
+			emit_uninitialized_temporary_expression(result_type, id);
+			emit_copy_logical_type(id, result_type, ptr, get_pointee_type_id(expression_type_id(ptr)), {});
+			register_read(id, ptr, false);
+			break;
+		}
 
 		// If we're loading from memory that cannot be changed by the shader,
 		// just forward the expression directly to avoid needless temporaries.
@@ -13158,7 +13176,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			expr = to_unpacked_expression(ptr);
 		}
 
-		auto &type = get<SPIRType>(result_type);
 		auto &expr_type = expression_type(ptr);
 
 		// If the expression has more vector components than the result type, insert
@@ -13376,6 +13393,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (var && var->remapped_variable && var->static_expression)
 		{
 			// Skip the write.
+		}
+		else if (((expression_type(ops[1]).basetype == SPIRType::Struct &&
+		           has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypeID)) ||
+		          has_extended_decoration(ops[0], SPIRVCrossDecorationPhysicalTypePacked)) &&
+		         (expression_type(ops[1]).basetype == SPIRType::Struct || !expression_type(ops[1]).array.empty()))
+		{
+			flush_variable_declaration(ops[0]);
+			flush_variable_declaration(ops[1]);
+			emit_copy_logical_type(ops[0], get_pointee_type_id(expression_type_id(ops[0])), ops[1],
+			                       expression_type_id(ops[1]), {});
 		}
 		else if (flattened_structs.count(ops[0]))
 		{
@@ -13975,19 +14002,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// RHS expression is immutable, so just forward it.
 			// Copying these things really make no sense, but
 			// seems to be allowed anyways.
+			auto *rhs_expr = maybe_get<SPIRExpression>(rhs);
+			bool need_transpose = pointer && rhs_expr && rhs_expr->need_transpose;
+			if (need_transpose)
+				rhs_expr->need_transpose = false;
 			auto &e = emit_op(result_type, id, to_expression(rhs), true, true);
+			if (need_transpose)
+				rhs_expr->need_transpose = true;
 			if (pointer)
 			{
 				auto *var = maybe_get_backing_variable(rhs);
 				e.loaded_from = var ? var->self : ID(0);
+				if (uint32_t physical_type = get_extended_decoration(rhs, SPIRVCrossDecorationPhysicalTypeID))
+					set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID, physical_type);
+				if (has_extended_decoration(rhs, SPIRVCrossDecorationPhysicalTypePacked))
+					set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
 			}
 
 			// If we're copying an access chain, need to inherit the read expressions.
-			auto *rhs_expr = maybe_get<SPIRExpression>(rhs);
 			if (rhs_expr)
 			{
 				e.implied_read_expressions = rhs_expr->implied_read_expressions;
 				e.expression_dependencies = rhs_expr->expression_dependencies;
+				if (pointer)
+				{
+					e.need_transpose = rhs_expr->need_transpose;
+					e.access_chain = rhs_expr->access_chain;
+				}
 			}
 		}
 		break;
@@ -16202,6 +16243,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			GLSL_BFOP(reportIntersectionNV);
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
+	case OpIgnoreIntersectionKHR:
+		statement("ignoreIntersectionEXT;");
+		break;
+	case OpTerminateRayKHR:
+		statement("terminateRayEXT;");
+		break;
 	case OpIgnoreIntersectionNV:
 		// KHR variant is a terminator.
 		statement("ignoreIntersectionNV();");
@@ -16249,7 +16296,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ");");
 		break;
 	case OpRayQueryProceedKHR:
-		flush_variable_declaration(ops[0]);
+		flush_variable_declaration(ops[2]);
 		emit_op(ops[0], ops[1], join("rayQueryProceedEXT(", to_expression(ops[2]), ")"), false);
 		break;
 	case OpRayQueryTerminateKHR:
@@ -16376,14 +16423,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpConvertUToAccelerationStructureKHR:
 	{
-		require_extension_internal("GL_EXT_ray_tracing");
-
 		bool elide_temporary = should_forward(ops[2]) && forced_temporaries.count(ops[1]) == 0 &&
 		                       !hoisted_temporaries.count(ops[1]);
 
 		if (elide_temporary)
 		{
-			GLSL_UFOP(accelerationStructureEXT);
+			emit_op(ops[0], ops[1],
+			        to_acceleration_structure_expression(ops[2], to_unpacked_expression(ops[2])), true);
+			inherit_expression_dependencies(ops[1], ops[2]);
 		}
 		else
 		{
@@ -16395,7 +16442,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// and cast to RTAS on demand.
 			statement(declare_temporary(expression_type_id(ops[2]), ops[1]), to_unpacked_expression(ops[2]), ";");
 			// Use raw SPIRExpression interface to block all usage tracking.
-			set<SPIRExpression>(ops[1], join("accelerationStructureEXT(", to_name(ops[1]), ")"), ops[0], true);
+			set<SPIRExpression>(ops[1], to_acceleration_structure_expression(ops[2], to_name(ops[1])), ops[0], true);
 		}
 		break;
 	}
@@ -19663,12 +19710,13 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 	}
 
 	case SPIRBlock::IgnoreIntersection:
-		statement("ignoreIntersectionEXT;");
-		break;
-
 	case SPIRBlock::TerminateRay:
-		statement("terminateRayEXT;");
+	{
+		Instruction instruction;
+		instruction.op = block.terminator == SPIRBlock::IgnoreIntersection ? OpIgnoreIntersectionKHR : OpTerminateRayKHR;
+		emit_instruction(instruction);
 		break;
+	}
 
 	case SPIRBlock::EmitMeshTasks:
 		emit_mesh_tasks(block);
@@ -20442,6 +20490,7 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		auto rhs = access_chain_internal(rhs_id, chain.data(), uint32_t(chain.size()),
 		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta, nullptr);
 
+		uint32_t lhs_source = lhs_id, rhs_source = rhs_id;
 		uint32_t id = ir.increase_bound_by(2);
 		lhs_id = id;
 		rhs_id = id + 1;
@@ -20449,6 +20498,7 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		{
 			auto &lhs_expr = set<SPIRExpression>(lhs_id, std::move(lhs), lhs_type_id, true);
 			lhs_expr.need_transpose = lhs_meta.need_transpose;
+			lhs_expr.loaded_from = lhs_source;
 
 			if (lhs_meta.storage_is_packed)
 				set_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked);
@@ -20462,6 +20512,7 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		{
 			auto &rhs_expr = set<SPIRExpression>(rhs_id, std::move(rhs), rhs_type_id, true);
 			rhs_expr.need_transpose = rhs_meta.need_transpose;
+			rhs_expr.loaded_from = rhs_source;
 
 			if (rhs_meta.storage_is_packed)
 				set_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypePacked);
@@ -21300,4 +21351,10 @@ string CompilerGLSL::construct_function_attributes(const SPIRFunction &func, boo
 		function_attributes += "]]\n";
 
 	return function_attributes;
+}
+
+string CompilerGLSL::to_acceleration_structure_expression(uint32_t, string expression)
+{
+	require_extension_internal("GL_EXT_ray_tracing");
+	return join("accelerationStructureEXT(", expression, ")");
 }

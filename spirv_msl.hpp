@@ -24,6 +24,8 @@
 #ifndef SPIRV_CROSS_MSL_HPP
 #define SPIRV_CROSS_MSL_HPP
 
+#define SPIRV_CROSS_MSL_ACCELERATION_STRUCTURE_DESCRIPTOR_AS_ADDRESS 1
+#define SPIRV_CROSS_MSL_RAY_TRACING_PIPELINE 1 /* Embedder-supplied runtime ABI version. */
 #include "spirv_glsl.hpp"
 #include <map>
 #include <set>
@@ -321,6 +323,7 @@ public:
         uint32_t draw_id_buffer_index = 19;
 		uint32_t reversed_depth_viewport_buffer_index = 18;
 		uint32_t depth_clip_state_buffer_index = 17;
+		uint32_t acceleration_structure_address_table_buffer_index = 16;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -348,6 +351,10 @@ public:
 		// Enable use of Metal argument buffers.
 		// MSL 2.0 must also be enabled.
 		bool argument_buffers = false;
+		bool acceleration_structure_descriptor_as_address = false;
+		bool ray_tracing_pipeline = false;
+		uint32_t ray_tracing_max_hit_attribute_size = 0;
+		bool ray_tracing_any_hit_ifb = false, ray_tracing_intersection_ifb = false;
 
 		// Defines Metal argument buffer tier levels.
 		// Uses same values as Metal MTLArgumentBuffersTier enumeration.
@@ -616,6 +623,7 @@ public:
 	{
 		return !buffers_requiring_array_length.empty();
 	}
+	bool needs_acceleration_structure_address_table() const { return uses_acceleration_structure_address; }
 
 	// Provide feedback to calling API to determine if the vertex shader writes
 	// to PointSize. This allows the API to avoid declaring a point size output
@@ -951,6 +959,7 @@ protected:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_ray_return(uint32_t action = 0);
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
 	void emit_mesh_tasks(SPIRBlock &block) override;
@@ -969,11 +978,13 @@ protected:
 	std::string sampler_type(const SPIRType &type, uint32_t id, bool member);
 	std::string builtin_to_glsl(BuiltIn builtin, StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
 	std::string to_function_name(const TextureFunctionNameArguments &args) override;
 	std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
 	std::string to_zero_initialized_expression(uint32_t type_id) override;
+	std::string to_acceleration_structure_expression(uint32_t source_id, std::string expression) override;
 
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                   bool is_packed, bool row_major) override;
@@ -1009,6 +1020,11 @@ protected:
 	bool is_mesh_shader() const;
 
 	void preprocess_op_codes();
+	std::string ray_query_metadata_name(uint32_t id);
+	std::string ray_query_metadata_expression(uint32_t id);
+	bool ray_query_needs_metadata() const;
+	bool is_ray_tracing_ifb_stage() const;
+	uint32_t clone_ray_data_type(uint32_t type_id, bool force = false);
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
 	void mark_packable_structs();
@@ -1104,6 +1120,7 @@ protected:
 	std::string to_buffer_size_expression(uint32_t id);
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
+	bool is_ray_tracing_stage() const;
 	bool is_direct_input_builtin(BuiltIn builtin);
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
@@ -1217,6 +1234,7 @@ protected:
 	uint32_t builtin_frag_depth_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
+	uint32_t acceleration_structure_address_table_id = 0;
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t draw_index_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
@@ -1304,6 +1322,9 @@ protected:
 	TriState needs_base_instance_arg = TriState::Neutral;
 
 	bool has_sampled_images = false;
+	bool uses_acceleration_structure_address = false, uses_ray_query_sbt = false, uses_ray_query_flags = false;
+	std::string incoming_ray_payload_type;
+	std::unordered_map<uint32_t, uint32_t> ray_data_physical_types;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 
 	bool is_using_builtin_array = false; // Force the use of C style array declaration.

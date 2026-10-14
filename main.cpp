@@ -646,6 +646,9 @@ struct CLIArguments
 	bool msl_pad_fragment_output = false;
 	bool msl_domain_lower_left = false;
 	bool msl_argument_buffers = false;
+	bool msl_ray_tracing_pipeline = false;
+	bool msl_acceleration_structure_descriptor_as_address = false;
+	uint32_t msl_ray_tracing_max_hit_attribute_size = 0;
 	uint32_t msl_argument_buffers_tier = 0;		// Tier 1
 	bool msl_texture_buffer_native = false;
 	bool msl_framebuffer_fetch = false;
@@ -878,6 +881,9 @@ static void print_help_msl()
 	                "\t[--msl-pad-fragment-output]:\n\t\tAlways emit color outputs as 4-component variables.\n"
 	                "\t\tIn Metal, the fragment shader must emit at least as many components as the render target format.\n"
 	                "\t[--msl-domain-lower-left]:\n\t\tUse a lower-left tessellation domain.\n"
+	                "\t[--msl-ray-tracing-pipeline]:\n\t\tEmit ray-tracing functions using the external runtime ABI. Requires MSL 3.0.\n"
+	                "\t[--msl-acceleration-structure-descriptor-as-address]:\n\t\tRepresent acceleration-structure descriptors as runtime addresses.\n"
+	                "\t[--msl-ray-tracing-max-hit-attribute-size <bytes>]:\n\t\tSet the hit-attribute size supplied by the runtime ABI.\n"
 	                "\t[--msl-argument-buffers]:\n\t\tEmit Metal argument buffers instead of discrete resource bindings.\n"
 	                "\t\tRequires MSL 2.0 to be enabled.\n"
 	                "\t[--msl-argument-buffer-tier]:\n\t\tWhen using Metal argument buffers, indicate the Metal argument buffer tier level supported by the Metal platform.\n"
@@ -1274,6 +1280,9 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
 		msl_opts.argument_buffers = args.msl_argument_buffers;
+		msl_opts.ray_tracing_pipeline = args.msl_ray_tracing_pipeline;
+		msl_opts.acceleration_structure_descriptor_as_address = args.msl_acceleration_structure_descriptor_as_address;
+		msl_opts.ray_tracing_max_hit_attribute_size = args.msl_ray_tracing_max_hit_attribute_size;
 		msl_opts.argument_buffers_tier = static_cast<CompilerMSL::Options::ArgumentBuffersTier>(args.msl_argument_buffers_tier);
 		msl_opts.texture_buffer_native = args.msl_texture_buffer_native;
 		msl_opts.multiview = args.msl_multiview;
@@ -1759,6 +1768,10 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
 	cbs.add("--msl-domain-lower-left", [&args](CLIParser &) { args.msl_domain_lower_left = true; });
+	cbs.add("--msl-ray-tracing-pipeline", [&args](CLIParser &) { args.msl_ray_tracing_pipeline = true; });
+	cbs.add("--msl-acceleration-structure-descriptor-as-address", [&args](CLIParser &) { args.msl_acceleration_structure_descriptor_as_address = true; });
+	cbs.add("--msl-ray-tracing-max-hit-attribute-size",
+	        [&args](CLIParser &parser) { args.msl_ray_tracing_max_hit_attribute_size = parser.next_uint(); });
 	cbs.add("--msl-argument-buffers", [&args](CLIParser &) { args.msl_argument_buffers = true; });
 	cbs.add("--msl-argument-buffer-tier",
 	        [&args](CLIParser &parser) { args.msl_argument_buffers_tier = parser.next_uint(); });

@@ -183,8 +183,9 @@ def path_to_msl_standard_cli(shader):
         return '10200'
 
 ignore_win_metal_tool = False
-def validate_shader_msl(shader, opt):
-    msl_path = reference_path(shader[0], shader[1], opt)
+def validate_shader_msl(shader, opt, msl_path=None):
+    if msl_path is None:
+        msl_path = reference_path(shader[0], shader[1], opt)
 
     # The 4.0 compiler for Windows is outdated and broken, so we cannot rely on version checks either.
     cli_standard = path_to_msl_standard_cli(msl_path)
@@ -268,6 +269,10 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-capture-output')
     if '.domain.' in shader:
         msl_args.append('--msl-domain-lower-left')
+    if '.ray-tracing.' in shader:
+        msl_args.extend(['--msl-ray-tracing-pipeline', '--msl-ray-tracing-max-hit-attribute-size', '32'])
+    if '.rt-address.' in shader:
+        msl_args.append('--msl-acceleration-structure-descriptor-as-address')
     if '.argument.' in shader:
         msl_args.append('--msl-argument-buffers')
     if '.argument-tier-1.' in shader:
@@ -995,7 +1000,21 @@ def test_shader_msl(stats, shader, args, paths):
 
     skip_validation = '.invalid.' in joined_path
     if (not args.force_no_external_validation) and (not skip_validation):
-        validate_shader_msl(shader, args.opt)
+        if '.ray-tracing.' in shader[1]:
+            if not args.msl_runtime:
+                raise RuntimeError('Native RT validation requires --msl-runtime with the consumer runtime header.')
+            reflection = json.loads(subprocess.check_output([paths.spirv_cross, spirv, '--reflect', '--entry', 'main']))
+            mode = next(entry['mode'] for entry in reflection['entryPoints'] if entry['name'] == 'main')
+            kind = {'rgen': 0, 'rmiss': 1, 'rchit': 1, 'rahit': 1, 'rint': 1, 'rcall': 2}[mode]
+            wrapped = create_temporary(os.path.basename(shader[1]))
+            try:
+                with open(wrapped, 'w') as output, open(args.msl_runtime) as runtime, open(reference_path(shader[0], shader[1], args.opt)) as source:
+                    output.write('#define SPV_RAY_CONTEXT_KIND ' + str(kind) + '\n' + runtime.read() + '\n' + source.read())
+                validate_shader_msl(shader, args.opt, wrapped)
+            finally:
+                remove_file(wrapped)
+        else:
+            validate_shader_msl(shader, args.opt)
 
     remove_file(spirv)
 
@@ -1097,6 +1116,8 @@ def main():
     parser.add_argument('--msl',
             action = 'store_true',
             help = 'Test Metal backend.')
+    parser.add_argument('--msl-runtime',
+            help = 'Consumer runtime header for native validation of external-runtime RT fixtures.')
     parser.add_argument('--metal',
             action = 'store_true',
             help = 'Deprecated Metal option. Use --msl instead.')

@@ -1,0 +1,126 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+typedef packed_float3 packed_rm_float3x2[2];
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+template <typename T, int stride>
+struct spvPaddedArrayElement { T data; char padding[stride - sizeof(T)]; };
+
+struct _4
+{
+    float3 _m0;
+};
+
+struct _6
+{
+    float _m0;
+};
+
+struct _5
+{
+    _4 _m0;
+    float _m1;
+    float2x3 _m2;
+    spvPaddedArrayElement<_6, 16> _m3[2];
+};
+
+struct _8
+{
+    _5 _m0;
+};
+
+struct spvRayData_4
+{
+    packed_float3 _m0;
+};
+
+struct spvRayData_6
+{
+    float _m0;
+};
+
+struct spvRayData_5
+{
+    spvRayData_4 _m0;
+    float _m1;
+    packed_rm_float3x2 _m2;
+    spvUnsafeArray<spvRayData_6, 2> _m3;
+};
+
+struct spvDescriptorSetBuffer0
+{
+    const device _8* m_3 [[id(0)]];
+};
+
+static inline __attribute__((always_inline))
+void _24(thread spvRayData_5& _2, const device _8& _3, SPV_RAY_CONTEXT_ARGS(void))
+{
+    _2._m0._m0 = _3._m0._m0._m0;
+    _2._m1 = _3._m0._m1;
+    _2._m2[0] = _3._m0._m2[0];
+    _2._m2[1] = _3._m0._m2[1];
+    _2._m3[0]._m0 = _3._m0._m3[0].data._m0;
+    _2._m3[1]._m0 = _3._m0._m3[1].data._m0;
+    _2._m3[0u]._m0 = _3._m0._m1;
+}
+
+[[visible]] void main0(uint3 spvLaunchId, uint3 spvLaunchSize, SPV_RAY_CONTEXT_ARGS(void))
+{
+    const device spvDescriptorSetBuffer0& spvDescriptorSet0 = *reinterpret_cast<const device spvDescriptorSetBuffer0*>(spvRayState.dispatch->descriptorSetAddresses[0]);
+    spvRayData_5 _2;
+    _24(_2, (*spvDescriptorSet0.m_3), SPV_RAY_CONTEXT_NAMES);
+    _2._m0._m0 = (*spvDescriptorSet0.m_3)._m0._m0._m0;
+    _2._m1 = (*spvDescriptorSet0.m_3)._m0._m1;
+    _2._m2[0] = (*spvDescriptorSet0.m_3)._m0._m2[0];
+    _2._m2[1] = (*spvDescriptorSet0.m_3)._m0._m2[1];
+    _2._m3[0]._m0 = (*spvDescriptorSet0.m_3)._m0._m3[0].data._m0;
+    _2._m3[1]._m0 = (*spvDescriptorSet0.m_3)._m0._m3[1].data._m0;
+}
+

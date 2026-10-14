@@ -1,0 +1,26 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct HitData
+{
+    packed_float3 a;
+    packed_float3 b;
+    float c;
+};
+
+[[visible]] void main0(SPV_RAY_CONTEXT_ARGS(void))
+{
+    spvHitAttribute<HitData>(spvRay.context).a = float3(1.0, 2.0, 3.0);
+    spvHitAttribute<HitData>(spvRay.context).b = float3(4.0, 5.0, 6.0);
+    spvHitAttribute<HitData>(spvRay.context).c = 7.0;
+    bool _32 = spvReportIntersection(1.0, 1u, spvRay, spvRayState);
+    if (spvRay.action == 2)
+    return;
+}
+

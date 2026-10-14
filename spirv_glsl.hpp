@@ -876,6 +876,7 @@ protected:
 	virtual void emit_block_hints(const SPIRBlock &block);
 	virtual std::string to_initializer_expression(const SPIRVariable &var);
 	virtual std::string to_zero_initialized_expression(uint32_t type_id);
+	virtual std::string to_acceleration_structure_expression(uint32_t source_id, std::string expression);
 	bool type_can_zero_initialize(const SPIRType &type) const;
 
 	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing,

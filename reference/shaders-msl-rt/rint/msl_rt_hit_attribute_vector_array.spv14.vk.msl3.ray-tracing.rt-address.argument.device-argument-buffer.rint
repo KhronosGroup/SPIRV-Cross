@@ -1,0 +1,80 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+struct HitData
+{
+    packed_float3 samples[2];
+};
+
+struct Inputs
+{
+    float scale;
+};
+
+struct spvDescriptorSetBuffer0
+{
+    const device Inputs* inputs [[id(0)]];
+};
+
+[[visible]] void main0(SPV_RAY_CONTEXT_ARGS(void))
+{
+    const device spvDescriptorSetBuffer0& spvDescriptorSet0 = *reinterpret_cast<const device spvDescriptorSetBuffer0*>(spvRayState.dispatch->descriptorSetAddresses[0]);
+    spvHitAttribute<HitData>(spvRay.context).samples[1] = float3(1.0, 2.0, 3.0) * (*spvDescriptorSet0.inputs).scale;
+    spvUnsafeArray<float3, 2> _34;
+    _34[0] = float3(spvHitAttribute<HitData>(spvRay.context).samples[0]);
+    _34[1] = float3(spvHitAttribute<HitData>(spvRay.context).samples[1]);
+    spvUnsafeArray<float3, 2> samples = _34;
+    spvHitAttribute<HitData>(spvRay.context).samples[0] = samples[0];
+    spvHitAttribute<HitData>(spvRay.context).samples[1] = samples[1];
+    bool _39 = spvReportIntersection(1.0, 1u, spvRay, spvRayState);
+    if (spvRay.action == 2)
+    return;
+}
+

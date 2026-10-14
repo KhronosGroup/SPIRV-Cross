@@ -41,6 +41,7 @@ option(SPIRV_CROSS_SHARED "Build the C API as a single shared library." OFF)
 option(SPIRV_CROSS_STATIC "Build the C and C++ API as static libraries." ON)
 option(SPIRV_CROSS_CLI "Build the CLI binary. Requires SPIRV_CROSS_STATIC." ON)
 option(SPIRV_CROSS_ENABLE_TESTS "Enable SPIRV-Cross tests." ON)
+set(SPIRV_CROSS_MSL_RUNTIME "" CACHE FILEPATH "Consumer runtime header for native MSL ray-tracing tests.")
 
 option(SPIRV_CROSS_ENABLE_GLSL "Enable GLSL support." ON)
 option(SPIRV_CROSS_ENABLE_HLSL "Enable HLSL target support." ON)
@@ -600,6 +601,20 @@ if (SPIRV_CROSS_CLI)
 						${spirv-cross-externals}
 						${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl
 						WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
+				add_test(NAME spirv-cross-test-metal-ray-tracing
+						COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --msl
+						--force-no-external-validation
+						${spirv-cross-externals}
+						${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl-rt
+						WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
+				if(SPIRV_CROSS_MSL_RUNTIME)
+					add_test(NAME spirv-cross-test-metal-ray-tracing-native
+							COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --msl
+							--msl-runtime ${SPIRV_CROSS_MSL_RUNTIME}
+							${spirv-cross-externals}
+							${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl-rt
+							WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
+				endif()
 				add_test(NAME spirv-cross-test-metal-no-opt
 						COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --parallel
 						${spirv-cross-externals}

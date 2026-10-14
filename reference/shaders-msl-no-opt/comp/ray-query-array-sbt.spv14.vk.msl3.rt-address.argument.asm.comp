@@ -1,0 +1,85 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct spvRayQueryMetadata { device const ulong* accelerationStructure; uint flags; };
+
+intersection_params spvMakeIntersectionParams(uint flags)
+{
+    intersection_params ip;
+    if ((flags & 1) != 0)
+        ip.force_opacity(forced_opacity::opaque);
+    if ((flags & 2) != 0)
+        ip.force_opacity(forced_opacity::non_opaque);
+    if ((flags & 4) != 0)
+        ip.accept_any_intersection(true);
+    if ((flags & 16) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::back);
+    if ((flags & 32) != 0)
+        ip.set_triangle_cull_mode(triangle_cull_mode::front);
+    if ((flags & 64) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::opaque);
+    if ((flags & 128) != 0)
+        ip.set_opacity_cull_mode(opacity_cull_mode::non_opaque);
+    if ((flags & 256) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::triangle);
+    if ((flags & 512) != 0)
+        ip.set_geometry_cull_mode(geometry_cull_mode::bounding_box);
+    return ip;
+}
+
+struct _8
+{
+    uint _m0;
+};
+
+struct spvDescriptorSetBuffer0
+{
+    device const ulong* m_2 [[id(0)]];
+};
+
+struct spvDescriptorSetBuffer1
+{
+    device _8* m_4 [[id(0)]];
+};
+
+static inline __attribute__((always_inline))
+uint _40(uint i, uint j, device const ulong* _2, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> (&queries)[2][3], thread spvRayQueryMetadata (&_3_rayQueryMetadata)[2][3])
+{
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> branch_query; spvRayQueryMetadata _5_rayQueryMetadata;
+    if (i == 0u)
+    {
+        _5_rayQueryMetadata.accelerationStructure = _2;
+        branch_query.reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), *(device const raytracing::acceleration_structure<raytracing::instancing>*)_2, 255u, spvMakeIntersectionParams(0u));
+    }
+    else
+    {
+        _5_rayQueryMetadata.accelerationStructure = _2;
+        branch_query.reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), *(device const raytracing::acceleration_structure<raytracing::instancing>*)_2, 255u, spvMakeIntersectionParams(0u));
+    }
+    bool _50 = branch_query.next();
+    _3_rayQueryMetadata[i][j].accelerationStructure = _2;
+    queries[i][j].reset(raytracing::ray(float3(0.0), float3(0.0, 0.0, -1.0), 0.0, 100.0), *(device const raytracing::acceleration_structure<raytracing::instancing>*)_2, 255u, spvMakeIntersectionParams(0u));
+    bool _51 = queries[i][j].next();
+    if (_51)
+    {
+        uint _54 = ((device const uint*)_3_rayQueryMetadata[i][j].accelerationStructure[1])[queries[i][j].get_candidate_instance_id()] & 0x00ffffffu;
+        return _54;
+    }
+    return 0u;
+}
+
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]])
+{
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> queries[2][3]; spvRayQueryMetadata _3_rayQueryMetadata[2][3];
+    uint _39 = _40(1u, 2u, spvDescriptorSet0.m_2, queries, _3_rayQueryMetadata);
+    (*spvDescriptorSet1.m_4)._m0 = _39;
+}
+

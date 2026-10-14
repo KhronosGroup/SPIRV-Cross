@@ -1,0 +1,33 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+static inline __attribute__((always_inline))
+void in_func(SPV_RAY_CONTEXT_ARGS(float))
+{
+    if (spvRayData<float>(SPV_RAY_INCOMING_DATA) > 0.0)
+    {
+        spvRay.action = 1;
+        return;
+    }
+    else
+    {
+        spvRay.action = 2;
+        return;
+    }
+}
+
+[[visible]] void main0(SPV_RAY_CONTEXT_ARGS(float))
+{
+    in_func(SPV_RAY_CONTEXT_NAMES);
+    if (spvRay.action != 0)
+    return;
+}
+

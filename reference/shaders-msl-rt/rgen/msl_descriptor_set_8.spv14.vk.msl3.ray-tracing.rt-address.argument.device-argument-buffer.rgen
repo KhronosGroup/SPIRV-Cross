@@ -1,0 +1,25 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+#if __METAL_VERSION__ >= 230
+#include <metal_raytracing>
+using namespace metal::raytracing;
+#endif
+
+using namespace metal;
+
+struct Data
+{
+    uint value;
+};
+
+struct spvDescriptorSetBuffer8
+{
+    device Data* dataBuffer [[id(0)]];
+};
+
+[[visible]] void main0(uint3 spvLaunchId, uint3 spvLaunchSize, SPV_RAY_CONTEXT_ARGS(void))
+{
+    constant spvDescriptorSetBuffer8& spvDescriptorSet8 = *reinterpret_cast<constant spvDescriptorSetBuffer8*>(spvRayState.dispatch->descriptorSetAddresses[8]);
+    (*spvDescriptorSet8.dataBuffer).value = spvLaunchId.x;
+}
+
