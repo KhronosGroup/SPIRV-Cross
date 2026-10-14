@@ -446,6 +446,10 @@ def shader_model_hlsl(shader):
         return '-Tcs_5_1'
     elif '.geom' in shader:
         return '-Tgs_5_1'
+    elif '.tesc' in shader:
+        return '-Ths_5_1'
+    elif '.tese' in shader:
+        return '-Tds_5_1'
     elif '.mesh' in shader:
         return '-Tms_6_5'
     elif '.task' in shader:
@@ -602,6 +606,14 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--flip-vert-y')
     if '.user-semantic.' in shader:
         hlsl_args.append('--hlsl-user-semantic')
+    if '.domain.' in shader:
+        hlsl_args.append('--hlsl-domain-lower-left')
+    input_control_points = re.search(r'\.icp(\d+)\.', shader)
+    if input_control_points:
+        hlsl_args += ['--hlsl-tess-input-control-points', input_control_points.group(1)]
+    output_vertices = re.search(r'\.ov(\d+)\.', shader)
+    if output_vertices:
+        hlsl_args += ['--set-output-vertices', output_vertices.group(1)]
 
     subprocess.check_call(hlsl_args)
 

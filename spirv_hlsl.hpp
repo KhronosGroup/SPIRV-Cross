@@ -154,6 +154,17 @@ public:
 
 		// Use UserSemantic decoration info (if specified), otherwise use default mechanism (such as add_vertex_attribute_remap or TEXCOORD#).
 		bool user_semantic = false;
+
+		// Tessellation: the tessellator's domain origin is the lower left corner (OpenGL) rather than the
+		// upper left (Vulkan, D3D). The D3D tessellator produces the same domain coordinates and applies the
+		// tessellation factors to the same edges either way; only the winding of the generated triangles
+		// differs. This is the hull shader's business, so domain shaders do not change.
+		bool tess_domain_origin_lower_left = false;
+
+		// Tessellation control shaders: control points per input patch (InputPatch<T, N>), i.e. the patch
+		// topology of the draw. SPIR-V does not carry it. 0 means the same as the output control points
+		// (OutputVertices).
+		uint32_t tess_input_control_points = 0;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)
@@ -236,6 +247,19 @@ private:
 	std::string image_type_hlsl_modern(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
+	uint32_t tessellation_patch_vertices() const;
+	uint32_t tessellation_input_control_points() const;
+	bool is_tess_patch_variable(const SPIRVariable &var) const;
+	void emit_tess_factors_in_struct();
+	struct TessControlPointIO
+	{
+		std::string global;
+		std::string suffix;
+		std::string member;
+	};
+	SmallVector<TessControlPointIO> tesc_control_point_io(spv::StorageClass storage);
+	void emit_hlsl_tesc_entry_point();
+	std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin) override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;
