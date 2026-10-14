@@ -1,0 +1,10 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 4) in;
+
+void main()
+{
+	uint count = gl_LocalInvocationIndex == 0u ? 2u : 0u;
+	EmitMeshTasksEXT(count, 1, 1);
+}
