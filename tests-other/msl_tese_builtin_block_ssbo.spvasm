@@ -1,0 +1,50 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationEvaluation %main "main" %output %input
+OpExecutionMode %main Triangles
+OpExecutionMode %main SpacingEqual
+OpExecutionMode %main VertexOrderCcw
+OpName %Storage "Storage"
+OpMemberName %Storage 0 "value"
+OpName %ssbo "ssbo"
+OpDecorate %Storage Block
+OpMemberDecorate %Storage 0 Offset 0
+OpDecorate %ssbo DescriptorSet 0
+OpDecorate %ssbo Binding 0
+OpDecorate %output BuiltIn Position
+OpDecorate %Input Block
+OpMemberDecorate %Input 0 BuiltIn TessCoord
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v3float = OpTypeVector %float 3
+%v4float = OpTypeVector %float 4
+%int = OpTypeInt 32 1
+%int_0 = OpConstant %int 0
+%float_1 = OpConstant %float 1
+%ptr_Output = OpTypePointer Output %v4float
+%ptr_Output_v4float = OpTypePointer Output %v4float
+%output = OpVariable %ptr_Output Output
+%Input = OpTypeStruct %v3float
+%ptr_Input = OpTypePointer Input %Input
+%ptr_Input_v3float = OpTypePointer Input %v3float
+%input = OpVariable %ptr_Input Input
+%Storage = OpTypeStruct %float
+%ptr_Storage = OpTypePointer StorageBuffer %Storage
+%ptr_Storage_float = OpTypePointer StorageBuffer %float
+%ssbo = OpVariable %ptr_Storage StorageBuffer
+%main = OpFunction %void None %function
+%entry = OpLabel
+%coord_ptr = OpAccessChain %ptr_Input_v3float %input %int_0
+%coord = OpLoad %v3float %coord_ptr
+%x = OpCompositeExtract %float %coord 0
+%y = OpCompositeExtract %float %coord 1
+%z = OpCompositeExtract %float %coord 2
+%position = OpCompositeConstruct %v4float %x %y %z %float_1
+OpStore %output %position
+%value_ptr = OpAccessChain %ptr_Storage_float %ssbo %int_0
+OpStore %value_ptr %float_1
+OpReturn
+OpFunctionEnd

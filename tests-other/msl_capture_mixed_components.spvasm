@@ -1,0 +1,56 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Block and standalone arrays share a Location with disjoint Components.
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %main "main" %lower %upper %position
+OpName %lower "lower"
+OpMemberName %Block 0 "values"
+OpName %upper "upper"
+OpMemberDecorate %Block 0 Location 0
+OpMemberDecorate %Block 0 Component 0
+OpDecorate %Block Block
+OpDecorate %upper Location 0
+OpDecorate %upper Component 2
+OpDecorate %position BuiltIn Position
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%zero = OpConstant %uint 0
+%two = OpConstant %uint 2
+%one = OpConstant %float 1
+%v2 = OpTypeVector %float 2
+%v4 = OpTypeVector %float 4
+%value = OpConstantComposite %v2 %one %one
+%pos = OpConstantComposite %v4 %one %one %one %one
+%array = OpTypeArray %v2 %two
+%values = OpConstantComposite %array %value %value
+%Block = OpTypeStruct %array
+%ptrBlock = OpTypePointer Output %Block
+%ptrArray = OpTypePointer Output %array
+%ptrV4 = OpTypePointer Output %v4
+%lower = OpVariable %ptrBlock Output
+%upper = OpVariable %ptrArray Output
+%position = OpVariable %ptrV4 Output
+%main = OpFunction %void None %fn
+%entry = OpLabel
+%member = OpAccessChain %ptrArray %lower %zero
+OpStore %member %values
+OpStore %upper %values
+OpStore %position %pos
+OpReturn
+OpFunctionEnd

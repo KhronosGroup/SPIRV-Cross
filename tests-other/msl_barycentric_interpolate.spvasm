@@ -1,0 +1,84 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Explicit interpolation of both builtins, whole vectors and scalar access chains,
+; including a runtime component index, helper calls and ordinary default loads.
+OpCapability Shader
+OpCapability SampleRateShading
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %persp %linear %sample %color
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %persp BuiltIn BaryCoordKHR
+OpDecorate %linear BuiltIn BaryCoordNoPerspKHR
+OpDecorate %sample Flat
+OpDecorate %sample Location 3
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%vec2 = OpTypeVector %float 2
+%vec3 = OpTypeVector %float 3
+%in3 = OpTypePointer Input %vec3
+%in1 = OpTypePointer Input %float
+%inu = OpTypePointer Input %uint
+%out3 = OpTypePointer Output %vec3
+%void_fn = OpTypeFunction %void
+%vec_fn = OpTypeFunction %vec3
+%zero = OpConstant %float 0
+%offset = OpConstantComposite %vec2 %zero %zero
+%one = OpConstant %uint 1
+%three = OpConstant %uint 3
+%persp = OpVariable %in3 Input
+%linear = OpVariable %in3 Input
+%sample = OpVariable %inu Input
+%color = OpVariable %out3 Output
+%helper = OpFunction %vec3 None %vec_fn
+%h = OpLabel
+%s = OpLoad %uint %sample
+%component = OpUMod %uint %s %three
+%pc = OpAccessChain %in1 %persp %one
+%nc = OpAccessChain %in1 %linear %component
+%p0 = OpExtInst %vec3 %glsl InterpolateAtCentroid %persp
+%p1 = OpExtInst %vec3 %glsl InterpolateAtSample %persp %s
+%p2 = OpExtInst %vec3 %glsl InterpolateAtOffset %persp %offset
+%n0 = OpExtInst %vec3 %glsl InterpolateAtCentroid %linear
+%n1 = OpExtInst %vec3 %glsl InterpolateAtSample %linear %s
+%n2 = OpExtInst %vec3 %glsl InterpolateAtOffset %linear %offset
+%px = OpExtInst %float %glsl InterpolateAtCentroid %pc
+%nx = OpExtInst %float %glsl InterpolateAtOffset %nc %offset
+%cs = OpFAdd %float %px %nx
+%cv = OpCompositeConstruct %vec3 %cs %cs %cs
+%a = OpFAdd %vec3 %p0 %p1
+%b = OpFAdd %vec3 %a %p2
+%c = OpFAdd %vec3 %b %n0
+%d = OpFAdd %vec3 %c %n1
+%e = OpFAdd %vec3 %d %n2
+%result = OpFAdd %vec3 %e %cv
+OpReturnValue %result
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%m = OpLabel
+%interpolated = OpFunctionCall %vec3 %helper
+%p = OpLoad %vec3 %persp
+%n = OpLoad %vec3 %linear
+%sum = OpFAdd %vec3 %p %n
+%final = OpFAdd %vec3 %sum %interpolated
+OpStore %color %final
+OpReturn
+OpFunctionEnd

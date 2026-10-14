@@ -1,0 +1,64 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Empty input-block access chains are pointer aliases before member selection.
+OpCapability Shader
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %load "load" %weights %color
+OpEntryPoint Fragment %explicit "at_centroid" %weights %color
+OpExecutionMode %load OriginUpperLeft
+OpExecutionMode %explicit OriginUpperLeft
+OpDecorate %block Block
+OpMemberDecorate %block 0 BuiltIn BaryCoordKHR
+OpMemberDecorate %block 1 BuiltIn BaryCoordNoPerspKHR
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%vec3 = OpTypeVector %float 3
+%vec4 = OpTypeVector %float 4
+%block = OpTypeStruct %vec3 %vec3
+%input_block = OpTypePointer Input %block
+%input_vec3 = OpTypePointer Input %vec3
+%output_vec4 = OpTypePointer Output %vec4
+%fn = OpTypeFunction %void
+%zero = OpConstant %uint 0
+%zero_float = OpConstant %float 0
+%weights = OpVariable %input_block Input
+%color = OpVariable %output_vec4 Output
+%load = OpFunction %void None %fn
+%load_entry = OpLabel
+%load_root = OpAccessChain %input_block %weights
+%load_member = OpAccessChain %input_vec3 %load_root %zero
+%loaded = OpLoad %vec3 %load_member
+%load_color = OpCompositeConstruct %vec4 %loaded %zero_float
+OpStore %color %load_color
+OpReturn
+OpFunctionEnd
+%explicit = OpFunction %void None %fn
+%explicit_entry = OpLabel
+%explicit_root = OpAccessChain %input_block %weights
+%explicit_copy = OpCopyObject %input_block %explicit_root
+%explicit_alias = OpInBoundsAccessChain %input_block %explicit_copy
+%explicit_member = OpAccessChain %input_vec3 %explicit_alias %zero
+%interpolated = OpExtInst %vec3 %glsl InterpolateAtCentroid %explicit_member
+%explicit_color = OpCompositeConstruct %vec4 %interpolated %zero_float
+OpStore %color %explicit_color
+OpReturn
+OpFunctionEnd

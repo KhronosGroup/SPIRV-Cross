@@ -1,0 +1,53 @@
+#version 450
+// Copyright 2026 Jean-Philippe Meunier
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the License);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an AS IS BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// PerVertexKHR corners of a mesh pipeline: Locations 0 and 3 are copied, Location 2 stays interpolated.
+// MATRIX and LINES are the forms the corner copies refuse.
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x = 3) in;
+#ifdef LINES
+layout(lines, max_vertices = 3, max_primitives = 1) out;
+#else
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+#endif
+#ifdef MATRIX
+layout(location = 0) out mat2 corner[];
+#else
+layout(location = 0) out vec4 corner[];
+#endif
+layout(location = 2) out vec4 interpolated[];
+layout(location = 3, component = 1) out vec2 packed[];
+
+void main()
+{
+	uint i = gl_LocalInvocationIndex;
+	SetMeshOutputsEXT(3, 1);
+	gl_MeshVerticesEXT[i].gl_Position = vec4(float(i), 0.0, 0.0, 1.0);
+#ifdef MATRIX
+	corner[i] = mat2(float(i));
+#else
+	corner[i] = vec4(float(i));
+#endif
+	interpolated[i] = vec4(1.0);
+	packed[i] = vec2(float(i), 2.0);
+#ifdef LINES
+	if (i == 0u)
+		gl_PrimitiveLineIndicesEXT[0] = uvec2(0u, 1u);
+#else
+	if (i == 0u)
+		gl_PrimitiveTriangleIndicesEXT[0] = uvec3(2u, 0u, 1u);
+#endif
+}

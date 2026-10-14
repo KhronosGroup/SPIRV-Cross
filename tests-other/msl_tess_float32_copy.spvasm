@@ -1,0 +1,64 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationControl %main "main" %outer %inner
+OpExecutionMode %main OutputVertices 1
+OpExecutionMode %main Triangles
+OpDecorate %outer Patch
+OpDecorate %outer BuiltIn TessLevelOuter
+OpDecorate %inner Patch
+OpDecorate %inner BuiltIn TessLevelInner
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%two = OpConstant %uint 2
+%three = OpConstant %uint 3
+%four = OpConstant %uint 4
+%a4 = OpTypeArray %float %four
+%a2 = OpTypeArray %float %two
+%out4 = OpTypePointer Output %a4
+%out2 = OpTypePointer Output %a2
+%outf = OpTypePointer Output %float
+%local4 = OpTypePointer Function %a4
+%local2 = OpTypePointer Function %a2
+%v1 = OpConstant %float 1.000244140625
+%v2 = OpConstant %float 1.00000011920928955078125
+%v3 = OpConstant %float 3.000244140625
+%v4 = OpConstant %float 4.000244140625
+%v5 = OpConstant %float 5.000244140625
+%v6 = OpConstant %float 6.000244140625
+%init4 = OpConstantComposite %a4 %v1 %v2 %v3 %v4
+%init2 = OpConstantComposite %a2 %v5 %v6
+%zero4 = OpConstantNull %a4
+%zero2 = OpConstantNull %a2
+%outer = OpVariable %out4 Output %init4
+%inner = OpVariable %out2 Output %init2
+%main = OpFunction %void None %fn
+%entry = OpLabel
+%call = OpFunctionCall %void %copy
+OpReturn
+OpFunctionEnd
+%copy = OpFunction %void None %fn
+%body = OpLabel
+%snapshot4 = OpVariable %local4 Function
+%snapshot2 = OpVariable %local2 Function
+OpCopyMemory %snapshot4 %outer
+OpCopyMemory %snapshot2 %inner
+OpStore %outer %zero4
+OpStore %inner %zero2
+OpCopyMemory %outer %snapshot4
+OpCopyMemory %inner %snapshot2
+%alias4 = OpCopyObject %out4 %outer
+%alias2 = OpCopyObject %out2 %inner
+%loaded4 = OpLoad %a4 %alias4
+%loaded2 = OpLoad %a2 %alias2
+OpStore %alias4 %loaded4
+OpStore %alias2 %loaded2
+%element = OpAccessChain %outf %alias4 %three
+%aliasScalar = OpCopyObject %outf %element
+%scalar = OpLoad %float %aliasScalar
+OpStore %aliasScalar %scalar
+OpReturn
+OpFunctionEnd

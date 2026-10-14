@@ -1,0 +1,90 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+OpCapability Shader
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %persp %linear %ordinary %color
+OpEntryPoint Fragment %bare "bare" %persp %linear %color
+OpEntryPoint Fragment %sample_main "at_sample" %persp %linear %color
+OpEntryPoint Fragment %offset_main "at_offset" %persp %linear %color
+OpExecutionMode %main OriginUpperLeft
+OpExecutionMode %bare OriginUpperLeft
+OpExecutionMode %sample_main OriginUpperLeft
+OpExecutionMode %offset_main OriginUpperLeft
+OpDecorate %persp BuiltIn BaryCoordKHR
+OpDecorate %linear BuiltIn BaryCoordNoPerspKHR
+OpDecorate %ordinary Location 0
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%vec2 = OpTypeVector %float 2
+%vec3 = OpTypeVector %float 3
+%in3 = OpTypePointer Input %vec3
+%out3 = OpTypePointer Output %vec3
+%fn = OpTypeFunction %void
+%value_fn = OpTypeFunction %vec3
+%sample_index = OpConstant %uint 0
+%zero = OpConstant %float 0
+%offset = OpConstantComposite %vec2 %zero %zero
+%persp = OpVariable %in3 Input
+%linear = OpVariable %in3 Input
+%ordinary = OpVariable %in3 Input
+%color = OpVariable %out3 Output
+%main = OpFunction %void None %fn
+%m = OpLabel
+%p = OpExtInst %vec3 %glsl InterpolateAtCentroid %persp
+%n = OpExtInst %vec3 %glsl InterpolateAtCentroid %linear
+%o = OpExtInst %vec3 %glsl InterpolateAtCentroid %ordinary
+%s = OpFAdd %vec3 %p %n
+%r = OpFAdd %vec3 %s %o
+OpStore %color %r
+OpReturn
+OpFunctionEnd
+; No ordinary input to keep a stage-in block alive accidentally.
+%bare = OpFunction %void None %fn
+%b = OpLabel
+%bp = OpExtInst %vec3 %glsl InterpolateAtCentroid %persp
+%bn = OpExtInst %vec3 %glsl InterpolateAtCentroid %linear
+%bs = OpFAdd %vec3 %bp %bn
+OpStore %color %bs
+OpReturn
+OpFunctionEnd
+; Whole-variable explicit-only reads in a helper must be active as well.
+%sample_helper = OpFunction %vec3 None %value_fn
+%sh = OpLabel
+%sp = OpExtInst %vec3 %glsl InterpolateAtSample %persp %sample_index
+%sn = OpExtInst %vec3 %glsl InterpolateAtSample %linear %sample_index
+%ss = OpFAdd %vec3 %sp %sn
+OpReturnValue %ss
+OpFunctionEnd
+%sample_main = OpFunction %void None %fn
+%sm = OpLabel
+%sr = OpFunctionCall %vec3 %sample_helper
+OpStore %color %sr
+OpReturn
+OpFunctionEnd
+%offset_main = OpFunction %void None %fn
+%om = OpLabel
+%op = OpExtInst %vec3 %glsl InterpolateAtOffset %persp %offset
+%on = OpExtInst %vec3 %glsl InterpolateAtOffset %linear %offset
+%os = OpFAdd %vec3 %op %on
+OpStore %color %os
+OpReturn
+OpFunctionEnd

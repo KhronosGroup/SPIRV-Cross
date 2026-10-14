@@ -1,0 +1,91 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Both builtins, helper loads, Component input and a two-location matrix.
+; Single-builtin entry points are native/default-path regression controls.
+OpCapability Shader
+OpCapability SampleRateShading
+OpCapability FragmentBarycentricKHR
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %persp %linear %ordinary %matrix %color
+OpEntryPoint Fragment %perspective "perspective" %persp %color
+OpEntryPoint Fragment %no_perspective "no_perspective" %linear %color
+OpEntryPoint Fragment %unused "unused" %color
+OpExecutionMode %main OriginUpperLeft
+OpExecutionMode %perspective OriginUpperLeft
+OpExecutionMode %no_perspective OriginUpperLeft
+OpExecutionMode %unused OriginUpperLeft
+OpDecorate %persp BuiltIn BaryCoordKHR
+OpDecorate %linear BuiltIn BaryCoordNoPerspKHR
+OpDecorate %ordinary Location 2
+OpDecorate %ordinary Component 2
+OpDecorate %matrix Location 4
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%vec2 = OpTypeVector %float 2
+%vec3 = OpTypeVector %float 3
+%mat2 = OpTypeMatrix %vec2 2
+%in3 = OpTypePointer Input %vec3
+%in2 = OpTypePointer Input %vec2
+%inmat = OpTypePointer Input %mat2
+%out3 = OpTypePointer Output %vec3
+%void_fn = OpTypeFunction %void
+%vec_fn = OpTypeFunction %vec3
+%zero = OpConstant %float 0
+%zeros = OpConstantComposite %vec3 %zero %zero %zero
+%persp = OpVariable %in3 Input
+%linear = OpVariable %in3 Input
+%ordinary = OpVariable %in2 Input
+%matrix = OpVariable %inmat Input
+%color = OpVariable %out3 Output
+%helper = OpFunction %vec3 None %vec_fn
+%h = OpLabel
+%p = OpLoad %vec3 %persp
+%n = OpLoad %vec3 %linear
+%sum = OpFAdd %vec3 %p %n
+OpReturnValue %sum
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%m = OpLabel
+%weights = OpFunctionCall %vec3 %helper
+%uv = OpLoad %vec2 %ordinary
+%mat = OpLoad %mat2 %matrix
+%transformed = OpMatrixTimesVector %vec2 %mat %uv
+%x = OpCompositeExtract %float %transformed 0
+%y = OpCompositeExtract %float %transformed 1
+%extra = OpCompositeConstruct %vec3 %x %y %zero
+%result = OpFAdd %vec3 %weights %extra
+OpStore %color %result
+OpReturn
+OpFunctionEnd
+%perspective = OpFunction %void None %void_fn
+%pe = OpLabel
+%pv = OpLoad %vec3 %persp
+OpStore %color %pv
+OpReturn
+OpFunctionEnd
+%no_perspective = OpFunction %void None %void_fn
+%ne = OpLabel
+%nv = OpLoad %vec3 %linear
+OpStore %color %nv
+OpReturn
+OpFunctionEnd
+%unused = OpFunction %void None %void_fn
+%ue = OpLabel
+OpStore %color %zeros
+OpReturn
+OpFunctionEnd

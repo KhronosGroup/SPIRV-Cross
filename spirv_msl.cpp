@@ -26,7 +26,9 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <iterator>
 #include <numeric>
+#include <tuple>
 
 using namespace SPIRV_CROSS_SPV_HEADER_NAMESPACE;
 using namespace SPIRV_CROSS_NAMESPACE;
@@ -54,6 +56,839 @@ CompilerMSL::CompilerMSL(const ParsedIR &ir_)
 CompilerMSL::CompilerMSL(ParsedIR &&ir_)
     : CompilerGLSL(std::move(ir_))
 {
+}
+
+MSLCapturedVertexLayout CompilerMSL::get_msl_captured_vertex_layout() const
+{
+	if (!msl_compile_completed)
+		SPIRV_CROSS_THROW("Captured vertex layout requires a successful MSL compilation first.");
+	if ((get_execution_model() != ExecutionModelVertex && !(is_tese_shader() && msl_options.tese_as_compute)) || !capture_output_to_buffer || !stage_out_var_id)
+		SPIRV_CROSS_THROW("Captured vertex layout requires vertex capture_output_to_buffer or TES compute capture with an output record.");
+	// Reflect the emitted declaration, whose interface structs have no SPIR-V Offsets.
+	struct PhysicalLayout
+	{
+		SPIRType type;
+		uint32_t size = 0, alignment = 1, offset = 0;
+		bool row_major = false;
+		std::vector<PhysicalLayout> children;
+		explicit PhysicalLayout(const SPIRType &t) : type(t) {}
+	};
+	auto checked = [](uint64_t value) -> uint32_t {
+		if (value > UINT32_MAX)
+			SPIRV_CROSS_THROW("Captured vertex layout exceeds the uint32 byte-offset ABI.");
+		return uint32_t(value);
+	};
+	auto align = [&](uint64_t value, uint32_t alignment) { return checked((value + alignment - 1) & ~(uint64_t(alignment) - 1)); };
+	std::function<PhysicalLayout(const SPIRType &, bool, bool)> physical_layout;
+	physical_layout = [&](const SPIRType &type, bool packed, bool row_major) -> PhysicalLayout {
+		PhysicalLayout node(type);
+		node.row_major = row_major;
+		if (type.pointer)
+			SPIRV_CROSS_THROW("Captured vertex layout cannot export pointers.");
+		if (!type.array.empty())
+		{
+			if (!type.array_size_literal.back() || !type.array.back())
+				SPIRV_CROSS_THROW("Captured vertex layout requires literal nonzero array sizes.");
+			SPIRType element = type;
+			element.array.pop_back();
+			element.array_size_literal.pop_back();
+			node.children.push_back(physical_layout(element, packed, row_major));
+			node.alignment = node.children[0].alignment;
+			node.size = checked(uint64_t(node.children[0].size) * type.array.back());
+		}
+		else if (type.basetype == SPIRType::Struct)
+		{
+			if (packed || has_decoration(type.self, DecorationArrayStride))
+				SPIRV_CROSS_THROW("Captured vertex layout cannot export packed or stride-remapped structs.");
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+			{
+				if (has_extended_member_decoration(type.self, i, SPIRVCrossDecorationOverlappingBinding))
+					SPIRV_CROSS_THROW("Captured vertex layout cannot export overlapping interface members.");
+				auto child = physical_layout(get<SPIRType>(get_physical_member_type_id(type, i)), member_is_packed_physical_type(type, i), has_member_decoration(type.self, i, DecorationRowMajor));
+				child.offset = align(uint64_t(node.size) + get_extended_member_decoration(type.self, i, SPIRVCrossDecorationPaddingTarget), child.alignment);
+				node.size = checked(uint64_t(child.offset) + child.size);
+				node.alignment = max(node.alignment, child.alignment);
+				node.children.push_back(std::move(child));
+			}
+			node.size = max(1u, align(node.size, node.alignment));
+		}
+		else
+		{
+			if (type.basetype != SPIRType::Half && type.basetype != SPIRType::Short && type.basetype != SPIRType::UShort && type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt)
+				SPIRV_CROSS_THROW("Captured vertex layout requires 16/32-bit numeric physical members.");
+			if (!type.vecsize || type.vecsize > 4 || !type.columns || type.columns > 4)
+				SPIRV_CROSS_THROW("Captured vertex layout has an unsupported physical vector or matrix shape.");
+			uint32_t rows = row_major && type.columns > 1 ? type.columns : type.vecsize;
+			uint32_t columns = row_major && type.columns > 1 ? type.vecsize : type.columns;
+			uint32_t vector_size = (packed || rows != 3 ? rows : 4) * (type.width / 8);
+			node.alignment = packed ? type.width / 8 : vector_size;
+			node.size = vector_size * columns;
+		}
+		return node;
+	};
+	const auto &type = get_variable_data_type(get<SPIRVariable>(stage_out_var_id));
+	auto record = physical_layout(type, false, false);
+	MSLCapturedVertexLayout layout;
+	layout.stride = record.size;
+	std::set<LocationComponentPair> fields;
+	std::set<std::tuple<BuiltIn, uint32_t, uint32_t>> builtin_fields;
+	std::function<void(const PhysicalLayout &, uint32_t, uint32_t &, uint32_t, BuiltIn, uint32_t, bool)> visit;
+	visit = [&](const PhysicalLayout &node, uint32_t offset, uint32_t &location, uint32_t component, BuiltIn builtin, uint32_t index, bool packed_components) {
+		const auto &physical = node.type;
+		if (!physical.array.empty())
+		{
+			for (uint32_t i = 0; i < physical.array.back(); i++)
+				visit(node.children[0], offset + i * node.children[0].size, location, component, builtin, checked(uint64_t(index) + i), packed_components);
+		}
+		else if (physical.basetype == SPIRType::Struct)
+		{
+			for (uint32_t i = 0; i < node.children.size(); i++)
+			{
+				if (has_member_decoration(physical.self, i, DecorationLocation))
+					location = get_member_decoration(physical.self, i, DecorationLocation);
+				uint32_t member_component = has_member_decoration(physical.self, i, DecorationComponent) ? get_member_decoration(physical.self, i, DecorationComponent) : component;
+				BuiltIn member_builtin = has_member_decoration(physical.self, i, DecorationBuiltIn) ? BuiltIn(get_member_decoration(physical.self, i, DecorationBuiltIn)) : builtin;
+				visit(node.children[i], offset + node.children[i].offset, location, member_component, member_builtin, get_member_decoration(physical.self, i, DecorationIndex), physical.self == type.self && !has_extended_member_decoration(physical.self, i, SPIRVCrossDecorationInterfaceOrigID));
+			}
+		}
+		else
+		{
+			if (builtin == BuiltInMax && (location == k_unknown_location || component > 3 || physical.vecsize > 4 - component || physical.columns > k_unknown_location - location))
+				SPIRV_CROSS_THROW("Captured vertex layout has an unrepresentable Location/Component.");
+			if (builtin != BuiltInMax && physical.columns != 1)
+				SPIRV_CROSS_THROW("Captured vertex layout has an unsupported builtin matrix.");
+			uint32_t column_stride = node.size / (node.row_major && physical.columns > 1 ? physical.vecsize : physical.columns);
+			for (uint32_t col = 0; col < physical.columns; col++)
+				for (uint32_t c = 0; c < physical.vecsize; c++)
+				{
+					uint32_t byte_offset = offset + (node.row_major && physical.columns > 1 ? c * column_stride + col * (physical.width / 8) : col * column_stride + c * (physical.width / 8));
+					if (builtin != BuiltInMax)
+					{
+						if (!builtin_fields.emplace(builtin, index, c).second)
+							SPIRV_CROSS_THROW("Captured vertex layout has duplicate builtin array element/component.");
+						MSLCapturedVertexBuiltin field;
+						field.builtin = builtin;
+						field.array_index = index;
+						field.component = c;
+						field.byte_offset = byte_offset;
+						field.scalar_type = physical.basetype;
+						layout.builtins.push_back(field);
+					}
+					else
+					{
+						auto mask = captured_output_component_masks.find(location + col);
+						if (packed_components && mask != captured_output_component_masks.end() && !(mask->second & (1u << (component + c))))
+							continue;
+						if (!fields.insert({location + col, component + c}).second)
+							SPIRV_CROSS_THROW("Captured vertex layout has duplicate Location/Component.");
+						MSLCapturedVertexComponent field;
+						field.location = location + col;
+						field.component = component + c;
+						field.byte_offset = byte_offset;
+						field.scalar_type = physical.basetype;
+						layout.components.push_back(field);
+					}
+				}
+			if (builtin == BuiltInMax)
+				location += physical.columns;
+		}
+	};
+	uint32_t location = k_unknown_location;
+	visit(record, 0, location, 0, BuiltInMax, 0, false);
+	return layout;
+}
+
+string CompilerMSL::compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding)
+{
+	return compile_captured_output_replay(layout, binding, MSLCapturedOutputReplayBarycentricBinding{});
+}
+
+string CompilerMSL::compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics)
+{
+	return compile_captured_output_replay_impl(layout, binding, barycentrics, nullptr);
+}
+
+string CompilerMSL::compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics, const std::vector<uint32_t> &user_locations)
+{
+	return compile_captured_output_replay_impl(layout, binding, barycentrics, &user_locations);
+}
+
+string CompilerMSL::compile_captured_output_replay_impl(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics, const std::vector<uint32_t> *user_locations)
+{
+	if (msl_compile_started)
+		SPIRV_CROSS_THROW("Captured output replay requires a fresh compiler with the original SPIR-V.");
+	msl_compile_started = true;
+	captured_output_replay = true;
+	if (get_execution_model() != ExecutionModelVertex && get_execution_model() != ExecutionModelTessellationEvaluation)
+		SPIRV_CROSS_THROW("Captured output replay supports only vertex or tessellation evaluation entry points, not mesh stages.");
+	if (!msl_options.supports_msl_version(2, 4))
+		SPIRV_CROSS_THROW("Captured output replay requires MSL 2.4 or later.");
+	if (msl_options.capture_output_to_buffer || msl_options.vertex_for_tessellation || msl_options.disable_rasterization)
+		SPIRV_CROSS_THROW("Captured output replay requires a normal rasterizing vertex configuration.");
+	if (binding.multiview_layer && (!msl_options.multiview || !msl_options.multiview_layered_rendering || msl_options.view_index_from_device_index || is_stage_output_builtin_masked(BuiltInLayer)))
+		SPIRV_CROSS_THROW("Captured output replay multiview Layer requires layered multiview, no device index and an unmasked Layer.");
+	if ((msl_options.multiview && !binding.multiview_layer) || msl_options.view_index_from_device_index || msl_options.emulate_depth_clip_enable || msl_options.enable_point_size_default)
+		SPIRV_CROSS_THROW("Captured output replay does not support multiview, depth-clip emulation or synthesized default PointSize.");
+	if (binding.vertex_buffer_index > 30 || binding.occurrence_buffer_index > 30 || binding.draw_parameters_buffer_index > 30 || binding.vertex_buffer_index == binding.occurrence_buffer_index || binding.vertex_buffer_index == binding.draw_parameters_buffer_index || binding.occurrence_buffer_index == binding.draw_parameters_buffer_index)
+		SPIRV_CROSS_THROW("Captured output replay requires three distinct Metal buffer indices in [0, 30].");
+	if (msl_options.emulate_reversed_depth_viewport && (msl_options.reversed_depth_viewport_buffer_index > 30 || msl_options.reversed_depth_viewport_buffer_index == binding.vertex_buffer_index || msl_options.reversed_depth_viewport_buffer_index == binding.occurrence_buffer_index || msl_options.reversed_depth_viewport_buffer_index == binding.draw_parameters_buffer_index))
+		SPIRV_CROSS_THROW("Captured output replay requires a reversed-depth viewport mask buffer index in [0, 30] distinct from the three replay buffers.");
+	if (binding.primitive_index_location == k_unknown_location || !layout.stride)
+		SPIRV_CROSS_THROW("Captured output replay requires a private Location and nonzero captured stride.");
+	bool emit_barycentrics = barycentrics.perspective_location != k_unknown_location || barycentrics.no_perspective_location != k_unknown_location;
+	if (!emit_barycentrics && barycentrics.corner_buffer_index != ~0u)
+		SPIRV_CROSS_THROW("Captured output replay barycentrics require at least one private Location.");
+	if (emit_barycentrics)
+	{
+		uint32_t slot = barycentrics.corner_buffer_index;
+		if (slot > 30 || slot == binding.vertex_buffer_index || slot == binding.occurrence_buffer_index || slot == binding.draw_parameters_buffer_index || (msl_options.emulate_reversed_depth_viewport && slot == msl_options.reversed_depth_viewport_buffer_index))
+			SPIRV_CROSS_THROW("Captured output replay barycentrics require a corner buffer index in [0, 30] distinct from all replay buffers.");
+		if (barycentrics.perspective_location == barycentrics.no_perspective_location)
+			SPIRV_CROSS_THROW("Captured output replay barycentrics require distinct private Locations.");
+		for (uint32_t location : { barycentrics.perspective_location, barycentrics.no_perspective_location })
+		{
+			if (location == k_unknown_location)
+				continue;
+			if (location == binding.primitive_index_location)
+				SPIRV_CROSS_THROW("Captured output replay barycentric Location collides with the primitive key.");
+			for (const auto &field : layout.components)
+				if (field.location == location)
+					SPIRV_CROSS_THROW("Captured output replay barycentric Location collides with the captured layout.");
+			for (const auto &output : outputs_by_location)
+				if (output.first.location == location)
+					SPIRV_CROSS_THROW("Captured output replay barycentric Location collides with an MSL shader output mapping.");
+		}
+	}
+
+	std::map<LocationComponentPair, MSLCapturedVertexComponent> components;
+	std::map<std::tuple<BuiltIn, uint32_t, uint32_t>, MSLCapturedVertexBuiltin> builtins;
+	std::map<uint32_t, uint32_t> ranges;
+	auto validate_scalar = [&](SPIRType::BaseType scalar_type, uint32_t offset) {
+		uint32_t size = 0;
+		switch (scalar_type)
+		{
+		case SPIRType::Half: case SPIRType::Short: case SPIRType::UShort: size = 2; break;
+		case SPIRType::Float: case SPIRType::Int: case SPIRType::UInt: size = 4; break;
+		default: SPIRV_CROSS_THROW("Captured output replay requires 16/32-bit numeric scalar types.");
+		}
+		if (offset % size || layout.stride % size)
+			SPIRV_CROSS_THROW("Captured output replay scalar offsets and stride must be naturally aligned.");
+		if (size > layout.stride || offset > layout.stride - size)
+			SPIRV_CROSS_THROW("Captured output replay scalar lies outside the captured stride.");
+		auto next = ranges.lower_bound(offset);
+		if ((next != ranges.end() && next->first < offset + size) || (next != ranges.begin() && std::prev(next)->second > offset))
+			SPIRV_CROSS_THROW("Captured output replay layout has overlapping scalar offsets.");
+		ranges.emplace(offset, offset + size);
+	};
+	for (const auto &field : layout.components)
+	{
+		if (field.location == k_unknown_location || field.component > 3)
+			SPIRV_CROSS_THROW("Captured output replay layout has invalid Location/Component.");
+		if (field.location == binding.primitive_index_location)
+			SPIRV_CROSS_THROW("Captured output replay private Location collides with the captured layout.");
+		if (!components.emplace(LocationComponentPair{field.location, field.component}, field).second)
+			SPIRV_CROSS_THROW("Captured output replay layout has duplicate Location/Component.");
+		validate_scalar(field.scalar_type, field.byte_offset);
+	}
+	auto supported_builtin = [](BuiltIn builtin) {
+		return builtin == BuiltInPosition || builtin == BuiltInPointSize || builtin == BuiltInClipDistance || builtin == BuiltInLayer || builtin == BuiltInViewportIndex;
+	};
+	for (const auto &field : layout.builtins)
+	{
+		if (!supported_builtin(field.builtin))
+			SPIRV_CROSS_THROW(join("Captured output replay does not support builtin ", uint32_t(field.builtin), "."));
+		bool is_uint = field.builtin == BuiltInLayer || field.builtin == BuiltInViewportIndex;
+		if (field.scalar_type != (is_uint ? SPIRType::UInt : SPIRType::Float) || (field.builtin != BuiltInClipDistance && field.array_index) || field.component >= (field.builtin == BuiltInPosition ? 4u : 1u))
+			SPIRV_CROSS_THROW("Captured output replay builtin has an unsupported type or shape.");
+		if (!builtins.emplace(std::make_tuple(field.builtin, field.array_index, field.component), field).second)
+			SPIRV_CROSS_THROW("Captured output replay layout has duplicate builtin array element/component.");
+		validate_scalar(field.scalar_type, field.byte_offset);
+	}
+	if (binding.multiview_layer && !builtins.count(std::make_tuple(BuiltInLayer, 0u, 0u)))
+		SPIRV_CROSS_THROW("Captured output replay multiview requires a captured Layer.");
+	std::set<uint32_t> selected_locations;
+	if (user_locations)
+	{
+		for (uint32_t location : *user_locations)
+		{
+			bool captured = std::any_of(layout.components.begin(), layout.components.end(), [=](const MSLCapturedVertexComponent &field) { return field.location == location; });
+			if (location == k_unknown_location || !captured || !selected_locations.insert(location).second)
+				SPIRV_CROSS_THROW("Captured output selected replay Location is invalid, duplicate or absent from the capture layout.");
+		}
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, const SPIRVariable &var) {
+			if (var.storage != StorageClassOutput || !interface_variable_exists_in_entry_point(id))
+				return;
+			const auto &type = get_variable_data_type(var);
+			if (type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock))
+			{
+				for (uint32_t i = 0; i < type.member_types.size(); i++)
+				{
+					if (has_member_decoration(type.self, i, DecorationBuiltIn))
+						continue;
+					uint32_t location = get_declared_member_location(var, i, false);
+					if (location == k_unknown_location)
+						SPIRV_CROSS_THROW("Captured output selected replay requires explicit user output Locations.");
+					if (!selected_locations.count(location))
+						mask_stage_output_by_location(location, get_member_decoration(type.self, i, DecorationComponent));
+				}
+			}
+			else if (!is_builtin_variable(var))
+			{
+				if (!has_decoration(id, DecorationLocation))
+					SPIRV_CROSS_THROW("Captured output selected replay requires explicit user output Locations.");
+				uint32_t location = get_decoration(id, DecorationLocation);
+				if (!selected_locations.count(location))
+					mask_stage_output_by_location(location, get_decoration(id, DecorationComponent));
+			}
+		});
+	}
+
+	configure_msl_backend();
+	fixup_anonymous_struct_names();
+	fixup_type_alias();
+	replace_illegal_names();
+	sync_entry_point_aliases_and_names();
+	build_function_control_flow_graphs_and_analyze();
+	update_active_builtins();
+	if (binding.multiview_layer && active_output_builtins.get(BuiltInLayer))
+		SPIRV_CROSS_THROW("Captured output replay multiview requires a synthetic Layer, not an application Layer output.");
+	active_output_builtins.for_each_bit([&](uint32_t builtin) {
+		if (!supported_builtin(BuiltIn(builtin)))
+			SPIRV_CROSS_THROW(join("Captured output replay does not support output builtin ", builtin, "."));
+	});
+	set_enabled_interface_variables(get_active_interface_variables());
+	capture_output_to_buffer = false;
+	is_rasterization_disabled = false;
+	stage_out_var_id = add_interface_block(StorageClassOutput);
+	if (!stage_out_var_id || qual_pos_var_name.empty())
+		SPIRV_CROSS_THROW("Captured output replay requires a Position output.");
+	auto &output = get<SPIRType>(get_variable_data_type_id(get<SPIRVariable>(stage_out_var_id)));
+	if (user_locations)
+	{
+		std::set<uint32_t> emitted_locations;
+		for (uint32_t i = 0; i < output.member_types.size(); i++)
+			if (!has_member_decoration(output.self, i, DecorationBuiltIn))
+			{
+				uint32_t location = get_member_location(output.self, i);
+				if (!selected_locations.count(location))
+					SPIRV_CROSS_THROW("Captured output selected replay cannot omit part of an output or a required user varying.");
+				emitted_locations.insert(location);
+			}
+		if (emitted_locations != selected_locations)
+			SPIRV_CROSS_THROW("Captured output selected replay did not emit a requested Location.");
+	}
+	for (uint32_t i = 0; i < output.member_types.size(); i++)
+	{
+		if (!has_member_decoration(output.self, i, DecorationBuiltIn) && get_member_location(output.self, i) == binding.primitive_index_location)
+			SPIRV_CROSS_THROW("Captured output replay private Location collides with the raster output interface.");
+		uint32_t location = get_member_location(output.self, i);
+		if (emit_barycentrics && location != k_unknown_location && (location == barycentrics.perspective_location || location == barycentrics.no_perspective_location))
+			SPIRV_CROSS_THROW("Captured output replay barycentric Location collides with the raster output interface.");
+	}
+
+	uint32_t uint_id = ir.increase_bound_by(1);
+	auto &uint_type = set<SPIRType>(uint_id, OpTypeInt);
+	uint_type.basetype = SPIRType::UInt;
+	uint_type.width = 32;
+	if (binding.multiview_layer)
+	{
+		uint32_t layer_member = uint32_t(output.member_types.size());
+		output.member_types.push_back(uint_id);
+		set_member_name(output.self, layer_member, "spvReplayLayer");
+		set_member_decoration(output.self, layer_member, DecorationBuiltIn, BuiltInLayer);
+	}
+	uint32_t key_member = uint32_t(output.member_types.size());
+	captured_output_replay_key_member = key_member;
+	output.member_types.push_back(uint_id);
+	set_member_name(output.self, key_member, "spvReplayPrimitive");
+	set_member_decoration(output.self, key_member, DecorationLocation, binding.primitive_index_location);
+	set_member_decoration(output.self, key_member, DecorationFlat);
+	if (emit_barycentrics)
+	{
+		uint32_t float3_id = ir.increase_bound_by(1);
+		auto &float3_type = set<SPIRType>(float3_id, OpTypeFloat);
+		float3_type.basetype = SPIRType::Float;
+		float3_type.width = 32;
+		float3_type.vecsize = 3;
+		for (uint32_t location : { barycentrics.perspective_location, barycentrics.no_perspective_location })
+		{
+			if (location == k_unknown_location)
+				continue;
+			uint32_t member = uint32_t(output.member_types.size());
+			output.member_types.push_back(float3_id);
+			set_member_name(output.self, member, location == barycentrics.perspective_location ? "spvReplayBarycentric" : "spvReplayBarycentricNoPersp");
+			set_member_decoration(output.self, member, DecorationLocation, location);
+		}
+	}
+	// Do not emit resources, application functions or interface fixup hooks. Those hooks
+	// contain application stores and flattening operations, not just rasterization fixups.
+	buffer.reset();
+	emit_header();
+	emit_struct(output);
+	string replay_arguments;
+	if (msl_options.emulate_reversed_depth_viewport)
+		replay_arguments = join(", constant uint& spvEmulatedReversedDepthViewportMask [[buffer(", msl_options.reversed_depth_viewport_buffer_index, ")]]");
+	if (emit_barycentrics)
+		replay_arguments += join(", const device uint* spvReplayCorners [[buffer(", barycentrics.corner_buffer_index, ")]]");
+	statement("vertex ", type_to_glsl(output), " ", to_name(ir.default_entry_point), "(uint spvReplayVertex [[vertex_id]], uint spvReplayInstance [[instance_id]], const device uchar* spvReplayVertices [[buffer(", binding.vertex_buffer_index, ")]], const device uint* spvReplayOccurrences [[buffer(", binding.occurrence_buffer_index, ")]], constant uint* spvReplayDraw [[buffer(", binding.draw_parameters_buffer_index, ")]]", replay_arguments, ")");
+	begin_scope();
+	statement(type_to_glsl(output), " ", stage_out_var_name, ";");
+	statement("ulong spvReplayOccurrence = ulong(spvReplayDraw[0]) + (ulong(spvReplayInstance) - ulong(spvReplayDraw[2])) * ulong(spvReplayDraw[3]) + (ulong(spvReplayVertex) - ulong(spvReplayDraw[1]));");
+	statement("const device uchar* spvReplayRecord = spvReplayVertices + ulong(spvReplayOccurrences[2ul * spvReplayOccurrence]) * ", layout.stride, "ul;");
+	for (uint32_t i = 0; i < key_member; i++)
+	{
+		const auto &type = get<SPIRType>(get_physical_member_type_id(output, i));
+		bool builtin = has_member_decoration(output.self, i, DecorationBuiltIn);
+		if (type.pointer || type.columns != 1 || !type.vecsize || type.vecsize > 4 || type.array.size() > 1 || (!builtin && !type.array.empty()))
+			SPIRV_CROSS_THROW("Captured output replay has an unsupported physical output shape.");
+		uint32_t count = 1;
+		if (!type.array.empty())
+		{
+			if (!type.array_size_literal[0] || !type.array[0])
+				SPIRV_CROSS_THROW("Captured output replay requires literal nonzero builtin array sizes.");
+			count = type.array[0];
+		}
+		uint32_t component = 0;
+		uint32_t location = get_member_location(output.self, i, &component);
+		if (component == k_unknown_component)
+			component = 0;
+		if (!builtin && (location == k_unknown_location || component > 3 || type.vecsize > 4 - component))
+			SPIRV_CROSS_THROW("Captured output replay has an unrepresentable output Location/Component.");
+		for (uint32_t a = 0; a < count; a++)
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				uint32_t offset;
+				SPIRType::BaseType scalar_type;
+				if (builtin)
+				{
+					auto bi = BuiltIn(get_member_decoration(output.self, i, DecorationBuiltIn));
+					uint32_t first = get_member_decoration(output.self, i, DecorationIndex);
+					if (first > UINT32_MAX - a)
+						SPIRV_CROSS_THROW("Captured output replay builtin array index overflows.");
+					auto field = builtins.find(std::make_tuple(bi, first + a, c));
+					if (field == builtins.end())
+						SPIRV_CROSS_THROW(join("Captured output replay missing builtin ", uint32_t(bi), " array index ", first + a, " component ", c, "."));
+					offset = field->second.byte_offset;
+					scalar_type = field->second.scalar_type;
+				}
+				else
+				{
+					auto field = components.find({location, component + c});
+					if (field == components.end())
+						SPIRV_CROSS_THROW(join("Captured output replay missing Location ", location, " Component ", component + c, "."));
+					offset = field->second.byte_offset;
+					scalar_type = field->second.scalar_type;
+				}
+				if (scalar_type != type.basetype)
+					SPIRV_CROSS_THROW(join("Captured output replay physical scalar type mismatch for output ", to_member_name(output, i), "."));
+				SPIRType scalar(type_is_floating_point(type) ? OpTypeFloat : OpTypeInt);
+				scalar.basetype = scalar_type;
+				scalar.width = type.width;
+				string target = join(stage_out_var_name, ".", to_member_name(output, i));
+				if (!type.array.empty())
+					target += join("[", a, "]");
+				if (type.vecsize > 1)
+					target += join("[", c, "]");
+				statement(target, " = *reinterpret_cast<const device ", type_to_glsl(scalar), "*>(spvReplayRecord + ", offset, "ul);");
+			}
+	}
+	statement(stage_out_var_name, ".", to_member_name(output, key_member), " = spvReplayOccurrences[2ul * spvReplayOccurrence + 1ul];");
+	if (emit_barycentrics)
+	{
+		statement("uint spvReplayCorner = spvReplayCorners[spvReplayOccurrence];");
+		for (uint32_t member = key_member + 1; member < output.member_types.size(); member++)
+			statement(stage_out_var_name, ".", to_member_name(output, member), " = float3(spvReplayCorner == 0u, spvReplayCorner == 1u, spvReplayCorner == 2u);");
+	}
+	emit_fixup();
+	statement("return ", stage_out_var_name, ";");
+	end_scope();
+	return buffer.str();
+}
+
+void CompilerMSL::set_msl_per_vertex_input_buffer(const MSLCapturedVertexLayout &layout, const MSLPerVertexInputBinding &binding)
+{
+	per_vertex_input_layout = layout;
+	per_vertex_input_binding = binding;
+	per_vertex_input_buffer_enabled = true;
+}
+
+bool CompilerMSL::uses_per_vertex_primitive_id_buffer() const
+{
+	return get_execution_model() == ExecutionModelFragment && per_vertex_input_buffer_enabled &&
+	       per_vertex_input_binding.primitive_id_buffer_index != ~0u;
+}
+
+void CompilerMSL::set_msl_fragment_barycentric_input(const MSLFragmentBarycentricInputBinding &binding)
+{
+	if (msl_compile_started)
+		SPIRV_CROSS_THROW("Portable barycentric inputs must be configured before compilation.");
+	fragment_barycentric_input_binding = binding;
+	fragment_barycentric_input_enabled = true;
+}
+
+bool CompilerMSL::is_portable_barycentric(BuiltIn builtin) const
+{
+	return fragment_barycentric_input_enabled && get_execution_model() == ExecutionModelFragment && (builtin == BuiltInBaryCoordKHR || builtin == BuiltInBaryCoordNoPerspKHR);
+}
+
+uint32_t CompilerMSL::portable_barycentric_location(BuiltIn builtin) const
+{
+	return builtin == BuiltInBaryCoordKHR ? fragment_barycentric_input_binding.perspective_location : fragment_barycentric_input_binding.no_perspective_location;
+}
+
+void CompilerMSL::prepare_fragment_barycentric_input()
+{
+	if (get_execution_model() != ExecutionModelFragment)
+	{
+		if (fragment_barycentric_input_enabled)
+			SPIRV_CROSS_THROW("Portable barycentric inputs require a fragment entry point.");
+		return;
+	}
+	if (fragment_barycentric_input_enabled && !msl_options.supports_msl_version(2, 4))
+		SPIRV_CROSS_THROW("Portable barycentric inputs require MSL 2.4 or later.");
+	// The same member lowering is needed for ordinary active builtins in input
+	// blocks even when portable barycentric interpolation was not requested.
+	if (!fragment_barycentric_input_enabled)
+	{
+		bool has_builtin_input_block = false;
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, const SPIRVariable &var) {
+			if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(id))
+			{
+				const auto &type = get_variable_data_type(var);
+				has_builtin_input_block |= type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock) && is_builtin_variable(var);
+			}
+		});
+		if (!has_builtin_input_block)
+			return;
+	}
+	std::unordered_set<uint32_t> reachable_blocks;
+	for (const auto &cfg : function_cfgs)
+		for (auto block : get<SPIRFunction>(cfg.first).blocks)
+			reachable_blocks.insert(block);
+	std::unordered_map<uint32_t, uint32_t> pointer_aliases;
+	ir.for_each_typed_id<SPIRBlock>([&](uint32_t, SPIRBlock &block) {
+		for (auto &instruction : block.ops)
+			if (instruction.op == OpCopyObject ||
+			    ((instruction.op == OpAccessChain || instruction.op == OpInBoundsAccessChain) && instruction.length == 3))
+			{
+				auto ops = stream(instruction);
+				const auto &type = get<SPIRType>(ops[0]);
+				if (type.pointer && (instruction.op == OpCopyObject || type.storage == StorageClassInput))
+					pointer_aliases[ops[1]] = ops[2];
+			}
+	});
+	// Builtin activity analysis sees direct access-chain bases, so resolve
+	// pointer copies and index-free access chains before deciding which block
+	// members need lowering. An index-free chain is only a pointer alias.
+	ir.for_each_typed_id<SPIRBlock>([&](uint32_t, SPIRBlock &block) {
+		if (!reachable_blocks.count(block.self))
+			return;
+		for (auto &instruction : block.ops)
+		{
+			if (instruction.op != OpAccessChain && instruction.op != OpInBoundsAccessChain)
+				continue;
+			auto ops = stream_mutable(instruction);
+			if (get<SPIRType>(ops[0]).storage == StorageClassInput)
+			{
+				while (pointer_aliases.count(ops[2]))
+					ops[2] = pointer_aliases.at(ops[2]);
+				if (instruction.length == 3)
+					instruction.op = OpCopyObject;
+			}
+		}
+	});
+	update_active_builtins();
+	// The general builtin analysis misses whole-variable InterpolateAt* operands.
+	// Interface activity already tracks those reads, including reads in helpers.
+	if (fragment_barycentric_input_enabled)
+		for (auto id : get_active_interface_variables())
+			if (has_decoration(id, DecorationBuiltIn))
+			{
+				auto builtin = BuiltIn(get_decoration(id, DecorationBuiltIn));
+				if (is_portable_barycentric(builtin))
+					active_input_builtins.set(builtin);
+			}
+	bool perspective = has_active_builtin(BuiltInBaryCoordKHR, StorageClassInput);
+	bool linear = has_active_builtin(BuiltInBaryCoordNoPerspKHR, StorageClassInput);
+	if (fragment_barycentric_input_enabled && ((perspective && fragment_barycentric_input_binding.perspective_location == k_unknown_location) || (linear && fragment_barycentric_input_binding.no_perspective_location == k_unknown_location)))
+		SPIRV_CROSS_THROW("Portable barycentric inputs require a private Location for each active builtin.");
+	if (fragment_barycentric_input_enabled && perspective && linear && fragment_barycentric_input_binding.perspective_location == fragment_barycentric_input_binding.no_perspective_location)
+		SPIRV_CROSS_THROW("Portable barycentric inputs require distinct private Locations for the two builtins.");
+	auto validate = [&](BuiltIn builtin, const SPIRType &type, const Bitset &flags) {
+		if (!is_portable_barycentric(builtin) || !has_active_builtin(builtin, StorageClassInput))
+			return;
+		if (type.basetype != SPIRType::Float || type.width != 32 || type.vecsize != 3 || type.columns != 1 || !type.array.empty())
+			SPIRV_CROSS_THROW("Portable barycentric inputs require float3 builtins.");
+		if (flags.get(DecorationFlat) || flags.get(DecorationPatch) || flags.get(DecorationPerVertexKHR) || (flags.get(DecorationCentroid) && flags.get(DecorationSample)))
+			SPIRV_CROSS_THROW("Portable barycentric inputs do not support Flat, Patch, PerVertexKHR or combined Centroid/Sample decorations.");
+		if (builtin == BuiltInBaryCoordKHR && flags.get(DecorationNoPerspective))
+			SPIRV_CROSS_THROW("NoPerspective decorations are not supported for BaryCoord inputs.");
+	};
+	std::map<BuiltIn, std::pair<uint32_t, uint32_t>> builtin_members;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, const SPIRVariable &var) {
+		if (var.storage != StorageClassInput || !interface_variable_exists_in_entry_point(id))
+			return;
+		const auto &type = get_variable_data_type(var);
+		if (has_decoration(id, DecorationBuiltIn))
+			validate(BuiltIn(get_decoration(id, DecorationBuiltIn)), type, get_decoration_bitset(id));
+		else if (type.basetype == SPIRType::Struct)
+		{
+			bool barycentric_block = false;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+				if (has_member_decoration(type.self, i, DecorationBuiltIn) && is_portable_barycentric(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn))))
+					barycentric_block = true;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+				if (has_member_decoration(type.self, i, DecorationBuiltIn))
+				{
+					auto flags = get_member_decoration_bitset(type.self, i);
+					flags.merge_or(get_decoration_bitset(id));
+					auto builtin = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+					validate(builtin, get<SPIRType>(type.member_types[i]), flags);
+					if (!has_active_builtin(builtin, StorageClassInput))
+						continue;
+					if (builtin == BuiltInBaryCoordKHR || builtin == BuiltInBaryCoordNoPerspKHR)
+					{
+						if (!fragment_barycentric_input_enabled)
+							SPIRV_CROSS_THROW("Member-decorated barycentric inputs require portable fragment input mode in MSL.");
+						continue;
+					}
+					fragment_barycentric_input_blocks.insert(id);
+					const auto &member_type = get<SPIRType>(type.member_types[i]);
+					if (builtin == BuiltInSampleMask && (member_type.array.size() != 1 || !member_type.array_size_literal[0] || member_type.array[0] != 1))
+						SPIRV_CROSS_THROW("MSL fragment input blocks with builtin members require a single SampleMask word.");
+					if (builtin == BuiltInSampleMask && msl_options.force_native_arrays)
+						SPIRV_CROSS_THROW("MSL fragment input blocks with builtin members do not support SampleMask with force_native_arrays.");
+					switch (builtin)
+					{
+					case BuiltInFragCoord:
+					case BuiltInFrontFacing:
+					case BuiltInPointCoord:
+					case BuiltInSampleId:
+					case BuiltInSamplePosition:
+					case BuiltInHelperInvocation:
+					case BuiltInSampleMask:
+					case BuiltInClipDistance:
+					case BuiltInCullDistance:
+					case BuiltInPrimitiveId:
+					case BuiltInLayer:
+					case BuiltInViewportIndex:
+						builtin_members[builtin] = { type.self, i };
+						break;
+					default:
+						// Other builtins may require stage-in varyings or additional lowering.
+						SPIRV_CROSS_THROW(join("MSL fragment input blocks with builtin members do not support active builtin ", uint32_t(builtin), "."));
+					}
+				}
+			if (barycentric_block)
+				fragment_barycentric_input_blocks.insert(id);
+		}
+	});
+	for (const auto &member : builtin_members)
+	{
+		if (fragment_barycentric_builtin_ids.count(member.first))
+			continue;
+		// Use standalone builtin lowering for active block members. It supplies
+		// native stage inputs and the position and sample fixups.
+		uint32_t type_id = member.second.first;
+		uint32_t member_index = member.second.second;
+		uint32_t member_type = get<SPIRType>(type_id).member_types[member_index];
+		uint32_t ids = ir.increase_bound_by(2);
+		auto &pointer = set<SPIRType>(ids, get<SPIRType>(member_type));
+		pointer.op = OpTypePointer;
+		pointer.pointer = true;
+		pointer.pointer_depth++;
+		pointer.parent_type = member_type;
+		pointer.storage = StorageClassInput;
+		uint32_t var_id = ids + 1;
+		set<SPIRVariable>(var_id, ids, StorageClassInput);
+		ir.meta[var_id].decoration = ir.meta[type_id].members[member_index];
+		fragment_barycentric_builtin_ids[member.first] = var_id;
+		mark_implicit_builtin(StorageClassInput, member.first, var_id);
+	}
+	// Lower member pointers to the ordinary builtin variable before preprocessing
+	// and helper argument extraction. This also preserves the Input storage class.
+	ir.for_each_typed_id<SPIRBlock>([&](uint32_t, SPIRBlock &block) {
+		if (!reachable_blocks.count(block.self))
+			return;
+		for (auto &instruction : block.ops)
+		{
+			if (instruction.op != OpAccessChain && instruction.op != OpInBoundsAccessChain && instruction.op != OpLoad)
+				continue;
+			auto ops = stream_mutable(instruction);
+			uint32_t base = ops[2];
+			while (pointer_aliases.count(base))
+				base = pointer_aliases.at(base);
+			if (!fragment_barycentric_input_blocks.count(base))
+				continue;
+			const auto &type = get_variable_data_type(get<SPIRVariable>(base));
+			if (instruction.op == OpLoad || !type.array.empty() || instruction.length < 4)
+				SPIRV_CROSS_THROW("MSL fragment input blocks with builtin members require direct member access.");
+			uint32_t member = evaluate_constant_u32(ops[3]);
+			auto builtin = BuiltIn(get_member_decoration(type.self, member, DecorationBuiltIn));
+			auto itr = fragment_barycentric_builtin_ids.find(builtin);
+			if (itr == fragment_barycentric_builtin_ids.end())
+				continue;
+			ops[2] = itr->second;
+			for (uint32_t i = 3; i + 1 < instruction.length; i++)
+				ops[i] = ops[i + 1];
+			instruction.length--;
+			if (instruction.length == 3)
+				instruction.op = OpCopyObject;
+		}
+	});
+}
+
+void CompilerMSL::validate_per_vertex_input_buffer()
+{
+	if (!msl_options.supports_msl_version(2, 4))
+		SPIRV_CROSS_THROW("Portable PerVertexKHR inputs require MSL 2.4 or later.");
+	if (msl_options.supports_per_vertex_fragment_input)
+		SPIRV_CROSS_THROW("Portable and native PerVertexKHR input modes are mutually exclusive.");
+	if (capture_output_to_buffer)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR inputs cannot be combined with capture_output_to_buffer.");
+	const auto &binding = per_vertex_input_binding;
+	if (binding.vertex_buffer_index > 30 || binding.primitive_index_buffer_index > 30 || binding.vertex_buffer_index == binding.primitive_index_buffer_index)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR requires two distinct Metal buffer indices in [0, 30].");
+	if (binding.primitive_index_location == k_unknown_location)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR requires a private primitive index Location.");
+	if (binding.primitive_id_buffer_index != ~0u &&
+	    (binding.primitive_id_buffer_index > 30 || binding.primitive_id_buffer_index == binding.vertex_buffer_index ||
+	     binding.primitive_id_buffer_index == binding.primitive_index_buffer_index))
+		SPIRV_CROSS_THROW("Portable PerVertexKHR PrimitiveId buffer requires a distinct Metal buffer index in [0, 30].");
+	if (!per_vertex_input_layout.stride || per_vertex_input_layout.components.empty())
+		SPIRV_CROSS_THROW("Portable PerVertexKHR requires a nonzero producer stride and scalar layout.");
+	per_vertex_input_components.clear();
+	std::map<uint32_t, uint32_t> ranges;
+	for (const auto &field : per_vertex_input_layout.components)
+	{
+		uint32_t size;
+		switch (field.scalar_type)
+		{
+		case SPIRType::Half:
+		case SPIRType::Short:
+		case SPIRType::UShort:
+			size = 2;
+			break;
+		case SPIRType::Float:
+		case SPIRType::Int:
+		case SPIRType::UInt:
+			size = 4;
+			break;
+		default:
+			SPIRV_CROSS_THROW("Portable PerVertexKHR layout requires 16/32-bit floating-point or integer scalar types.");
+		}
+		if (field.location == k_unknown_location || field.component > 3)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR layout has invalid Location/Component.");
+		if (field.location == binding.primitive_index_location)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR private Location collides with the producer layout.");
+		if (field.byte_offset % size || per_vertex_input_layout.stride % size)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR scalar offsets and producer stride must be naturally aligned.");
+		if (size > per_vertex_input_layout.stride || field.byte_offset > per_vertex_input_layout.stride - size)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR scalar lies outside the producer stride.");
+		if (!per_vertex_input_components.emplace(LocationComponentPair{field.location, field.component}, field).second)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR layout has duplicate Location/Component.");
+		auto next = ranges.lower_bound(field.byte_offset);
+		if ((next != ranges.end() && next->first < field.byte_offset + size) || (next != ranges.begin() && std::prev(next)->second > field.byte_offset))
+			SPIRV_CROSS_THROW("Portable PerVertexKHR layout has overlapping scalar offsets.");
+		ranges.emplace(field.byte_offset, field.byte_offset + size);
+	}
+}
+
+void CompilerMSL::validate_per_vertex_buffer_binding(uint32_t index, uint32_t count) const
+{
+	if (msl_options.tese_as_compute)
+		for (uint32_t reserved : {msl_options.indirect_params_buffer_index, msl_options.shader_output_buffer_index,
+		                          msl_options.shader_input_buffer_index, msl_options.shader_patch_input_buffer_index,
+		                          msl_options.shader_tess_factor_buffer_index})
+			if (index <= reserved && reserved - index < count)
+				SPIRV_CROSS_THROW("TES compute buffer binding collides with an application or auxiliary buffer.");
+	if (msl_options.tessellation_factors_float32 && index <= msl_options.shader_tess_factor_buffer_index && msl_options.shader_tess_factor_buffer_index - index < count)
+		SPIRV_CROSS_THROW("Float32 TessLevel buffer binding collides with an application or auxiliary buffer.");
+	if (!per_vertex_input_buffer_used)
+		return;
+	for (uint32_t reserved : { per_vertex_input_binding.vertex_buffer_index, per_vertex_input_binding.primitive_index_buffer_index,
+	                           per_vertex_input_binding.primitive_id_buffer_index })
+		if (index <= reserved && reserved - index < count)
+			SPIRV_CROSS_THROW(join("Portable PerVertexKHR buffer index ", reserved, " collides with another fragment buffer."));
+}
+
+void CompilerMSL::add_per_vertex_input_from_buffer(const string &ib_var_ref, const SPIRVariable &var)
+{
+	const auto &array_type = get_variable_data_type(var);
+	if (is_builtin_variable(var) || !is_array(array_type) || !array_type.array_size_literal.back())
+		SPIRV_CROSS_THROW("Portable PerVertexKHR inputs must be non-builtin arrays with a literal size.");
+	uint32_t count = to_array_size_literal(array_type);
+	if (!count || count > 3)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR input arrays must contain one to three vertices.");
+	add_resource_name(var.self);
+	emit_local_masked_variable(var, false);
+	uint32_t location = has_decoration(var.self, DecorationLocation) ? get_decoration(var.self, DecorationLocation) : k_unknown_location;
+	add_per_vertex_input_leaf_from_buffer(ib_var_ref, get_variable_element_type(var), var.self, "", location, get_decoration(var.self, DecorationComponent), count);
+}
+
+void CompilerMSL::add_per_vertex_input_leaf_from_buffer(const string &ib_var_ref, const SPIRType &type, uint32_t var_id, const string &path, uint32_t &location, uint32_t component, uint32_t count)
+{
+	if (is_array(type) || is_matrix(type))
+	{
+		if (is_array(type) && !type.array_size_literal.back())
+			SPIRV_CROSS_THROW("Portable PerVertexKHR inner arrays must have a literal size.");
+		uint32_t elements = is_array(type) ? to_array_size_literal(type) : type.columns;
+		if (!elements)
+			SPIRV_CROSS_THROW("Portable PerVertexKHR inner arrays must have a nonzero size.");
+		for (uint32_t i = 0; i < elements; i++)
+			add_per_vertex_input_leaf_from_buffer(ib_var_ref, get<SPIRType>(type.parent_type), var_id, join(path, "[", i, "]"), location, component, count);
+		return;
+	}
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		{
+			if (has_member_decoration(type.self, i, DecorationBuiltIn) || has_member_decoration(type.self, i, DecorationPerVertexKHR))
+				SPIRV_CROSS_THROW("Portable PerVertexKHR blocks cannot contain BuiltIn or nested PerVertexKHR decorations.");
+			if (has_member_decoration(type.self, i, DecorationLocation))
+				location = get_member_decoration(type.self, i, DecorationLocation);
+			uint32_t member_component = get_member_decoration(type.self, i, DecorationComponent);
+			add_per_vertex_input_leaf_from_buffer(ib_var_ref, get<SPIRType>(type.member_types[i]), var_id, join(path, ".", to_member_name(type, i)), location, member_component, count);
+		}
+		return;
+	}
+	if (type.basetype != SPIRType::Half && type.basetype != SPIRType::Short && type.basetype != SPIRType::UShort && type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR inputs require 16/32-bit floating-point or integer scalar/vector elements.");
+	if (location == k_unknown_location)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR input requires a Location decoration.");
+	if (!type.vecsize || type.vecsize > 4 || component > 3 || type.vecsize > 4 - component)
+		SPIRV_CROSS_THROW("Portable PerVertexKHR input crosses a Location boundary.");
+	// The physical producer layout is authoritative; do not apply vertex-attribute format remaps.
+	if (inputs_by_location.count({location, component}))
+		SPIRV_CROSS_THROW("Portable PerVertexKHR does not support add_msl_shader_input remapping for captured inputs.");
+	SmallVector<uint32_t> offsets;
+	for (uint32_t c = 0; c < type.vecsize; c++)
+	{
+		auto field = per_vertex_input_components.find({location, component + c});
+		if (field == per_vertex_input_components.end())
+			SPIRV_CROSS_THROW(join("Portable PerVertexKHR missing producer scalar at Location ", location, " Component ", component + c, "."));
+		if (field->second.scalar_type != type.basetype)
+			SPIRV_CROSS_THROW(join("Portable PerVertexKHR producer scalar type mismatch at Location ", location, " Component ", component + c, "."));
+		offsets.push_back(field->second.byte_offset);
+	}
+	mark_location_as_used_by_shader(location, type, StorageClassInput);
+	location++;
+	SPIRType scalar = type;
+	scalar.vecsize = 1;
+	get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([=]() {
+		for (uint32_t v = 0; v < count; v++)
+		{
+			string record = join("ulong(spvPerVertexIndices[ulong(", ib_var_ref, ".spvPerVertexPrimitive) * 3ul + ", v, "ul]) * ", per_vertex_input_layout.stride, "ul");
+			string value = type_to_glsl(type) + "(";
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				if (c)
+					value += ", ";
+				value += join("*reinterpret_cast<const device ", type_to_glsl(scalar), "*>(spvPerVertexVertices + ", record, " + ", offsets[c], "ul)");
+			}
+			statement(to_name(var_id), "[", v, "]", path, " = ", value, ");");
+		}
+	});
 }
 
 void CompilerMSL::add_msl_shader_input(const MSLShaderInterfaceVariable &si)
@@ -251,7 +1086,7 @@ void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
 	bool need_vertex_params = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
-	                          !msl_options.vertex_for_tessellation;
+	                          (!msl_options.vertex_for_tessellation || msl_options.enable_base_index_zero);
 	bool need_tesc_params = is_tesc_shader();
 	bool need_tese_params = is_tese_shader() && msl_options.raw_buffer_tese_input;
 	bool need_subgroup_mask =
@@ -269,7 +1104,7 @@ void CompilerMSL::build_implicit_builtins()
 	bool need_grid_params = get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation;
 	bool need_vertex_base_params =
 	    need_grid_params &&
-	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
+	    (need_vertex_params || need_multiview || active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
 	bool need_local_invocation_index =
@@ -1345,6 +2180,8 @@ SPIRType &CompilerMSL::get_patch_stage_out_struct_type()
 
 std::string CompilerMSL::get_tess_factor_struct_name()
 {
+	if (msl_options.tessellation_factors_float32)
+		return "spvTessellationFactorsFloat";
 	if (is_tessellating_triangles())
 		return "MTLTriangleTessellationFactorsHalf";
 	return "MTLQuadTessellationFactorsHalf";
@@ -1671,7 +2508,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		statement("threadgroup uint2 spvMeshSizes;");
 }
 
-string CompilerMSL::compile()
+void CompilerMSL::configure_msl_backend()
 {
 	replace_illegal_entry_point_names();
 	ir.fixup_reserved_names();
@@ -1719,6 +2556,104 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 	backend.supports_spec_constant_array_size = false;
+}
+
+string CompilerMSL::get_tessellation_factors_float32_incompatibility()
+{
+	if (!is_tesc_shader() && !is_tese_shader())
+		return "Float32 tessellation factors require TCS or raw-buffer TES.";
+	if (get_entry_point().flags.get(ExecutionModeIsolines))
+		return "Float32 tessellation factors do not support isolines.";
+	string reason;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (!reason.empty() || (var.storage != StorageClassInput && var.storage != StorageClassOutput))
+			return;
+		const auto &type = get_variable_data_type(var);
+		auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+		if (has_decoration(var.self, DecorationBuiltIn) && (builtin == BuiltInTessLevelOuter || builtin == BuiltInTessLevelInner))
+		{
+			uint32_t count = builtin == BuiltInTessLevelOuter ? 4 : 2;
+			if (type.basetype != SPIRType::Float || type.width != 32 || type.vecsize != 1 || type.columns != 1 || type.array.size() != 1 || !type.array_size_literal[0] || type.array[0] != count || !has_decoration(var.self, DecorationPatch))
+				reason = "Float32 tessellation factors require Patch float32 outer[4] and inner[2].";
+			// Initialization is done by a single invocation; widening needs per-patch initialization and synchronization.
+			else if (var.initializer && is_tesc_shader() && get_entry_point().output_vertices != 1)
+				reason = "Float32 tessellation factor initializers currently require OutputVertices 1.";
+		}
+		for (uint32_t i = 0; reason.empty() && i < type.member_types.size(); i++)
+		{
+			auto member = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+			if (has_member_decoration(type.self, i, DecorationBuiltIn) && (member == BuiltInTessLevelOuter || member == BuiltInTessLevelInner))
+				reason = "Float32 tessellation factors require standalone builtins, not block members.";
+		}
+	});
+	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, const SPIRFunction &func) {
+		for (const auto &arg : func.arguments)
+		{
+			const auto &type = get<SPIRType>(arg.type);
+			if (reason.empty() && !arg.alias_global_variable && type.pointer && (type.storage == StorageClassInput || type.storage == StorageClassOutput))
+				reason = "Float32 tessellation factors do not support explicit IO pointer function parameters.";
+		}
+	});
+	return reason;
+}
+
+string CompilerMSL::compile()
+{
+	if (captured_output_replay)
+		SPIRV_CROSS_THROW("Captured output replay requires a fresh compiler for subsequent compilation.");
+	msl_compile_started = true;
+	msl_compile_completed = false;
+	captured_output_component_masks.clear();
+	configure_msl_backend();
+
+	if (msl_options.tessellation_factors_float32)
+	{
+		if (is_tese_shader() && !msl_options.raw_buffer_tese_input)
+			SPIRV_CROSS_THROW("Float32 tessellation factors require TCS or raw-buffer TES.");
+		auto incompatibility = get_tessellation_factors_float32_incompatibility();
+		if (!incompatibility.empty())
+			SPIRV_CROSS_THROW(incompatibility);
+		if (!msl_options.supports_msl_version(2, 0))
+			SPIRV_CROSS_THROW("Float32 tessellation factors require MSL 2.0.");
+		if (msl_options.multiview)
+			SPIRV_CROSS_THROW("Float32 tessellation factors do not support multiview.");
+		if (msl_options.shader_tess_factor_buffer_index > 30)
+			SPIRV_CROSS_THROW("Float32 TessLevel buffer index must be in [0, 30].");
+		for (uint32_t reserved : {msl_options.indirect_params_buffer_index, msl_options.shader_output_buffer_index,
+		                          msl_options.shader_input_buffer_index, msl_options.shader_patch_input_buffer_index,
+		                          msl_options.shader_patch_output_buffer_index})
+			if (reserved == msl_options.shader_tess_factor_buffer_index)
+				SPIRV_CROSS_THROW("Float32 TessLevel buffer binding collides with an implicit buffer.");
+		if (is_stage_output_builtin_masked(BuiltInTessLevelOuter) || is_stage_output_builtin_masked(BuiltInTessLevelInner))
+			SPIRV_CROSS_THROW("Float32 tessellation factors do not support masked factors.");
+	}
+
+	if (is_tese_shader() && msl_options.capture_output_to_buffer && !msl_options.tese_as_compute)
+		SPIRV_CROSS_THROW("TES capture requires tese_as_compute; hardware TES has no dense output record index.");
+	if (msl_options.tese_as_compute)
+	{
+		if (!is_tese_shader() || !msl_options.capture_output_to_buffer || !msl_options.raw_buffer_tese_input)
+			SPIRV_CROSS_THROW("TES compute requires a TES shader, capture_output_to_buffer and raw_buffer_tese_input.");
+		if (!msl_options.supports_msl_version(2, 4))
+			SPIRV_CROSS_THROW("TES compute requires MSL 2.4.");
+		if (!get_entry_point().flags.get(ExecutionModeTriangles) || !get_entry_point().flags.get(ExecutionModeSpacingEqual))
+			SPIRV_CROSS_THROW("TES compute currently requires triangle domain and equal spacing.");
+		if (!get_entry_point().output_vertices || get_entry_point().output_vertices > 32)
+			SPIRV_CROSS_THROW("TES compute requires an OutputVertices override in [1, 32] for the input patch size.");
+		if (msl_options.multiview || msl_options.vertex_for_tessellation || msl_options.multi_patch_workgroup ||
+		    msl_options.tess_domain_origin_lower_left || msl_options.argument_buffers || msl_options.dispatch_base ||
+		    msl_options.emulate_depth_clip_enable || msl_options.emulate_reversed_depth_viewport ||
+		    options.vertex.fixup_clipspace || options.vertex.flip_vert_y)
+			SPIRV_CROSS_THROW("TES compute does not support multiview, tessellation scheduling, argument buffers or raster coordinate transforms.");
+		if (!masked_output_locations.empty() || !masked_output_builtins.empty())
+			SPIRV_CROSS_THROW("TES compute does not support masked outputs.");
+		std::set<uint32_t> bindings;
+		for (uint32_t binding : {msl_options.indirect_params_buffer_index, msl_options.shader_output_buffer_index,
+		                         msl_options.shader_input_buffer_index, msl_options.shader_patch_input_buffer_index,
+		                         msl_options.shader_tess_factor_buffer_index})
+			if (binding > 30 || !bindings.insert(binding).second)
+				SPIRV_CROSS_THROW("TES compute requires distinct invocation, output and raw input buffer indices in [0, 30].");
+	}
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -1742,6 +2677,19 @@ string CompilerMSL::compile()
 
 	build_function_control_flow_graphs_and_analyze();
 	update_active_builtins();
+	if (msl_options.tese_as_compute)
+		active_input_builtins.for_each_bit([](uint32_t builtin) {
+			switch (BuiltIn(builtin))
+			{
+			case BuiltInPosition: case BuiltInPointSize: case BuiltInClipDistance: case BuiltInCullDistance:
+			case BuiltInPrimitiveId: case BuiltInTessCoord: case BuiltInPatchVertices:
+			case BuiltInTessLevelInner: case BuiltInTessLevelOuter:
+				break;
+			default:
+				SPIRV_CROSS_THROW("TES compute has an unsupported input builtin.");
+			}
+		});
+	prepare_fragment_barycentric_input();
 	analyze_image_and_sampler_usage();
 	analyze_sampled_image_usage();
 	analyze_interlocked_resource_usage();
@@ -1767,6 +2715,8 @@ string CompilerMSL::compile()
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
+	for (const auto &builtin : fragment_barycentric_builtin_ids)
+		add_active_interface_variable(builtin.second);
 	if (msl_options.force_active_argument_buffer_resources)
 		activate_argument_buffer_resources();
 
@@ -1789,6 +2739,44 @@ string CompilerMSL::compile()
 	if (builtin_frag_depth_id)
 		add_active_interface_variable(builtin_frag_depth_id);
 
+	if (msl_options.tese_as_compute)
+		get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([this]() {
+			statement("if (spvTessInvocation.y != 0u || spvTessInvocation.z != 0u || spvTessInvocation.x >= spvTessInvocations[0]) return;");
+			statement("const device uint* spvTessRecord = spvTessInvocations + 4ul + ulong(spvTessInvocation.x) * 8ul;");
+			ir.for_each_typed_id<SPIRVariable>([this](uint32_t id, const SPIRVariable &var) {
+				const auto &type = get_variable_data_type(var);
+				if (var.storage == StorageClassInput && has_decoration(type.self, DecorationBlock) && type.array.empty() &&
+				    interface_variable_exists_in_entry_point(id))
+					for (uint32_t i = 0; i < type.member_types.size(); i++)
+						if (has_member_decoration(type.self, i, DecorationBuiltIn) &&
+						    get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInTessCoord &&
+						    active_input_builtins.get(BuiltInTessCoord))
+							statement("float3 gl_TessCoord = as_type<float3>(uint3(spvTessRecord[0], spvTessRecord[1], spvTessRecord[2]));");
+				if (var.storage != StorageClassInput || !has_decoration(id, DecorationBuiltIn) || !interface_variable_exists_in_entry_point(id))
+					return;
+				auto builtin = BuiltIn(get_decoration(id, DecorationBuiltIn));
+				if (builtin == BuiltInPrimitiveId)
+					statement("uint ", to_expression(id), " = spvTessRecord[3];");
+				else if (builtin == BuiltInTessCoord && active_input_builtins.get(builtin))
+					statement("float3 ", to_expression(id), " = as_type<float3>(uint3(spvTessRecord[0], spvTessRecord[1], spvTessRecord[2]));");
+			});
+		});
+	else if (is_tese_shader() && get_entry_point().flags.get(ExecutionModeQuads) && active_input_builtins.get(BuiltInTessCoord))
+		ir.for_each_typed_id<SPIRVariable>([this](uint32_t id, const SPIRVariable &var) {
+			const auto &type = get_variable_data_type(var);
+			if (var.storage != StorageClassInput || !has_decoration(type.self, DecorationBlock) || !type.array.empty() ||
+			    !interface_variable_exists_in_entry_point(id))
+				return;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+				if (has_member_decoration(type.self, i, DecorationBuiltIn) &&
+				    get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInTessCoord)
+					get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([this]() {
+						statement("float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);");
+						if (msl_options.tess_domain_origin_lower_left)
+							statement("gl_TessCoord.y = 1.0 - gl_TessCoord.y;");
+					});
+		});
+
 	// Create structs to hold input, output and uniform variables.
 	// Do output first to ensure out. is declared at top of entry function.
 	qual_pos_var_name = "";
@@ -1807,6 +2795,9 @@ string CompilerMSL::compile()
 
 	if (is_tese_shader())
 		patch_stage_in_var_id = add_interface_block(StorageClassInput, true);
+
+	if (msl_options.tese_as_compute && (!stage_out_var_id || patch_stage_out_var_id))
+		SPIRV_CROSS_THROW("TES compute requires a non-patch captured output record.");
 
 	if (is_tesc_shader())
 		stage_out_ptr_var_id = add_interface_block_pointer(stage_out_var_id, StorageClassOutput);
@@ -1869,6 +2860,7 @@ string CompilerMSL::compile()
 		pass_count++;
 	} while (is_forcing_recompilation());
 
+	msl_compile_completed = true;
 	return buffer.str();
 }
 
@@ -2068,6 +3060,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpAccessChain:
 			case OpPtrAccessChain:
 			case OpArrayLength:
+			case OpCopyObject:
 			{
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
@@ -2116,6 +3109,13 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				added_arg_ids.insert(inner_func_args.begin(), inner_func_args.end());
 				break;
 			}
+
+			case OpCopyMemory:
+				if (msl_options.tessellation_factors_float32)
+					for (uint32_t index = 0; index < 2; index++)
+						if (global_var_ids.count(ops[index]))
+							added_arg_ids.insert(ops[index]);
+				break;
 
 			case OpStore:
 			{
@@ -2402,6 +3402,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			bool is_redirected_to_global_stage_io = (is_control_point_storage || is_patch_block_storage) &&
 			                                        variable_is_stage_io;
 
+			// Non-arrayed TES builtin blocks are passed member by member, not as control-point arrays.
+			if (is_tese_shader() && var.storage == StorageClassInput && is_builtin && is_block && p_type->array.empty())
+				is_redirected_to_global_stage_io = false;
+
 			// If output is masked it is not considered part of the global stage IO interface.
 			if (is_redirected_to_global_stage_io && var.storage == StorageClassOutput)
 				is_redirected_to_global_stage_io = !is_stage_output_variable_masked(var);
@@ -2476,7 +3480,9 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				}
 				ir.meta[next_id] = ir.meta[arg_id];
 			}
-			else if (is_builtin && has_decoration(p_type->self, DecorationBlock))
+			// Portable barycentric interpolants must travel with stage-in for explicit
+			// interpolation in helpers; expanding this block loses the interpolant object.
+			else if (is_builtin && has_decoration(p_type->self, DecorationBlock) && !(arg_id == stage_in_var_id && !fragment_barycentric_input_expressions.empty()))
 			{
 				// Get the pointee type
 				type_id = get_pointee_type_id(type_id);
@@ -2487,6 +3493,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					BuiltIn builtin = BuiltInMax;
 					is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
+					if (fragment_barycentric_input_blocks.count(arg_id) && fragment_barycentric_builtin_ids.count(builtin))
+					{
+						mbr_idx++;
+						continue;
+					}
 					if (is_builtin && has_active_builtin(builtin, var.storage))
 					{
 						// Add a arg variable with the same type and decorations as the member
@@ -2755,6 +3766,12 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 		uint32_t start_component = get_decoration(var.self, DecorationComponent);
 		uint32_t type_components = type.vecsize;
 		uint32_t num_components = location_meta->num_components;
+		if (storage == StorageClassOutput && capture_output_to_buffer && start_component < 4 && type_components <= 4 - start_component)
+		{
+			uint32_t mask = ((1u << type_components) - 1) << start_component;
+			for (uint32_t loc = 0; loc < type_to_location_count(type); loc++)
+				captured_output_component_masks[location + loc] |= mask;
+		}
 
 		if (pad_fragment_output)
 		{
@@ -2773,10 +3790,10 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 			entry_func.fixup_hooks_in.push_back([=, &type, &var]() {
 				if (!type.array.empty())
 				{
-					uint32_t array_size = to_array_size_literal(type);
+					uint32_t array_size = interface_composite_element_count(type);
 					for (uint32_t loc_off = 0; loc_off < array_size; loc_off++)
 					{
-						statement(to_name(var.self), "[", loc_off, "]", " = ", ib_var_ref,
+						statement(to_name(var.self), interface_composite_element_access(type, loc_off), " = ", ib_var_ref,
 						          ".m_location_", location + loc_off,
 						          vector_swizzle(type_components, start_component), ";");
 					}
@@ -2793,12 +3810,12 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 			entry_func.fixup_hooks_out.push_back([=, &type, &var]() {
 				if (!type.array.empty())
 				{
-					uint32_t array_size = to_array_size_literal(type);
+					uint32_t array_size = interface_composite_element_count(type);
 					for (uint32_t loc_off = 0; loc_off < array_size; loc_off++)
 					{
 						statement(ib_var_ref, ".m_location_", location + loc_off,
 						          vector_swizzle(type_components, start_component), " = ",
-						          to_name(var.self), "[", loc_off, "];");
+						          to_name(var.self), interface_composite_element_access(type, loc_off), ";");
 					}
 				}
 				else
@@ -2821,6 +3838,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_flat = has_decoration(var.self, DecorationFlat);
 	bool is_noperspective = has_decoration(var.self, DecorationNoPerspective);
+	if (is_portable_barycentric(builtin) && builtin == BuiltInBaryCoordNoPerspKHR)
+		is_noperspective = true;
 	bool is_centroid = has_decoration(var.self, DecorationCentroid);
 	bool is_sample = has_decoration(var.self, DecorationSample);
 
@@ -2882,6 +3901,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		else
 			qual_var_name += ".interpolate_at_center()";
 	}
+	if (storage == StorageClassInput && is_portable_barycentric(builtin))
+		fragment_barycentric_input_expressions[builtin] = qual_var_name;
 
 	if (padded_output || padded_input)
 	{
@@ -3011,31 +4032,49 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
 }
 
+uint32_t CompilerMSL::interface_composite_element_count(const SPIRType &type) const
+{
+	if (is_tessellation_shader() && (type.array.size() > 1 || (!type.array.empty() && type.columns > 1)))
+		SPIRV_CROSS_THROW("MSL cannot flatten multidimensional arrays or arrays-of-matrices in tessellation interfaces.");
+	uint64_t count = type.columns;
+	for (uint32_t dim = 0; dim < type.array.size(); dim++)
+	{
+		// A one-dimensional array keeps the default value of a specialization constant size, as before flattening.
+		if (!type.array_size_literal[dim] && type.array.size() > 1)
+			SPIRV_CROSS_THROW("MSL interface composite flattening requires literal array sizes.");
+		uint32_t size = to_array_size_literal(type, dim);
+		if (!size || count > UINT32_MAX / size)
+			SPIRV_CROSS_THROW("MSL interface composite has an invalid or overflowing array size.");
+		count *= size;
+	}
+	return uint32_t(count);
+}
+
+string CompilerMSL::interface_composite_element_access(const SPIRType &type, uint32_t index) const
+{
+	string access;
+	uint32_t stride = interface_composite_element_count(type);
+	for (uint32_t dim = uint32_t(type.array.size()); dim; dim--)
+	{
+		stride /= to_array_size_literal(type, dim - 1);
+		access += join("[", index / stride, "]");
+		index %= stride;
+	}
+	if (type.columns > 1)
+		access += join("[", index, "]");
+	return access;
+}
+
 void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
                                                             SPIRType &ib_type, SPIRVariable &var,
                                                             InterfaceBlockMeta &meta)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-	uint32_t elem_cnt = 0;
+	uint32_t elem_cnt = interface_composite_element_count(var_type);
 
 	if (add_component_variable_to_interface_block(storage, ib_var_ref, var, var_type, meta))
 		return;
-
-	if (is_matrix(var_type))
-	{
-		if (is_array(var_type))
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-		elem_cnt = var_type.columns;
-	}
-	else if (is_array(var_type))
-	{
-		if (var_type.array.size() != 1)
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-		elem_cnt = to_array_size_literal(var_type);
-	}
 
 	bool is_builtin = is_builtin_variable(var);
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
@@ -3179,7 +4218,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			switch (storage)
 			{
 			case StorageClassInput:
-				entry_func.fixup_hooks_in.push_back([=, &var]() {
+				entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
 					if (pull_model_inputs.count(var.self))
 					{
 						string lerp_call;
@@ -3189,30 +4228,30 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 							lerp_call = join(".interpolate_at_sample(", to_expression(builtin_sample_id_id), ")");
 						else
 							lerp_call = ".interpolate_at_center()";
-						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, lerp_call, ";");
+						statement(to_name(var.self), interface_composite_element_access(var_type, i), " = ", ib_var_ref, ".", mbr_name, lerp_call, ";");
 					}
 					else
 					{
-						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
+						statement(to_name(var.self), interface_composite_element_access(var_type, i), " = ", ib_var_ref, ".", mbr_name, ";");
 					}
 				});
 				break;
 
 			case StorageClassOutput:
-				entry_func.fixup_hooks_out.push_back([=, &var]() {
+				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 					if (padded_output)
 					{
 						auto &padded_type = this->get<SPIRType>(type_id);
 						statement(
 						    ib_var_ref, ".", mbr_name, " = ",
-						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
+						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), interface_composite_element_access(var_type, i))),
 						    ";");
 					}
 					else if (flatten_from_ib_var)
 						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i,
 						          "];");
 					else
-						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
+						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), interface_composite_element_access(var_type, i), ";");
 				});
 				break;
 
@@ -3232,6 +4271,11 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
                                                                    uint32_t &location, uint32_t &var_mbr_idx,
                                                                    const Bitset &interpolation_qual)
 {
+	if (storage == StorageClassInput && has_member_decoration(var_type.self, mbr_idx, DecorationPerVertexKHR))
+		SPIRV_CROSS_THROW("Member-decorated PerVertexKHR inputs are not supported in MSL.");
+	if (is_tessellation_shader() && has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
+		SPIRV_CROSS_THROW("Component decoration is not supported in tessellation shaders.");
+
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
@@ -3262,24 +4306,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	uint32_t mbr_type_id = var_type.member_types[mbr_idx];
 	auto &mbr_type = get<SPIRType>(mbr_type_id);
 
-	bool mbr_is_indexable = false;
-	uint32_t elem_cnt = 1;
-	if (is_matrix(mbr_type))
-	{
-		if (is_array(mbr_type))
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-		mbr_is_indexable = true;
-		elem_cnt = mbr_type.columns;
-	}
-	else if (is_array(mbr_type))
-	{
-		if (mbr_type.array.size() != 1)
-			SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-		mbr_is_indexable = true;
-		elem_cnt = to_array_size_literal(mbr_type);
-	}
+	bool mbr_is_indexable = is_matrix(mbr_type) || is_array(mbr_type);
+	uint32_t elem_cnt = interface_composite_element_count(mbr_type);
 
 	auto *usable_type = &mbr_type;
 	if (usable_type->pointer)
@@ -3308,13 +4336,20 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			return;
 	}
 
+	// Resolve the member's base before descending into nested structures. An explicit
+	// Location starts a new range even when a previous member established a location.
+	if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
+		location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+	else if (location == UINT32_MAX && has_decoration(var.self, DecorationLocation))
+		location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+
 	// Recursively handle nested structures.
 	if (mbr_type.basetype == SPIRType::Struct)
 	{
 		for (uint32_t i = 0; i < elem_cnt; i++)
 		{
 			string mbr_name = append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : "");
-			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), (mbr_is_indexable ? join("[", i, "]") : ""));
+			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), interface_composite_element_access(mbr_type, i));
 			uint32_t sub_mbr_cnt = uint32_t(mbr_type.member_types.size());
 			for (uint32_t sub_mbr_idx = 0; sub_mbr_idx < sub_mbr_cnt; sub_mbr_idx++)
 			{
@@ -3342,44 +4377,25 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : ""), "m");
 		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
-		// The SPIRV location of interface variable, used to obtain the initial
-		// MSL location (the location variable) and interface matching
 		uint32_t ir_location = UINT32_MAX;
-		bool has_member_loc_decor = has_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-		bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
 		uint32_t orig_vecsize = UINT32_MAX;
 
-		// If we haven't established a location base yet, do so here.
-		if (location == UINT32_MAX)
+		// Builtins can receive locations from the application for buffer interfaces.
+		if (location == UINT32_MAX && is_builtin)
 		{
-			if (has_member_loc_decor)
-				ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-			else if (has_var_loc_decor)
-				ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
-			else if (is_builtin)
-			{
-				if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
-					ir_location = inputs_by_builtin[builtin].location;
-				else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
-					ir_location = outputs_by_builtin[builtin].location;
-			}
+			if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+				ir_location = inputs_by_builtin[builtin].location;
+			else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+				ir_location = outputs_by_builtin[builtin].location;
 		}
 
-		// Once we determine the location of the first member within nested structures,
-		// from a var of the topmost structure, the remaining flattened members of
-		// the nested structures will have consecutive location values. At this point,
-		// we've recursively tunnelled into structs, arrays, and matrices, and are
-		// down to a single location for each member now.
 		if (location == UINT32_MAX && ir_location != UINT32_MAX)
 			location = ir_location + i;
 
-		if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
+		if (storage == StorageClassInput && !is_builtin && location != UINT32_MAX)
 		{
-			uint32_t component = 0;
+			uint32_t component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
 			uint32_t orig_mbr_type_id = usable_type->self;
-
-			if (has_member_loc_decor)
-				component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
 
 			var.basetype = ensure_correct_input_type(var.basetype, location, component, 0, meta.strip_array);
 			mbr_type_id = ensure_correct_input_type(usable_type->self, location, component, 0, meta.strip_array);
@@ -3410,7 +4426,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
-			SPIRV_CROSS_THROW("DecorationComponent on matrices and arrays is not supported.");
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, get_member_decoration(var_type.self, mbr_idx, DecorationComponent));
 
 		if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
 		{
@@ -3431,7 +4447,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		if (!meta.strip_array && meta.allow_local_declaration)
 		{
-			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), (mbr_is_indexable ? join("[", i, "]") : ""));
+			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), interface_composite_element_access(mbr_type, i));
 			switch (storage)
 			{
 			case StorageClassInput:
@@ -3477,14 +4493,21 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
                                                                const string &var_chain_qual,
                                                                uint32_t &location, uint32_t &var_mbr_idx)
 {
+	if (storage == StorageClassInput && has_member_decoration(var_type.self, mbr_idx, DecorationPerVertexKHR))
+		SPIRV_CROSS_THROW("Member-decorated PerVertexKHR inputs are not supported in MSL.");
+
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
 	bool is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
+	if (storage == StorageClassInput && is_builtin && fragment_barycentric_input_blocks.count(var.self) && !is_portable_barycentric(builtin))
+		return;
 	bool is_flat =
 	    has_member_decoration(var_type.self, mbr_idx, DecorationFlat) || has_decoration(var.self, DecorationFlat);
 	bool is_noperspective = has_member_decoration(var_type.self, mbr_idx, DecorationNoPerspective) ||
 	                        has_decoration(var.self, DecorationNoPerspective);
+	if (is_portable_barycentric(builtin) && builtin == BuiltInBaryCoordNoPerspKHR)
+		is_noperspective = true;
 	bool is_centroid = has_member_decoration(var_type.self, mbr_idx, DecorationCentroid) ||
 	                   has_decoration(var.self, DecorationCentroid);
 	bool is_sample =
@@ -3517,6 +4540,9 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			qual_var_name += ".interpolate_at_center()";
 	}
 
+	if (storage == StorageClassInput && is_portable_barycentric(builtin))
+		fragment_barycentric_input_expressions[builtin] = qual_var_name;
+
 	// The SPIRV location of interface variable, used to obtain the initial
 	// MSL location (the location variable) and interface matching
 	uint32_t ir_location = UINT32_MAX;
@@ -3536,12 +4562,9 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			ir_location = outputs_by_builtin[builtin].location;
 	}
 
-	// Once we determine the location of the first member within nested structures,
-	// from a var of the topmost structure, the remaining flattened members of
-	// the nested structures will have consecutive location values. At this point,
-	// we've recursively tunnelled into structs, arrays, and matrices, and are
-	// down to a single location for each member now.
-	if (location == UINT32_MAX && ir_location != UINT32_MAX)
+	// An explicit member Location overrides the running location, including for
+	// composites retained in a capture record rather than flattened into stage I/O.
+	if ((has_member_loc_decor || location == UINT32_MAX) && ir_location != UINT32_MAX)
 		location = ir_location;
 
 	if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
@@ -3592,7 +4615,17 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		case StorageClassOutput:
 			flatten_stage_out = true;
 			entry_func.fixup_hooks_out.push_back([=]() {
-				statement(qual_var_name, " = ", var_chain, ";");
+				const auto &member_type = get<SPIRType>(mbr_type_id);
+				if (msl_options.force_native_arrays && !member_type.array.empty())
+				{
+					for (uint32_t i = 0; i < interface_composite_element_count(member_type); i++)
+					{
+						auto access = interface_composite_element_access(member_type, i);
+						statement(qual_var_name, access, " = ", var_chain, access, ";");
+					}
+				}
+				else
+					statement(qual_var_name, " = ", var_chain, ";");
 			});
 			break;
 
@@ -3763,7 +4796,7 @@ void CompilerMSL::add_tess_level_input(const std::string &base_ref, const std::s
 	// We need to declare the variable early and at entry-point scope.
 	entry_func.add_local_variable(var.self);
 	vars_needing_early_declaration.push_back(var.self);
-	bool triangles = is_tessellating_triangles();
+	bool triangles = is_tessellating_triangles() && !msl_options.tessellation_factors_float32;
 
 	if (builtin == BuiltInTessLevelOuter)
 	{
@@ -3886,6 +4919,85 @@ void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, boo
 	}
 }
 
+// Keep the SPIR-V input as a thread-local array so dynamic indices and function arguments
+// use the ordinary access-chain path. Only the flattened stage-in leaves use vertex_value.
+void CompilerMSL::add_per_vertex_input_to_interface_block(const string &ib_var_ref, SPIRType &ib_type, const SPIRVariable &var, const SPIRType &type, const string &path, uint32_t &location, uint32_t component, uint32_t vertex_count)
+{
+	uint32_t mesh_corners = msl_options.mesh_per_vertex_corner_locations;
+	if (mesh_corners && (is_array(type) || is_matrix(type) || type.basetype == SPIRType::Struct))
+		SPIRV_CROSS_THROW("PerVertexKHR inputs read from mesh corners must be arrays of scalars or vectors in MSL.");
+	if (is_array(type) || is_matrix(type))
+	{
+		if (is_array(type) && !type.array_size_literal.back())
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays must have a literal size in MSL.");
+		uint32_t count = is_array(type) ? to_array_size_literal(type) : type.columns;
+		if (!count)
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays must have a nonzero size in MSL.");
+		for (uint32_t i = 0; i < count; i++)
+			add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get<SPIRType>(type.parent_type), join(path, "[", i, "]"), location, component, vertex_count);
+		return;
+	}
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		{
+			if (has_member_decoration(type.self, i, DecorationBuiltIn) || has_member_decoration(type.self, i, DecorationPerVertexKHR))
+				SPIRV_CROSS_THROW("PerVertexKHR input blocks with BuiltIn or member PerVertexKHR decorations are not supported in MSL.");
+			if (has_member_decoration(type.self, i, DecorationLocation))
+				location = get_member_decoration(type.self, i, DecorationLocation);
+			uint32_t member_component = has_member_decoration(type.self, i, DecorationComponent) ? get_member_decoration(type.self, i, DecorationComponent) : component;
+			add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get<SPIRType>(type.member_types[i]), join(path, ".", to_member_name(type, i)), location, member_component, vertex_count);
+		}
+		return;
+	}
+	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Half && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt && type.basetype != SPIRType::Short && type.basetype != SPIRType::UShort)
+		SPIRV_CROSS_THROW("PerVertexKHR inputs in MSL require 16-bit or 32-bit floating-point or integer scalars or vectors.");
+	if (location == k_unknown_location)
+		SPIRV_CROSS_THROW("PerVertexKHR inputs in MSL require a Location decoration.");
+	uint32_t type_id = ensure_correct_input_type(type.self, location, component, 0, false);
+	if (get<SPIRType>(type_id).basetype != type.basetype)
+		SPIRV_CROSS_THROW("PerVertexKHR input type remapping is not supported in MSL.");
+	string swizzle = get<SPIRType>(type_id).vecsize != type.vecsize ? vector_swizzle(type.vecsize, 0) : "";
+	uint32_t var_id = var.self;
+	if (mesh_corners)
+	{
+		if (location >= 32 || !(mesh_corners & (1u << location)))
+			SPIRV_CROSS_THROW("PerVertexKHR input Location is missing from mesh_per_vertex_corner_locations.");
+		// One flat member per corner, written by the mesh shader in primitive index order.
+		for (uint32_t corner = 0; corner < vertex_count; corner++)
+		{
+			uint32_t member_index = uint32_t(ib_type.member_types.size());
+			ib_type.member_types.push_back(type_id);
+			set_member_name(ib_type.self, member_index, join("spvPerVertex", var.self, "_", member_index));
+			set_member_decoration(ib_type.self, member_index, DecorationLocation, location);
+			set_member_decoration(ib_type.self, member_index, DecorationComponent, component);
+			set_member_decoration(ib_type.self, member_index, DecorationFlat);
+			set_extended_member_decoration(ib_type.self, member_index, SPIRVCrossDecorationMeshPerVertexCorner, corner);
+			string member_name = to_member_name(ib_type, member_index);
+			get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([=]() {
+				statement(to_name(var_id), "[", corner, "]", path, " = ", ib_var_ref, ".", member_name, swizzle, ";");
+			});
+		}
+		mark_location_as_used_by_shader(location, get<SPIRType>(type_id), StorageClassInput);
+		location++;
+		return;
+	}
+	uint32_t member_index = uint32_t(ib_type.member_types.size());
+	ib_type.member_types.push_back(type_id);
+	set_member_name(ib_type.self, member_index, join("spvPerVertex", var.self, "_", member_index));
+	set_member_decoration(ib_type.self, member_index, DecorationLocation, location);
+	set_member_decoration(ib_type.self, member_index, DecorationComponent, component);
+	set_member_decoration(ib_type.self, member_index, DecorationPerVertexKHR);
+	mark_location_as_used_by_shader(location, get<SPIRType>(type_id), StorageClassInput);
+	location++;
+	string member_name = to_member_name(ib_type, member_index);
+	get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([=]() {
+		static const char *vertices[] = { "first", "second", "third" };
+		for (uint32_t i = 0; i < vertex_count; i++)
+			statement(to_name(var_id), "[", i, "]", path, " = ", ib_var_ref, ".", member_name, ".get(vertex_index::", vertices[i], ")", swizzle, ";");
+	});
+}
+
 void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const string &ib_var_ref, SPIRType &ib_type,
                                                   SPIRVariable &var, InterfaceBlockMeta &meta)
 {
@@ -3924,7 +5036,36 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	}
 
 	if (storage == StorageClassInput && has_decoration(var.self, DecorationPerVertexKHR))
-		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
+	{
+		if (get_execution_model() != ExecutionModelFragment)
+			SPIRV_CROSS_THROW("PerVertexKHR inputs are only supported in fragment shaders in MSL.");
+		bool mesh_corners = msl_options.mesh_per_vertex_corner_locations != 0;
+		if (mesh_corners && per_vertex_input_buffer_enabled)
+			SPIRV_CROSS_THROW("mesh_per_vertex_corner_locations and the PerVertexKHR input buffer are mutually exclusive.");
+		if (per_vertex_input_buffer_enabled)
+		{
+			if (!per_vertex_input_buffer_used)
+				validate_per_vertex_input_buffer();
+			per_vertex_input_buffer_used = true;
+			add_per_vertex_input_from_buffer(ib_var_ref, var);
+			return;
+		}
+		// Mesh corners take precedence over vertex_value, which mesh pipelines do not use.
+		if (!mesh_corners && !msl_options.supports_msl_version(4, 0))
+			SPIRV_CROSS_THROW("PerVertexKHR inputs require MSL 4.0 and a GPU supporting vertex_value.");
+		if (!mesh_corners && !msl_options.supports_per_vertex_fragment_input)
+			SPIRV_CROSS_THROW("PerVertexKHR inputs require supports_per_vertex_fragment_input and a GPU supporting vertex_value.");
+		if (is_builtin || !is_array(var_type) || !var_type.array_size_literal.back())
+			SPIRV_CROSS_THROW("PerVertexKHR inputs in MSL must be non-builtin arrays with a literal size.");
+		uint32_t vertex_count = to_array_size_literal(var_type);
+		if (vertex_count == 0 || vertex_count > 3)
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays in MSL must contain one to three vertices.");
+		add_resource_name(var.self);
+		emit_local_masked_variable(var, false);
+		uint32_t location = has_decoration(var.self, DecorationLocation) ? get_decoration(var.self, DecorationLocation) : k_unknown_location;
+		add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get_variable_element_type(var), "", location, get_decoration(var.self, DecorationComponent), vertex_count);
+		return;
+	}
 
 	// If variable names alias, they will end up with wrong names in the interface struct, because
 	// there might be aliases in the member name cache and there would be a mismatch in fixup_in code.
@@ -3965,21 +5106,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			bool masked_block = false;
 			uint32_t location = UINT32_MAX;
 			uint32_t var_mbr_idx = 0;
-			uint32_t elem_cnt = 1;
-			if (is_matrix(var_type))
-			{
-				if (is_array(var_type))
-					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
-
-				elem_cnt = var_type.columns;
-			}
-			else if (is_array(var_type))
-			{
-				if (var_type.array.size() != 1)
-					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
-
-				elem_cnt = to_array_size_literal(var_type);
-			}
+			uint32_t elem_cnt = interface_composite_element_count(var_type);
 
 			for (uint32_t elem_idx = 0; elem_idx < elem_cnt; elem_idx++)
 			{
@@ -3988,7 +5115,12 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				{
 					builtin = BuiltInMax;
 					is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
+					if (is_tese_shader() && storage == StorageClassInput && is_block && var_type.array.empty() && is_builtin &&
+					    (builtin == BuiltInTessCoord || builtin == BuiltInPrimitiveId || builtin == BuiltInPatchVertices))
+						continue;
 					auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
+					if (storage == StorageClassInput && fragment_barycentric_input_blocks.count(var.self) && fragment_barycentric_builtin_ids.count(builtin))
+						continue;
 
 					if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 					{
@@ -4039,10 +5171,10 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						const string var_name = to_name(var.self);
 						string mbr_name_qual = var_name;
 						string var_chain_qual = var_name;
-						if (elem_cnt > 1)
+						if (is_array(var_type))
 						{
 							mbr_name_qual += join("_", elem_idx);
-							var_chain_qual += join("[", elem_idx, "]");
+							var_chain_qual += interface_composite_element_access(var_type, elem_idx);
 						}
 
 						if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
@@ -4218,7 +5350,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	bool pack_components =
 	    (storage == StorageClassInput && get_execution_model() == ExecutionModelVertex) ||
 	    (storage == StorageClassOutput && get_execution_model() == ExecutionModelFragment) ||
-	    (storage == StorageClassOutput && get_execution_model() == ExecutionModelVertex && capture_output_to_buffer);
+	    (storage == StorageClassOutput && (get_execution_model() == ExecutionModelVertex || msl_options.tese_as_compute) && capture_output_to_buffer);
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if (var.storage != storage)
@@ -4228,6 +5360,28 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 
 		bool is_builtin = is_builtin_variable(var);
 		bool is_block = has_decoration(type.self, DecorationBlock);
+		// Non-arrayed TES builtin inputs are entry-point values, not control-point records.
+		if (is_tese_shader() && storage == StorageClassInput && is_block && type.array.empty() && !type.member_types.empty())
+		{
+			bool direct_builtins_only = true;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+			{
+				if (!has_member_decoration(type.self, i, DecorationBuiltIn))
+				{
+					direct_builtins_only = false;
+					break;
+				}
+				BuiltIn builtin = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+				if (builtin != BuiltInTessCoord && builtin != BuiltInPrimitiveId && builtin != BuiltInPatchVertices)
+				{
+					direct_builtins_only = false;
+					break;
+				}
+			}
+			// Native TES needs a (possibly empty) control-point array to query the patch size.
+			if (direct_builtins_only && (msl_options.raw_buffer_tese_input || !active_input_builtins.get(BuiltInPatchVertices)))
+				return;
+		}
 
 		auto bi_type = BuiltInMax;
 		bool builtin_is_gl_in_out = false;
@@ -4303,11 +5457,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		// Barycentric inputs must be emitted in stage-in, because they can have interpolation arguments.
 		if (is_active && (bi_type == BuiltInBaryCoordKHR || bi_type == BuiltInBaryCoordNoPerspKHR))
 		{
-			if (has_seen_barycentric)
+			if (has_seen_barycentric && !is_portable_barycentric(bi_type))
 				SPIRV_CROSS_THROW("Cannot declare both BaryCoordNV and BaryCoordNoPerspNV in same shader in MSL.");
 			has_seen_barycentric = true;
 			hidden = false;
 		}
+		if (is_active && is_builtin && is_block && fragment_barycentric_input_enabled)
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+				if (has_member_decoration(type.self, i, DecorationBuiltIn) && is_portable_barycentric(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn))))
+					hidden = false;
 
 		if (is_active && !hidden && type.pointer && filter_patch_decoration &&
 		    (!is_builtin || is_interface_block_builtin))
@@ -4330,7 +5488,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						uint32_t array_size = 1;
 						if (!type.array.empty())
-							array_size = to_array_size_literal(type);
+							array_size = interface_composite_element_count(type);
 
 						for (uint32_t location_offset = 0; location_offset < array_size; location_offset++)
 						{
@@ -4356,7 +5514,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			// but we still need the hook to run to populate the arrays.
 			string base_ref = join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id), "]");
 			const char *mbr_name =
-			    bi_type == BuiltInTessLevelOuter ? "edgeTessellationFactor" : "insideTessellationFactor";
+			    msl_options.tessellation_factors_float32 ? (bi_type == BuiltInTessLevelOuter ? "outer" : "inner") :
+			    (bi_type == BuiltInTessLevelOuter ? "edgeTessellationFactor" : "insideTessellationFactor");
 			add_tess_level_input(base_ref, mbr_name, var);
 			if (inputs_by_builtin.count(bi_type))
 			{
@@ -4441,7 +5600,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				    [=]()
 				    {
 					    statement("const device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_in = &",
-					              input_buffer_var_name, "[", to_expression(builtin_primitive_id_id), " * ",
+					              input_buffer_var_name, "[", msl_options.tese_as_compute ? join("ulong(", to_expression(builtin_primitive_id_id), ")") : to_expression(builtin_primitive_id_id), " * ",
 					              get_entry_point().output_vertices, "];");
 				    });
 			}
@@ -4493,7 +5652,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 						// The first member of the indirect buffer is always the number of vertices
 						// to draw.
 						// We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice
-						if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+						if (msl_options.tese_as_compute)
+						{
+							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
+							          " = ", output_buffer_var_name, "[ulong(spvTessRecord[4])];");
+						}
+						else if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
 						{
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
 							          " = ", output_buffer_var_name, "[", to_expression(builtin_invocation_id_id),
@@ -4737,7 +5901,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		auto &location_meta = loc.second;
 
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-		uint32_t type_id = build_extended_vector_type(location_meta.base_type_id, location_meta.num_components);
+		auto *element_type = &get<SPIRType>(location_meta.base_type_id);
+		while (is_array(*element_type) || is_matrix(*element_type))
+			element_type = &get<SPIRType>(element_type->parent_type);
+		uint32_t type_id = build_extended_vector_type(element_type->self, location_meta.num_components);
 		ib_type.member_types.push_back(type_id);
 
 		set_member_name(ib_type.self, ib_mbr_idx, join("m_location_", location));
@@ -4752,6 +5919,35 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationCentroid);
 		if (location_meta.sample)
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationSample);
+	}
+
+	if (storage == StorageClassInput && per_vertex_input_buffer_used)
+	{
+		uint32_t location = per_vertex_input_binding.primitive_index_location;
+		if (location_inputs_in_use.count(location))
+			SPIRV_CROSS_THROW("Portable PerVertexKHR private Location collides with a fragment input.");
+		uint32_t member = uint32_t(ib_type.member_types.size());
+		ib_type.member_types.push_back(get_uint_type_id());
+		set_member_name(ib_type.self, member, "spvPerVertexPrimitive");
+		set_member_decoration(ib_type.self, member, DecorationLocation, location);
+		set_member_decoration(ib_type.self, member, DecorationFlat);
+	}
+	if (storage == StorageClassInput && fragment_barycentric_input_enabled)
+	{
+		for (auto builtin : { BuiltInBaryCoordKHR, BuiltInBaryCoordNoPerspKHR })
+		{
+			if (!has_active_builtin(builtin, storage))
+				continue;
+			uint32_t location = portable_barycentric_location(builtin);
+			if (location_inputs_in_use.count(location))
+				SPIRV_CROSS_THROW("Portable barycentric private Location collides with a fragment input.");
+			if (per_vertex_input_buffer_used && location == per_vertex_input_binding.primitive_index_location)
+				SPIRV_CROSS_THROW("Portable barycentric private Location collides with the PerVertexKHR primitive key.");
+			// A builtin mapping occupies no user Location, whatever its location field holds.
+			for (const auto &input : inputs_by_location)
+				if (input.first.location == location && input.second.builtin == BuiltInMax)
+					SPIRV_CROSS_THROW("Portable barycentric private Location collides with an MSL shader input mapping.");
+		}
 	}
 
 	// Sort the members of the structure by their locations.
@@ -4859,7 +6055,9 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 		vars.push_back(&var);
 	});
 
-	if (vars.empty())
+	// The per-vertex block is built first: its PerVertexKHR corners become per-primitive values.
+	bool corners = per_primitive && msl_options.mesh_per_vertex_corner_locations;
+	if (vars.empty() && !corners)
 		return 0;
 
 	uint32_t next_id = ir.increase_bound_by(1);
@@ -4873,6 +6071,8 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 		meta.allow_local_declaration = false;
 		add_variable_to_interface_block(StorageClassOutput, "", type, *p_var, meta);
 	}
+	if (corners)
+		add_mesh_per_vertex_corners(type);
 
 	if (per_primitive)
 		set_name(type.self, "spvPerPrimitive");
@@ -4880,6 +6080,50 @@ uint32_t CompilerMSL::add_meshlet_block(bool per_primitive)
 		set_name(type.self, "spvPerVertex");
 
 	return next_id;
+}
+
+// Adds three per-primitive members per per-vertex output at a mesh_per_vertex_corner_locations Location: the values of
+// the primitive's corners, in index order, which the fragment reads as its PerVertexKHR inputs.
+void CompilerMSL::add_mesh_per_vertex_corners(SPIRType &ib_type)
+{
+	if (!get_entry_point().flags.get(ExecutionModeOutputTrianglesEXT) || !builtin_mesh_primitive_indices_id)
+		SPIRV_CROSS_THROW("PerVertexKHR corners of mesh outputs require triangles and PrimitiveTriangleIndicesEXT.");
+	if (!mesh_out_per_vertex)
+		SPIRV_CROSS_THROW("mesh_per_vertex_corner_locations names a Location without a per-vertex mesh output.");
+	auto &vertex_type = get<SPIRType>(mesh_out_per_vertex);
+	uint32_t mask = msl_options.mesh_per_vertex_corner_locations, copied = 0;
+	for (uint32_t i = 0; i < uint32_t(vertex_type.member_types.size()); i++)
+	{
+		uint32_t orig_var = get_extended_member_decoration(vertex_type.self, i, SPIRVCrossDecorationInterfaceOrigID);
+		if (!orig_var || is_member_builtin(vertex_type, i, nullptr) || !has_member_decoration(vertex_type.self, i, DecorationLocation))
+			continue;
+		uint32_t location = get_member_decoration(vertex_type.self, i, DecorationLocation);
+		if (location >= 32 || !(mask & (1u << location)))
+			continue;
+		// Check the declared output, not the member: matrices and arrays are flattened into vector members.
+		uint32_t orig_member = get_extended_member_decoration(vertex_type.self, i, SPIRVCrossDecorationInterfaceMemberIndex);
+		auto &var_type = get_variable_element_type(get<SPIRVariable>(orig_var));
+		auto &output_type = var_type.basetype == SPIRType::Struct ? get<SPIRType>(var_type.member_types[orig_member]) : var_type;
+		if (is_array(output_type) || is_matrix(output_type) || output_type.basetype == SPIRType::Struct)
+			SPIRV_CROSS_THROW("PerVertexKHR corners of mesh outputs require scalar or vector per-vertex outputs.");
+		copied |= 1u << location;
+		for (uint32_t corner = 0; corner < 3; corner++)
+		{
+			uint32_t index = uint32_t(ib_type.member_types.size());
+			ib_type.member_types.push_back(vertex_type.member_types[i]);
+			set_member_name(ib_type.self, index, join("spvCorner", corner, "_", to_member_name(vertex_type, i)));
+			set_member_decoration(ib_type.self, index, DecorationLocation, location);
+			if (has_member_decoration(vertex_type.self, i, DecorationComponent))
+				set_member_decoration(ib_type.self, index, DecorationComponent, get_member_decoration(vertex_type.self, i, DecorationComponent));
+			set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationInterfaceOrigID,
+			                               get_extended_member_decoration(vertex_type.self, i, SPIRVCrossDecorationInterfaceOrigID));
+			set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationInterfaceMemberIndex,
+			                               get_extended_member_decoration(vertex_type.self, i, SPIRVCrossDecorationInterfaceMemberIndex));
+			set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationMeshPerVertexCorner, corner);
+		}
+	}
+	if (copied != mask)
+		SPIRV_CROSS_THROW("mesh_per_vertex_corner_locations names a Location without a per-vertex mesh output.");
 }
 
 // Ensure that the type is compatible with the builtin.
@@ -5861,6 +7105,15 @@ void CompilerMSL::emit_header()
 	statement("");
 	statement("using namespace metal;");
 	statement("");
+	if (msl_options.tessellation_factors_float32)
+	{
+		statement("struct spvTessellationFactorsFloat");
+		begin_scope();
+		statement("float outer[4];");
+		statement("float inner[2];");
+		end_scope_decl();
+		statement("");
+	}
 
 	for (auto &td : typedef_lines)
 		statement(td);
@@ -8529,10 +9782,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 	if (workgroup_size_id == 0 && is_mesh_shader())
 	{
-		auto &execution = get_entry_point();
+		// LocalSizeId (SPIR-V 1.6) keeps the size in constants: a zero here makes the output loops never advance.
 		statement("constant uint3 ", builtin_to_glsl(BuiltInWorkgroupSize, StorageClassWorkgroup),
-		          " [[maybe_unused]] = ", "uint3(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
-		          execution.workgroup_size.z, ");");
+		          " [[maybe_unused]] = ", "uint3(", get_execution_mode_argument(ExecutionModeLocalSize, 0), ", ",
+		          get_execution_mode_argument(ExecutionModeLocalSize, 1), ", ",
+		          get_execution_mode_argument(ExecutionModeLocalSize, 2), ");");
 		statement("");
 	}
 
@@ -8784,6 +10038,19 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 {
 	auto &ptr_type = expression_type(ptr);
 	auto &result_type = get<SPIRType>(result_type_id);
+	if (msl_options.tessellation_factors_float32 && is_array(result_type))
+	{
+		auto *backing = maybe_get_backing_variable(ptr);
+		auto builtin = backing ? BuiltIn(get_decoration(backing->self, DecorationBuiltIn)) : BuiltInMax;
+		if (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter)
+		{
+			emit_uninitialized_temporary_expression(result_type_id, id);
+			for (uint32_t i = 0; i < get_physical_tess_level_array_size(builtin); i++)
+				statement(to_expression(id), "[", i, "] = ", to_expression(ptr), "[", i, "];");
+			register_read(id, ptr, false);
+			return true;
+		}
+	}
 	if (ptr_type.storage != StorageClassInput && ptr_type.storage != StorageClassOutput)
 		return false;
 	if (ptr_type.storage == StorageClassOutput && is_tese_shader())
@@ -9119,6 +10386,9 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		auto &type = get_variable_data_type(*var);
 		is_block = has_decoration(type.self, DecorationBlock);
 		is_arrayed = !type.array.empty();
+		// Its first index is a builtin member, not a control-point index.
+		if (is_tese_shader() && is_block && !is_arrayed && is_builtin_variable(*var))
+			return false;
 
 		flatten_composites = variable_storage_requires_stage_io(var->storage);
 		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(type);
@@ -9378,7 +10648,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	// to that one.
 	auto *m = ir.find_meta(var ? var->self : ID(0));
 	if (is_tesc_shader() && var && m && m->decoration.builtin_type == BuiltInTessLevelInner &&
-	    is_tessellating_triangles())
+	    is_tessellating_triangles() && !msl_options.tessellation_factors_float32)
 	{
 		auto *c = maybe_get<SPIRConstant>(ops[3]);
 		if (c && c->scalar() == 1)
@@ -9395,7 +10665,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs)
 {
-	if (!is_tessellating_triangles())
+	if (msl_options.tessellation_factors_float32 || !is_tessellating_triangles())
 		return false;
 
 	// In SPIR-V, TessLevelInner always has two elements and TessLevelOuter always has
@@ -9451,12 +10721,10 @@ bool CompilerMSL::access_chain_needs_stage_io_builtin_translation(uint32_t base)
 	if (!var || !is_tessellation_shader())
 		return true;
 
-	// We only need to rewrite builtin access chains when accessing flattened builtins like gl_ClipDistance_N.
-	// Avoid overriding it back to just gl_ClipDistance.
-	// This can only happen in scenarios where we cannot flatten/unflatten access chains, so, the only case
-	// where this triggers is evaluation shader inputs.
-	bool redirect_builtin = is_tese_shader() ? var->storage == StorageClassOutput : false;
-	return redirect_builtin;
+	// Arrayed TES inputs use flattened member names; stage I/O remapping may strip their array but retain parent_type.
+	const auto &type = get_variable_data_type(*var);
+	return is_tese_shader() && (var->storage == StorageClassOutput ||
+	                           (var->storage == StorageClassInput && has_decoration(type.self, DecorationBlock) && type.array.empty() && !type.parent_type));
 }
 
 // Sets the interface member index for an access chain to a pull-model interpolant.
@@ -9469,7 +10737,7 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	uint32_t interface_index;
 	auto &var_type = get_variable_data_type(*var);
 	auto &result_type = get<SPIRType>(ops[0]);
-	auto *type = &var_type;
+	auto *type = &get_pointee_type(expression_type(ops[2]));
 	if (has_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex))
 	{
 		interface_index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
@@ -9477,15 +10745,24 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	else
 	{
 		// Assume an access chain into a struct variable.
+		if (fragment_barycentric_input_enabled && (var_type.basetype != SPIRType::Struct || length <= 3 + var_type.array.size()))
+			SPIRV_CROSS_THROW("Portable barycentric explicit interpolation requires a resolved input member.");
 		assert(var_type.basetype == SPIRType::Struct);
 		auto &c = get<SPIRConstant>(ops[3 + var_type.array.size()]);
+		if (fragment_barycentric_input_enabled && !has_extended_member_decoration(var->self, c.scalar(), SPIRVCrossDecorationInterfaceMemberIndex))
+			SPIRV_CROSS_THROW("Portable barycentric explicit interpolation requires a resolved input member.");
 		interface_index =
 		    get_extended_member_decoration(var->self, c.scalar(), SPIRVCrossDecorationInterfaceMemberIndex);
 	}
 	// Accumulate indices. We'll have to skip over the one for the struct, if present, because we already accounted
 	// for that getting the base index.
+	if (has_extended_decoration(ops[2], SPIRVCrossDecorationInterpolantComponentExpr))
+		set_extended_decoration(ops[1], SPIRVCrossDecorationInterpolantComponentExpr, get_extended_decoration(ops[2], SPIRVCrossDecorationInterpolantComponentExpr));
 	for (uint32_t i = 3; i < length; ++i)
 	{
+		// Nested offsets are rejected until pull-model lowering tracks composite strides.
+		if (fragment_barycentric_input_enabled && (type->array.size() > 1 || (!type->array.empty() && (type->columns > 1 || type->basetype == SPIRType::Struct)) || (type->basetype == SPIRType::Struct && (i != 3 || has_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex)))))
+			SPIRV_CROSS_THROW("Portable barycentric explicit interpolation does not support nested input composites.");
 		if (is_vector(*type) && !is_array(*type) && is_scalar(result_type))
 		{
 			// We don't want to combine the next index. Actually, we need to save it
@@ -9784,6 +11061,21 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
+	case OpCopyObject:
+		CompilerGLSL::emit_instruction(instruction);
+		if (get<SPIRType>(ops[0]).pointer)
+		{
+			// Preserve an lvalue even when the backing builtin has a remapped type.
+			if (auto *expr = maybe_get<SPIRExpression>(ops[1]))
+				expr->access_chain = !should_dereference(ops[2]);
+			if (has_decoration(ops[2], DecorationBuiltIn))
+				set_decoration(ops[1], DecorationBuiltIn, get_decoration(ops[2], DecorationBuiltIn));
+			for (auto decoration : { SPIRVCrossDecorationInterfaceMemberIndex, SPIRVCrossDecorationInterpolantComponentExpr })
+				if (has_extended_decoration(ops[2], decoration))
+					set_extended_decoration(ops[1], decoration, get_extended_decoration(ops[2], decoration));
+		}
+		break;
+
 	case OpLoad:
 	{
 		uint32_t id = ops[1];
@@ -11569,7 +12861,7 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 
 uint32_t CompilerMSL::get_physical_tess_level_array_size(BuiltIn builtin) const
 {
-	if (is_tessellating_triangles())
+	if (is_tessellating_triangles() && !msl_options.tessellation_factors_float32)
 		return builtin == BuiltInTessLevelInner ? 1 : 3;
 	else
 		return builtin == BuiltInTessLevelInner ? 2 : 4;
@@ -11601,6 +12893,19 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 		// After a variable has been declared, we can no longer assign constant arrays in MSL unfortunately.
 		statement(to_expression(id_lhs), " = ", constant_expression(get<SPIRConstant>(id_rhs)), ";");
 		return true;
+	}
+
+	if (msl_options.tessellation_factors_float32 && is_tesc_shader())
+	{
+		auto *backing = maybe_get_backing_variable(id_lhs);
+		auto builtin = backing ? BuiltIn(get_decoration(backing->self, DecorationBuiltIn)) : BuiltInMax;
+		if (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter)
+		{
+			for (uint32_t i = 0; i < get_physical_tess_level_array_size(builtin); i++)
+				statement(to_expression(id_lhs), "[", i, "] = ", to_expression(id_rhs), "[", i, "];");
+			register_write(id_lhs);
+			return true;
+		}
 	}
 
 	if (is_tesc_shader() && has_decoration(id_lhs, DecorationBuiltIn))
@@ -11923,6 +13228,8 @@ const char *CompilerMSL::get_memory_order(uint32_t)
 void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
 	auto op = static_cast<GLSLstd450>(eop);
+	if (fragment_barycentric_input_enabled && (op == GLSLstd450InterpolateAtCentroid || op == GLSLstd450InterpolateAtSample || op == GLSLstd450InterpolateAtOffset) && !has_extended_decoration(args[0], SPIRVCrossDecorationInterfaceMemberIndex))
+		SPIRV_CROSS_THROW("Portable barycentric explicit interpolation requires a resolved input member.");
 
 	// If we need to do implicit bitcasts, make sure we do it with the correct type.
 	uint32_t integer_width = get_integer_width_for_glsl_instruction(op, args, count);
@@ -14012,7 +15319,9 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 				 (stage_in_var_id && get_stage_in_struct_type().self == type.self &&
 				  variable_storage_requires_stage_io(StorageClassInput))) ||
 				is_mesh_shader();
-		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
+		// Metal validates builtin array attributes even when the record is only used in a capture buffer.
+		bool is_captured_output = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation && stage_out_var_id && get_stage_out_struct_type().self == type.self;
+		if ((is_ib_in_out || is_captured_output) && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type, orig_id);
 	}
@@ -14102,6 +15411,9 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		if (array_stride != native_stride)
 			decl_type = join("spvPaddedArrayElement<", decl_type, ", ", array_stride, ">");
 	}
+
+	if (stage_in_var_id && type.self == get_stage_in_struct_type().self && has_member_decoration(type.self, index, DecorationPerVertexKHR))
+		decl_type = join("vertex_value<", decl_type, ">");
 
 	const char *overlapping_binding_tag =
 			has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding) ?
@@ -14195,6 +15507,9 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			return string(" [[attribute(") + convert_to_string(locn) + ")]]";
 	}
 
+	if (msl_options.tese_as_compute && type.storage == StorageClassOutput)
+		return "";
+
 	bool use_semantic_stage_output = is_mesh_shader() || is_tese_shader() ||
 	                                 (execution.model == ExecutionModelVertex && !msl_options.vertex_for_tessellation);
 
@@ -14240,6 +15555,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			}
 		}
 		string loc_qual = member_location_attribute_qualifier(type, index);
+		if (captured_output_replay && stage_out_var_id && type.self == get_stage_out_struct_type().self && index == captured_output_replay_key_member)
+			loc_qual += ", flat";
 		if (!loc_qual.empty())
 			return join(" [[", loc_qual, "]]");
 	}
@@ -14342,6 +15659,16 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	// Fragment function inputs
 	if (execution.model == ExecutionModelFragment && type.storage == StorageClassInput)
 	{
+		if (is_portable_barycentric(builtin))
+		{
+			string quals = join("user(locn", portable_barycentric_location(builtin), ")");
+			if (mbr_type.basetype != SPIRType::Interpolant)
+			{
+				const char *position = has_member_decoration(type.self, index, DecorationCentroid) ? "centroid" : has_member_decoration(type.self, index, DecorationSample) ? "sample" : "center";
+				quals += join(", ", position, builtin == BuiltInBaryCoordNoPerspKHR ? "_no_perspective" : "_perspective");
+			}
+			return " [[" + quals + "]]";
+		}
 		string quals;
 		if (is_builtin)
 		{
@@ -14530,6 +15857,12 @@ string CompilerMSL::member_location_attribute_qualifier(const SPIRType &type, ui
 			quals += "_";
 			quals += convert_to_string(comp);
 		}
+		// Mesh outputs and fragment inputs name PerVertexKHR corners alike.
+		if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationMeshPerVertexCorner))
+		{
+			quals += "_corner";
+			quals += convert_to_string(get_extended_member_decoration(type.self, index, SPIRVCrossDecorationMeshPerVertexCorner));
+		}
 		quals += ")";
 	}
 	return quals;
@@ -14647,7 +15980,7 @@ bool CompilerMSL::entry_point_is_vertex() const
 {
 	// MSL vertex entrypoint is used for non-tessellation vertex stage or tessellation evaluation stage.
 	return (get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation) ||
-			get_execution_model() == ExecutionModelTessellationEvaluation;
+			(get_execution_model() == ExecutionModelTessellationEvaluation && !msl_options.tese_as_compute);
 }
 
 bool CompilerMSL::entry_point_returns_stage_output() const
@@ -14691,7 +16024,9 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 			SPIRV_CROSS_THROW("Tessellation requires Metal 1.2.");
 		if (execution.flags.get(ExecutionModeIsolines))
 			SPIRV_CROSS_THROW("Metal does not support isoline tessellation.");
-		if (msl_options.is_ios())
+		if (msl_options.tese_as_compute)
+			entry_type = "kernel";
+		else if (msl_options.is_ios())
 			entry_type = join("[[ patch(", is_tessellating_triangles() ? "triangle" : "quad", ") ]] vertex");
 		else
 			entry_type = join("[[ patch(", is_tessellating_triangles() ? "triangle" : "quad", ", ",
@@ -14808,7 +16143,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		// readonly qualifiers.
 		// If rasterization is not disabled in vertex/tese, Metal does not allow side effects and refuses to compile "device",
 		// even if there are no writes. Just force const device.
-		if (entry_point_requires_const_device_buffers() && type.basetype != SPIRType::AtomicCounter)
+		if ((entry_point_requires_const_device_buffers() || (msl_options.tese_as_compute && stage_in_ptr_var_id != 0 && (id == stage_in_ptr_var_id || (var && var->basevariable == stage_in_ptr_var_id)))) && type.basetype != SPIRType::AtomicCounter)
 			addr_space = "const device";
 		else
 			addr_space = "device";
@@ -14855,7 +16190,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		// to float manually.
 		if (is_tese_shader() && msl_options.raw_buffer_tese_input && var)
 		{
-			bool is_stage_in = var->basevariable == stage_in_ptr_var_id;
+			bool is_stage_in = stage_in_ptr_var_id && var->basevariable == stage_in_ptr_var_id;
 			bool is_patch_stage_in = has_decoration(var->self, DecorationPatch);
 			bool is_builtin = has_decoration(var->self, DecorationBuiltIn);
 			BuiltIn builtin = (BuiltIn)get_decoration(var->self, DecorationBuiltIn);
@@ -14883,10 +16218,12 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 				}
 				else if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
 					addr_space = "threadgroup";
+				else if (is_local_vertex_output(*var))
+					addr_space = "thread";
 			}
 
 			// BlockIO is passed as thread and lowered on return from main.
-			if (get_execution_model() == ExecutionModelVertex && has_decoration(type.self, DecorationBlock))
+			if ((get_execution_model() == ExecutionModelVertex || msl_options.tese_as_compute) && has_decoration(type.self, DecorationBlock))
 				addr_space = "thread";
 
 			if (!addr_space)
@@ -14977,6 +16314,10 @@ string CompilerMSL::entry_point_arg_stage_in()
 // and false for builtins that should be passed or calculated some other way.
 bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 {
+	if (msl_options.tese_as_compute && (bi_type == BuiltInPrimitiveId || bi_type == BuiltInTessCoord))
+		return false;
+	if (bi_type == BuiltInPrimitiveId && uses_per_vertex_primitive_id_buffer())
+		return false;
 	switch (bi_type)
 	{
 	// Vertex function in
@@ -15054,10 +16395,26 @@ bool CompilerMSL::is_intersection_query() const
 
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
+	if (msl_options.tese_as_compute)
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("uint3 spvTessInvocation [[thread_position_in_grid]], const device uint* spvTessInvocations [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
+	}
+	if (per_vertex_input_buffer_used)
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("const device uchar* spvPerVertexVertices [[buffer(", per_vertex_input_binding.vertex_buffer_index, ")]], const device uint* spvPerVertexIndices [[buffer(", per_vertex_input_binding.primitive_index_buffer_index, ")]]");
+		if (uses_per_vertex_primitive_id_buffer() && active_input_builtins.get(BuiltInPrimitiveId))
+			ep_args += join(", const device uint* spvPerVertexPrimitiveIds [[buffer(", per_vertex_input_binding.primitive_id_buffer_index, ")]]");
+	}
+
 	depth_clip_viewport_idx_var_name = "";
 
 	// Builtin variables
 	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
+	Bitset direct_inputs;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if (var.storage != StorageClassInput)
 			return;
@@ -15077,6 +16434,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 			// Remember this variable. We may need to correct its type.
 			active_builtins.push_back(make_pair(&var, bi_type));
+			direct_inputs.set(bi_type);
 
 			if (is_direct_input_builtin(bi_type))
 			{
@@ -15133,6 +16491,28 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_size]]";
 		}
 	});
+	if (is_tese_shader() && !msl_options.tese_as_compute)
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, const SPIRVariable &var) {
+			const auto &type = get_variable_data_type(var);
+			if (var.storage != StorageClassInput || !has_decoration(type.self, DecorationBlock) || !type.array.empty() ||
+			    !interface_variable_exists_in_entry_point(id))
+				return;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+			{
+				if (!has_member_decoration(type.self, i, DecorationBuiltIn))
+					continue;
+				BuiltIn builtin = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+				if ((builtin != BuiltInTessCoord && builtin != BuiltInPrimitiveId) || !active_input_builtins.get(builtin) || direct_inputs.get(builtin))
+					continue;
+				if (!ep_args.empty())
+					ep_args += ", ";
+				if (builtin == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
+					ep_args += "float2 gl_TessCoordIn [[position_in_patch]]";
+				else
+					ep_args += join(builtin_type_decl(builtin), " ", builtin_to_glsl(builtin, StorageClassInput), " [[", builtin_qualifier(builtin), "]]");
+				direct_inputs.set(builtin);
+			}
+		});
 
 	// Correct the types of all encountered active builtins. We couldn't do this before
 	// because ensure_correct_builtin_type() may increase the bound, which isn't allowed
@@ -15149,6 +16529,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 	if (needs_depth_clip_state_buffer())
 	{
+		validate_per_vertex_buffer_binding(msl_options.depth_clip_state_buffer_index);
 		if (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 0) &&
 		    depth_clip_viewport_idx_var_name.empty())
 		{
@@ -15167,6 +16548,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 	if (msl_options.emulate_reversed_depth_viewport && stage_out_var_id && !capture_output_to_buffer &&
 	    is_vertex_like_shader() && !qual_pos_var_name.empty())
 	{
+		validate_per_vertex_buffer_binding(msl_options.reversed_depth_viewport_buffer_index);
 		if (!ep_args.empty())
 			ep_args += ", ";
 		ep_args += join("constant uint& spvEmulatedReversedDepthViewportMask [[buffer(",
@@ -15192,7 +16574,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args +=
 			    join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
-		else if (stage_out_var_id &&
+		else if (stage_out_var_id && !msl_options.tese_as_compute &&
 		         !(get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
 		{
 			if (!ep_args.empty())
@@ -15264,11 +16646,11 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				entry_func.fixup_hooks_in.push_back(
 				    [=]()
 				    {
-					    uint32_t components = is_tessellating_triangles() ? 3 : 4;
+					    uint32_t components = get_physical_tess_level_array_size(BuiltInTessLevelOuter);
 					    for (uint32_t i = 0; i < components; i++)
 					    {
 						    statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), "[", i,
-						              "] = ", "half(", to_expression(c->subconstants[i]), ");");
+						              "] = ", msl_options.tessellation_factors_float32 ? "float(" : "half(", to_expression(c->subconstants[i]), ");");
 					    }
 				    });
 			}
@@ -15276,7 +16658,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			if (inner_factor_initializer_id && (c = maybe_get<SPIRConstant>(inner_factor_initializer_id)))
 			{
 				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-				if (is_tessellating_triangles())
+				if (is_tessellating_triangles() && !msl_options.tessellation_factors_float32)
 				{
 					entry_func.fixup_hooks_in.push_back([=]() {
 						statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), " = ", "half(",
@@ -15289,7 +16671,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 						for (uint32_t i = 0; i < 2; i++)
 						{
 							statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), "[", i, "] = ",
-							          "half(", to_expression(c->subconstants[i]), ");");
+							          msl_options.tessellation_factors_float32 ? "float(" : "half(", to_expression(c->subconstants[i]), ");");
 						}
 					});
 				}
@@ -15394,6 +16776,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 				buffer_binding = i;
 		}
 
+		validate_per_vertex_buffer_binding(buffer_binding);
 		claimed_bindings.set(buffer_binding);
 
 		ep_args += get_variable_address_space(var) + " ";
@@ -15585,6 +16968,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 	{
 		auto &var = *r.var;
 		auto &type = get_variable_data_type(var);
+		if (is_var_runtime_size_array(var) || (r.basetype != SPIRType::Image && r.basetype != SPIRType::Sampler))
+			validate_per_vertex_buffer_binding(r.index, r.basetype == SPIRType::Struct && !type.array.empty() && !is_var_runtime_size_array(var) ? get_resource_array_size(type, var.self) : 1);
+		if (r.basetype == SPIRType::Image && atomic_image_vars_emulated.count(var.self))
+			validate_per_vertex_buffer_binding(r.secondary_index);
 
 		uint32_t var_id = var.self;
 
@@ -15881,6 +17268,18 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		if (!interface_variable_exists_in_entry_point(var.self))
 			return;
 
+		const auto &type = get_variable_data_type(var);
+		if (is_tese_shader() && var.storage == StorageClassInput && has_decoration(type.self, DecorationBlock) && type.array.empty())
+		{
+			bool has_patch_vertices = false;
+			for (uint32_t i = 0; i < type.member_types.size(); i++)
+				if (has_member_decoration(type.self, i, DecorationBuiltIn) && get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInPatchVertices)
+					has_patch_vertices = true;
+			if (!has_patch_vertices)
+				return;
+			bi_type = BuiltInPatchVertices;
+		}
+
 		if (var.storage == StorageClassInput && is_builtin_variable(var) && active_input_builtins.get(bi_type))
 		{
 			switch (bi_type)
@@ -15912,6 +17311,16 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				});
 				break;
 			case BuiltInPrimitiveId:
+				if (uses_per_vertex_primitive_id_buffer())
+				{
+					if (!per_vertex_input_buffer_used)
+						SPIRV_CROSS_THROW("Portable PerVertexKHR PrimitiveId buffer requires PerVertexKHR inputs.");
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = spvPerVertexPrimitiveIds[",
+						          stage_in_var_name, ".spvPerVertexPrimitive];");
+					});
+					break;
+				}
 				// This is natively supported by fragment and tessellation evaluation shaders.
 				// In tessellation control shaders, this is direct-mapped without multi-patch workgroups.
 				if (!is_tesc_shader() || !msl_options.multi_patch_workgroup)
@@ -15930,7 +17339,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					{
 						entry_func.fixup_hooks_in.push_back(
 						    [=]() {
-							    statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+							    statement(builtin_type_decl(bi_type), " ", builtin_to_glsl(bi_type, StorageClassInput), " = ",
 							              get_entry_point().output_vertices, ";");
 						    });
 					}
@@ -15939,7 +17348,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						entry_func.fixup_hooks_in.push_back(
 						    [=]()
 						    {
-							    statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+							    statement(builtin_type_decl(bi_type), " ", builtin_to_glsl(bi_type, StorageClassInput), " = ",
 							              to_expression(patch_stage_in_var_id), ".gl_in.size();");
 						    });
 					}
@@ -16244,14 +17653,21 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// Metal provides no special support for multiview, so we smuggle
 					// the view index in the instance index.
 					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-						          to_expression(view_mask_buffer_id), "[0] + (", to_expression(builtin_instance_idx_id),
-						          " - ", to_expression(builtin_base_instance_id), ") % ",
-						          to_expression(view_mask_buffer_id), "[1];");
-						statement(to_expression(builtin_instance_idx_id), " = (",
-						          to_expression(builtin_instance_idx_id), " - ",
-						          to_expression(builtin_base_instance_id), ") / ", to_expression(view_mask_buffer_id),
-						          "[1] + ", to_expression(builtin_base_instance_id), ";");
+						if (msl_options.vertex_for_tessellation)
+						{
+							// Grid y is the physical instance ordinal. Do not depend on the
+							// declaration order of application InstanceIndex/BaseInstance.
+							statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ", to_expression(view_mask_buffer_id), "[0] + ", to_expression(builtin_invocation_id_id), ".y % ", to_expression(view_mask_buffer_id), "[1];");
+						}
+						else
+						{
+							// Remap the raw Metal ID once; zero-base emulation is applied
+							// when application expressions subsequently read the builtin.
+							builtin_declaration = true;
+							statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ", to_expression(view_mask_buffer_id), "[0] + (", to_expression(builtin_instance_idx_id), " - ", to_expression(builtin_base_instance_id), ") % ", to_expression(view_mask_buffer_id), "[1];");
+							statement(to_expression(builtin_instance_idx_id), " = (", to_expression(builtin_instance_idx_id), " - ", to_expression(builtin_base_instance_id), ") / ", to_expression(view_mask_buffer_id), "[1] + ", to_expression(builtin_base_instance_id), ";");
+							builtin_declaration = false;
+						}
 					});
 					// In addition to setting the variable itself, we also need to
 					// set the render_target_array_index with it on output. We have to
@@ -16344,8 +17760,11 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 
 				entry_func.fixup_hooks_in.push_back([=]() {
 					builtin_declaration = true;
+					string view_divisor;
+					if (msl_options.multiview && msl_options.multiview_layered_rendering && !msl_options.view_index_from_device_index)
+						view_divisor = join(" / ", to_expression(view_mask_buffer_id), "[1]");
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-					          to_expression(builtin_invocation_id_id), ".y + ", to_expression(builtin_dispatch_base_id),
+					          to_expression(builtin_invocation_id_id), ".y", view_divisor, " + ", to_expression(builtin_dispatch_base_id),
 					          ".y;");
 					builtin_declaration = false;
 				});
@@ -16632,7 +18051,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			is_using_builtin_array = true;
 		}
 
-		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage) &&
+		bool is_captured_vertex = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation;
+		if (storage == StorageClassOutput && (variable_storage_requires_stage_io(storage) || is_captured_vertex) &&
 		    !is_stage_output_builtin_masked(builtin_type))
 			is_using_builtin_array = true;
 
@@ -16731,6 +18151,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 		}
 	}
+	else if (builtin && builtin_type == BuiltInSampleMask && type_storage == StorageClassInput)
+		decl += join(" ", to_expression(name_id));
 	else if (is_array(type) && !type_is_image)
 	{
 		// Arrays of opaque types are special cased.
@@ -16794,7 +18216,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 	}
 	else if (!type_is_image && !type_is_tlas &&
-	         (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
+	         (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct) &&
+	         !(arg.alias_global_variable && has_decoration(var.self, DecorationBuiltIn) && is_portable_barycentric(BuiltIn(get_decoration(var.self, DecorationBuiltIn)))))
 	{
 		// If this is going to be a reference to a variable pointer, the address space
 		// for the reference has to go before the '&', but after the '*'.
@@ -17635,6 +19058,12 @@ string CompilerMSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 }
 
+bool CompilerMSL::is_local_vertex_output(const SPIRVariable &variable) const
+{
+	const auto &original = variable.basevariable ? get<SPIRVariable>(variable.basevariable) : variable;
+	return (get_execution_model() == ExecutionModelVertex || msl_options.tese_as_compute) && original.storage == StorageClassOutput && original.self != stage_out_var_id && !is_builtin_variable(original) && find(vars_needing_early_declaration.begin(), vars_needing_early_declaration.end(), original.self) != vars_needing_early_declaration.end();
+}
+
 bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, StorageClass storage) const
 {
 	if (variable.storage == storage)
@@ -17661,13 +19090,19 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 		// These builtins are passed directly; we don't want to use remapping
 		// for them.
 		auto builtin = (BuiltIn)get_decoration(variable.self, DecorationBuiltIn);
-		if (is_tese_shader() && is_builtin_variable(variable) && (builtin == BuiltInTessCoord || builtin == BuiltInPrimitiveId))
+		if (is_tese_shader() && is_builtin_variable(variable) && (builtin == BuiltInTessCoord || builtin == BuiltInPrimitiveId || builtin == BuiltInPatchVertices))
+			return false;
+		if (msl_options.tessellation_factors_float32 && is_tese_shader() && is_builtin_variable(variable) && (builtin == BuiltInTessLevelOuter || builtin == BuiltInTessLevelInner))
 			return false;
 
 		// We won't be able to catch writes to control point outputs here since variable
 		// refers to a function local pointer.
 		// This is fine, as there cannot be concurrent writers to that memory anyways,
 		// so we just ignore that case.
+
+		// Vertex output blocks are local and copied into the capture record on return.
+		if (is_local_vertex_output(variable))
+			return false;
 
 		return (variable.storage == StorageClassOutput || variable.storage == StorageClassInput) &&
 		       !variable_storage_requires_stage_io(variable.storage) &&
@@ -18536,8 +19971,17 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 	case BuiltInBaryCoordKHR:
 	case BuiltInBaryCoordNoPerspKHR:
-		if (storage == StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
-			return stage_in_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
+		if (current_function && current_function->self == ir.default_entry_point)
+		{
+			if (is_portable_barycentric(builtin))
+			{
+				auto expr = fragment_barycentric_input_expressions.find(builtin);
+				if (expr != fragment_barycentric_input_expressions.end())
+					return expr->second;
+			}
+			if (storage == StorageClassInput)
+				return stage_in_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
+		}
 		break;
 
 	case BuiltInTessLevelOuter:
@@ -18545,7 +19989,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		    (current_function->self == ir.default_entry_point))
 		{
 			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
-			            "].edgeTessellationFactor");
+			            msl_options.tessellation_factors_float32 ? "].outer" : "].edgeTessellationFactor");
 		}
 		break;
 
@@ -18554,7 +19998,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		    (current_function->self == ir.default_entry_point))
 		{
 			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
-			            "].insideTessellationFactor");
+			            msl_options.tessellation_factors_float32 ? "].inner" : "].insideTessellationFactor");
 		}
 		break;
 
@@ -18850,11 +20294,11 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInTessLevelInner:
 		if (is_tese_shader())
 			return (msl_options.raw_buffer_tese_input || is_tessellating_triangles()) ? "float" : "float2";
-		return "half";
+		return msl_options.tessellation_factors_float32 ? "float" : "half";
 	case BuiltInTessLevelOuter:
 		if (is_tese_shader())
 			return (msl_options.raw_buffer_tese_input || is_tessellating_triangles()) ? "float" : "float4";
-		return "half";
+		return msl_options.tessellation_factors_float32 ? "float" : "half";
 
 	// Tess. evaluation function in
 	case BuiltInTessCoord:
@@ -19521,6 +20965,14 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		self.ir.ids[id].set_allow_type_rewrite();
 		break;
 	}
+	case OpCopyObject:
+		if (self.get<SPIRType>(args[0]).pointer)
+		{
+			set<SPIRExpression>(args[1], "", args[0], true);
+			self.register_read(args[1], args[2], true);
+			self.ir.ids[args[1]].set_allow_type_rewrite();
+		}
+		break;
 
 	case OpBitcast:
 	case OpConvertPtrToU:
@@ -19562,6 +21014,8 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 				// Fragment varyings used with pull-model interpolation need special handling,
 				// due to the way pull-model interpolation works in Metal.
 				auto *var = self.maybe_get_backing_variable(args[4]);
+				if (!var && self.fragment_barycentric_input_enabled && (self.has_active_builtin(BuiltInBaryCoordKHR, StorageClassInput) || self.has_active_builtin(BuiltInBaryCoordNoPerspKHR, StorageClassInput)))
+					SPIRV_CROSS_THROW("Portable barycentric inputs do not support explicit interpolation through an unresolved input pointer.");
 				if (var)
 				{
 					self.pull_model_inputs.insert(var->self);
@@ -20070,7 +21524,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 
 	case BuiltInTessLevelInner:
 	case BuiltInTessLevelOuter:
-		if (is_tesc_shader())
+		if (is_tesc_shader() && !msl_options.tessellation_factors_float32)
 		{
 			expected_type = SPIRType::Half;
 			expected_width = 16;
@@ -20197,8 +21651,11 @@ void CompilerMSL::cast_to_variable_store(uint32_t target_id, std::string &expr, 
 
 	case BuiltInTessLevelInner:
 	case BuiltInTessLevelOuter:
-		expected_type = SPIRType::Half;
-		expected_width = 16;
+		if (!msl_options.tessellation_factors_float32)
+		{
+			expected_type = SPIRType::Half;
+			expected_width = 16;
+		}
 		break;
 
 	default:
@@ -21198,7 +22655,16 @@ void CompilerMSL::emit_mesh_outputs()
 						access = "." + to_member_name(orig_type, orig_id);
 					}
 				}
-				statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
+				if (has_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationMeshPerVertexCorner))
+				{
+					// A PerVertexKHR corner: the per-vertex output of the primitive's corner, in index order.
+					static const char *const corners[] = { "x", "y", "z" };
+					uint32_t corner = get_extended_member_decoration(type_prim.self, index, SPIRVCrossDecorationMeshPerVertexCorner);
+					statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[gl_PrimitiveTriangleIndicesEXT[spvPI].",
+					          corners[corner], "]", access, ";");
+				}
+				else
+					statement("spvP.", to_member_name(type_prim, index), " = ", to_name(orig_var), "[spvPI]", access, ";");
 			}
 			statement("spvMesh.set_primitive(spvPI, spvP);");
 		}

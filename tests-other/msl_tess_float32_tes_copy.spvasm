@@ -1,0 +1,56 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationEvaluation %main "main" %outer %inner %position
+OpExecutionMode %main Triangles
+OpExecutionMode %main SpacingEqual
+OpExecutionMode %main VertexOrderCcw
+OpDecorate %outer Patch
+OpDecorate %outer BuiltIn TessLevelOuter
+OpDecorate %inner Patch
+OpDecorate %inner BuiltIn TessLevelInner
+OpDecorate %position BuiltIn Position
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v4 = OpTypeVector %float 4
+%readfn = OpTypeFunction %v4
+%uint = OpTypeInt 32 0
+%two = OpConstant %uint 2
+%four = OpConstant %uint 4
+%a4 = OpTypeArray %float %four
+%a2 = OpTypeArray %float %two
+%in4 = OpTypePointer Input %a4
+%in2 = OpTypePointer Input %a2
+%out = OpTypePointer Output %v4
+%local4 = OpTypePointer Function %a4
+%local2 = OpTypePointer Function %a2
+%outer = OpVariable %in4 Input
+%inner = OpVariable %in2 Input
+%position = OpVariable %out Output
+%main = OpFunction %void None %fn
+%entry = OpLabel
+%value = OpFunctionCall %v4 %read
+OpStore %position %value
+OpReturn
+OpFunctionEnd
+%read = OpFunction %v4 None %readfn
+%body = OpLabel
+%snapshot4 = OpVariable %local4 Function
+%snapshot2 = OpVariable %local2 Function
+OpCopyMemory %snapshot4 %outer
+OpCopyMemory %snapshot2 %inner
+%alias4 = OpCopyObject %in4 %outer
+%alias2 = OpCopyObject %in2 %inner
+%loaded4 = OpLoad %a4 %alias4
+%loaded2 = OpLoad %a2 %alias2
+%x = OpCompositeExtract %float %loaded4 3
+%y = OpCompositeExtract %float %loaded2 1
+%copy4 = OpLoad %a4 %snapshot4
+%copy2 = OpLoad %a2 %snapshot2
+%z = OpCompositeExtract %float %copy4 1
+%w = OpCompositeExtract %float %copy2 0
+%result = OpCompositeConstruct %v4 %x %y %z %w
+OpReturnValue %result
+OpFunctionEnd

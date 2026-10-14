@@ -1877,6 +1877,11 @@ enum ExtendedDecorations
 
 	SPIRVCrossDecorationOverlappingBinding,
 
+	// Apply to a member of the mesh per-primitive output struct or of the fragment stage input struct that holds one
+	// corner of a per-vertex value for PerVertexKHR (see CompilerMSL::Options::mesh_per_vertex_corner_locations).
+	// Stores the corner index, 0 to 2, in primitive index order.
+	SPIRVCrossDecorationMeshPerVertexCorner,
+
 	SPIRVCrossDecorationCount
 };
 

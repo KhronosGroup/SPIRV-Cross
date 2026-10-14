@@ -641,6 +641,8 @@ struct CLIArguments
 	bool sso = false;
 	bool support_nonzero_baseinstance = true;
 	bool msl_capture_output_to_buffer = false;
+	bool msl_supports_per_vertex_fragment_input = false;
+	uint32_t msl_mesh_per_vertex_corner_locations = 0;
 	bool msl_swizzle_texture_samples = false;
 	bool msl_ios = false;
 	bool msl_pad_fragment_output = false;
@@ -663,6 +665,8 @@ struct CLIArguments
 	uint32_t msl_enable_frag_output_mask = 0xffffffff;
 	bool msl_enable_clip_distance_user_varying = true;
 	bool msl_raw_buffer_tese_input = false;
+	bool msl_tessellation_factors_float32 = false;
+	uint32_t msl_tese_as_compute = 0;
 	bool msl_multi_patch_workgroup = false;
 	bool msl_vertex_for_tessellation = false;
 	uint32_t msl_additional_fixed_sample_mask = 0xffffffff;
@@ -939,7 +943,9 @@ static void print_help_msl()
 	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
 	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
 	                "\t\tEquivalent to --msl-add-shader-output with a rate of 'vertex'.\n"
+	                "\t[--msl-tese-as-compute <input-patch-size>]:\n\t\tEmit a TES capture kernel; requires --msl-capture-output, --msl-raw-buffer-tese-input and MSL 2.4.\n"
 	                "\t[--msl-raw-buffer-tese-input]:\n\t\tUse raw buffers for tessellation evaluation input.\n"
+	                "\t[--msl-tessellation-factors-float32]:\n\t\tUse a 24-byte float outer[4], inner[2] TessLevel buffer (TCS/raw TES, MSL 2.0). Requires a separate half buffer for hardware tessellation.\n"
 	                "\t\tThis allows the use of nested structures and arrays.\n"
 	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
 	                "\t[--msl-multi-patch-workgroup]:\n\t\tUse the new style of tessellation control processing, where multiple patches are processed per workgroup.\n"
@@ -999,6 +1005,9 @@ static void print_help_msl()
 	                "\t\tpartially transformed. This fixup gives correct results on Apple Silicon.\n"
 	                "\t[--msl-combined-sampler-suffix <suffix>]:\n\t\tUses a custom suffix for combined samplers.\n"
 	                "\t[--msl-disable-rasterization]:\n\t\tDisables rasterization and returns void from vertex-like entry points.\n"
+	                "\t[--msl-supports-per-vertex-fragment-input]:\n\t\tEnable PerVertexKHR triangle inputs. Requires MSL 4.0 and a GPU supporting vertex_value (Apple10 or later).\n"
+	                "\t[--msl-mesh-per-vertex-corner-locations <mask>]:\n\t\tCopy the mesh per-vertex outputs at these Locations into per-primitive corners, and read\n"
+	                "\t\tfragment PerVertexKHR inputs from them. Set the same mask for the mesh and the fragment shader.\n"
 	                "\t[--msl-auto-disable-rasterization]:\n\t\tDisables rasterization if BuiltInPosition is not written.\n"
 	                "\t[--msl-default-point-size <size>]:\n\t\tApplies a default value if BuiltInPointSize is not written.\n");
 	// clang-format on
@@ -1263,6 +1272,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.capture_output_to_buffer = args.msl_capture_output_to_buffer;
+		msl_opts.supports_per_vertex_fragment_input = args.msl_supports_per_vertex_fragment_input;
+		msl_opts.mesh_per_vertex_corner_locations = args.msl_mesh_per_vertex_corner_locations;
 		msl_opts.swizzle_texture_samples = args.msl_swizzle_texture_samples;
 		msl_opts.invariant_float_math = args.msl_invariant_float_math;
 		if (args.msl_ios)
@@ -1288,6 +1299,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.enable_frag_output_mask = args.msl_enable_frag_output_mask;
 		msl_opts.enable_clip_distance_user_varying = args.msl_enable_clip_distance_user_varying;
 		msl_opts.raw_buffer_tese_input = args.msl_raw_buffer_tese_input;
+		msl_opts.tese_as_compute = args.msl_tese_as_compute != 0;
+		msl_opts.tessellation_factors_float32 = args.msl_tessellation_factors_float32;
 		msl_opts.multi_patch_workgroup = args.msl_multi_patch_workgroup;
 		msl_opts.vertex_for_tessellation = args.msl_vertex_for_tessellation;
 		msl_opts.additional_fixed_sample_mask = args.msl_additional_fixed_sample_mask;
@@ -1627,6 +1640,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		}
 	}
 
+	if (args.msl && args.msl_tese_as_compute)
+		compiler->set_execution_mode(ExecutionModeOutputVertices, args.msl_tese_as_compute);
 	auto ret = compiler->compile();
 
 	if (args.dump_resources)
@@ -1755,6 +1770,9 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
 	cbs.add("--msl-capture-output", [&args](CLIParser &) { args.msl_capture_output_to_buffer = true; });
+	cbs.add("--msl-supports-per-vertex-fragment-input", [&args](CLIParser &) { args.msl_supports_per_vertex_fragment_input = true; });
+	cbs.add("--msl-mesh-per-vertex-corner-locations",
+	        [&args](CLIParser &parser) { args.msl_mesh_per_vertex_corner_locations = parser.next_uint(); });
 	cbs.add("--msl-swizzle-texture-samples", [&args](CLIParser &) { args.msl_swizzle_texture_samples = true; });
 	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
@@ -1887,7 +1905,13 @@ static int main_inner(int argc, char *argv[])
 		output.vecsize = parser.next_uint();
 		args.msl_shader_outputs.push_back(output);
 	});
+	cbs.add("--msl-tese-as-compute", [&args](CLIParser &parser) {
+		args.msl_tese_as_compute = parser.next_uint();
+		if (!args.msl_tese_as_compute || args.msl_tese_as_compute > 32)
+			SPIRV_CROSS_THROW("--msl-tese-as-compute requires an input patch size in [1, 32].");
+	});
 	cbs.add("--msl-raw-buffer-tese-input", [&args](CLIParser &) { args.msl_raw_buffer_tese_input = true; });
+	cbs.add("--msl-tessellation-factors-float32", [&args](CLIParser &) { args.msl_tessellation_factors_float32 = true; });
 	cbs.add("--msl-multi-patch-workgroup", [&args](CLIParser &) { args.msl_multi_patch_workgroup = true; });
 	cbs.add("--msl-vertex-for-tessellation", [&args](CLIParser &) { args.msl_vertex_for_tessellation = true; });
 	cbs.add("--msl-additional-fixed-sample-mask",

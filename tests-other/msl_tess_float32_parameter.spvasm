@@ -1,0 +1,32 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationControl %main "main" %outer
+OpExecutionMode %main OutputVertices 1
+OpDecorate %outer Patch
+OpDecorate %outer BuiltIn TessLevelOuter
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%zero = OpConstant %uint 0
+%four = OpConstant %uint 4
+%a4 = OpTypeArray %float %four
+%ptr = OpTypePointer Output %a4
+%element = OpTypePointer Output %float
+%helperfn = OpTypeFunction %void %ptr
+%outer = OpVariable %ptr Output
+%one = OpConstant %float 1
+%main = OpFunction %void None %fn
+%entry = OpLabel
+%call = OpFunctionCall %void %helper %outer
+OpReturn
+OpFunctionEnd
+%helper = OpFunction %void None %helperfn
+%arg = OpFunctionParameter %ptr
+%body = OpLabel
+%p = OpAccessChain %element %arg %zero
+OpStore %p %one
+OpReturn
+OpFunctionEnd

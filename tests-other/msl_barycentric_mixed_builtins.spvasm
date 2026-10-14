@@ -1,0 +1,263 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Mixed ordinary builtins must not inherit the barycentric pull-model type.
+OpCapability Shader
+OpCapability SampleRateShading
+OpCapability ClipDistance
+OpCapability CullDistance
+OpCapability Geometry
+OpCapability MultiViewport
+OpCapability MultiView
+OpCapability DemoteToHelperInvocationEXT
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+OpExtension "SPV_EXT_demote_to_helper_invocation"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %weights %color
+OpEntryPoint Fragment %loads "loads" %weights %color
+OpEntryPoint Fragment %inactive "inactive" %weights %color
+OpEntryPoint Fragment %unsupported "unsupported" %weights %color
+OpEntryPoint Fragment %unsupported_helper "unsupported_helper" %weights %color
+OpEntryPoint Fragment %unsupported_mask "unsupported_mask" %weights %color
+OpEntryPoint Fragment %companions "companions" %weights %color
+OpEntryPoint Fragment %companions_only "companions_only" %weights %color
+OpEntryPoint Fragment %demote "demote" %weights %color
+OpEntryPoint Fragment %unsupported_view "unsupported_view" %weights %color
+OpExecutionMode %companions OriginUpperLeft
+OpExecutionMode %companions_only OriginUpperLeft
+OpExecutionMode %demote OriginUpperLeft
+OpExecutionMode %unsupported_view OriginUpperLeft
+OpExecutionMode %main OriginUpperLeft
+OpExecutionMode %loads OriginUpperLeft
+OpExecutionMode %inactive OriginUpperLeft
+OpExecutionMode %unsupported OriginUpperLeft
+OpExecutionMode %unsupported_helper OriginUpperLeft
+OpExecutionMode %unsupported_mask OriginUpperLeft
+OpDecorate %block Block
+OpMemberDecorate %block 0 BuiltIn BaryCoordKHR
+OpMemberDecorate %block 1 BuiltIn BaryCoordNoPerspKHR
+OpMemberDecorate %block 2 BuiltIn FrontFacing
+OpMemberDecorate %block 3 BuiltIn SampleId
+OpMemberDecorate %block 4 BuiltIn HelperInvocation
+OpMemberDecorate %block 5 BuiltIn SamplePosition
+OpMemberDecorate %block 6 BuiltIn PointCoord
+OpMemberDecorate %block 7 BuiltIn SampleMask
+OpMemberDecorate %block 8 BuiltIn ClipDistance
+OpMemberDecorate %block 9 BuiltIn CullDistance
+OpMemberDecorate %block 10 BuiltIn PrimitiveId
+OpMemberDecorate %block 11 BuiltIn Layer
+OpMemberDecorate %block 12 BuiltIn ViewportIndex
+OpMemberDecorate %block 10 Flat
+OpMemberDecorate %block 11 Flat
+OpMemberDecorate %block 12 Flat
+OpMemberDecorate %block 13 BuiltIn ViewIndex
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%bool = OpTypeBool
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%vec2 = OpTypeVector %float 2
+%vec3 = OpTypeVector %float 3
+%bvec3 = OpTypeVector %bool 3
+%zero = OpConstant %uint 0
+%one = OpConstant %uint 1
+%two = OpConstant %uint 2
+%three = OpConstant %uint 3
+%four = OpConstant %uint 4
+%five = OpConstant %uint 5
+%six = OpConstant %uint 6
+%seven = OpConstant %uint 7
+%eight = OpConstant %uint 8
+%nine = OpConstant %uint 9
+%ten = OpConstant %uint 10
+%eleven = OpConstant %uint 11
+%twelve = OpConstant %uint 12
+%thirteen = OpConstant %uint 13
+%mask = OpTypeArray %uint %one
+%clip = OpTypeArray %float %two
+%block = OpTypeStruct %vec3 %vec3 %bool %uint %bool %vec2 %vec2 %mask %clip %clip %uint %uint %uint %uint
+%inclip = OpTypePointer Input %clip
+%inmask = OpTypePointer Input %mask
+%inblock = OpTypePointer Input %block
+%in3 = OpTypePointer Input %vec3
+%in2 = OpTypePointer Input %vec2
+%inbool = OpTypePointer Input %bool
+%inuint = OpTypePointer Input %uint
+%infloat = OpTypePointer Input %float
+%out3 = OpTypePointer Output %vec3
+%void_fn = OpTypeFunction %void
+%vec_fn = OpTypeFunction %vec3
+%weights = OpVariable %inblock Input
+%color = OpVariable %out3 Output
+; Read ordinary scalar/vector members in a helper, exercising argument extraction.
+%ordinary = OpFunction %vec3 None %vec_fn
+%o = OpLabel
+%ffp = OpAccessChain %inbool %weights %two
+%ff = OpLoad %bool %ffp
+%sidp = OpAccessChain %inuint %weights %three
+%sid = OpLoad %uint %sidp
+%spp = OpAccessChain %in2 %weights %five
+%sp = OpLoad %vec2 %spp
+%pcp = OpAccessChain %in2 %weights %six
+%pc = OpLoad %vec2 %pcp
+%si = OpConvertUToF %float %sid
+%xy = OpFAdd %vec2 %sp %pc
+%xyz = OpCompositeConstruct %vec3 %xy %si
+%neg = OpFNegate %vec3 %xyz
+%conds = OpCompositeConstruct %bvec3 %ff %ff %ff
+%result = OpSelect %vec3 %conds %xyz %neg
+OpReturnValue %result
+OpFunctionEnd
+%bary = OpFunction %vec3 None %vec_fn
+%b = OpLabel
+%pp = OpAccessChain %in3 %weights %zero
+%np = OpAccessChain %in3 %weights %one
+%p = OpExtInst %vec3 %glsl InterpolateAtCentroid %pp
+%n = OpExtInst %vec3 %glsl InterpolateAtSample %np %one
+%sum = OpFAdd %vec3 %p %n
+OpReturnValue %sum
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%values = OpFunctionCall %vec3 %ordinary
+%basis = OpFunctionCall %vec3 %bary
+%final = OpFAdd %vec3 %values %basis
+OpStore %color %final
+OpReturn
+OpFunctionEnd
+; Ordinary-only use, with inactive barycentric members still in the block.
+%loads = OpFunction %void None %void_fn
+%l = OpLabel
+%loaded = OpFunctionCall %vec3 %ordinary
+OpStore %color %loaded
+OpReturn
+OpFunctionEnd
+%inactive = OpFunction %void None %void_fn
+%i = OpLabel
+%basis_only = OpFunctionCall %vec3 %bary
+OpStore %color %basis_only
+OpReturn
+OpFunctionEnd
+; ClipDistance needs stage-in user varyings, not ordinary builtin extraction.
+%unsupported = OpFunction %void None %void_fn
+%u = OpLabel
+%cp = OpAccessChain %infloat %weights %eight %zero
+%c = OpLoad %float %cp
+%cs = OpCompositeConstruct %vec3 %c %c %c
+%ubasis = OpFunctionCall %vec3 %bary
+%ufinal = OpFAdd %vec3 %ubasis %cs
+OpStore %color %ufinal
+OpReturn
+OpFunctionEnd
+; Regression entries retain their original names after adding companion lowering.
+%helper_read = OpFunction %vec3 None %vec_fn
+%hr = OpLabel
+%hp = OpAccessChain %inbool %weights %four
+%h = OpLoad %bool %hp
+%hbasis = OpFunctionCall %vec3 %bary
+%hn = OpFNegate %vec3 %hbasis
+%hs = OpCompositeConstruct %bvec3 %h %h %h
+%hresult = OpSelect %vec3 %hs %hbasis %hn
+OpReturnValue %hresult
+OpFunctionEnd
+%unsupported_helper = OpFunction %void None %void_fn
+%uh = OpLabel
+%uhresult = OpFunctionCall %vec3 %helper_read
+OpStore %color %uhresult
+OpReturn
+OpFunctionEnd
+%unsupported_mask = OpFunction %void None %void_fn
+%um = OpLabel
+%mp = OpAccessChain %inuint %weights %seven %zero
+%m = OpLoad %uint %mp
+%mf = OpConvertUToF %float %m
+%ms = OpCompositeConstruct %vec3 %mf %mf %mf
+%mbasis = OpFunctionCall %vec3 %bary
+%mresult = OpFAdd %vec3 %mbasis %ms
+OpStore %color %mresult
+OpReturn
+OpFunctionEnd
+
+; Array values, copied member pointers, dynamic clip indexing and scalar builtins in a helper.
+%companion_read = OpFunction %vec3 None %vec_fn
+%cr = OpLabel
+%crmaskp = OpAccessChain %inmask %weights %seven
+%crmaskcopy = OpCopyObject %inmask %crmaskp
+%crmask = OpLoad %mask %crmaskcopy
+%crmask0 = OpCompositeExtract %uint %crmask 0
+%cridx = OpUMod %uint %crmask0 %two
+%crclipp = OpAccessChain %inclip %weights %eight
+%crclip = OpLoad %clip %crclipp
+%crclip1 = OpCompositeExtract %float %crclip 1
+%crcp = OpAccessChain %infloat %weights %eight %cridx
+%crc = OpLoad %float %crcp
+%crcullp = OpAccessChain %infloat %weights %nine %one
+%crcull = OpLoad %float %crcullp
+%crpp = OpAccessChain %inuint %weights %ten
+%crp = OpLoad %uint %crpp
+%crlp = OpAccessChain %inuint %weights %eleven
+%crl = OpLoad %uint %crlp
+%crvp = OpAccessChain %inuint %weights %twelve
+%crv = OpLoad %uint %crvp
+%crpl = OpIAdd %uint %crp %crl
+%crplv = OpIAdd %uint %crpl %crv
+%crfloat = OpConvertUToF %float %crplv
+%crsum = OpFAdd %float %crc %crcull
+%crsum2 = OpFAdd %float %crsum %crclip1
+%crresult = OpCompositeConstruct %vec3 %crsum2 %crfloat %crfloat
+OpReturnValue %crresult
+OpFunctionEnd
+%companions_only = OpFunction %void None %void_fn
+%co = OpLabel
+%cores = OpFunctionCall %vec3 %companion_read
+OpStore %color %cores
+OpReturn
+OpFunctionEnd
+%companions = OpFunction %void None %void_fn
+%ca = OpLabel
+%cares = OpFunctionCall %vec3 %companion_read
+%cab = OpFunctionCall %vec3 %bary
+%casum = OpFAdd %vec3 %cares %cab
+OpStore %color %casum
+OpReturn
+OpFunctionEnd
+%demote_helper = OpFunction %vec3 None %vec_fn
+%dh = OpLabel
+OpDemoteToHelperInvocationEXT
+%dhr = OpFunctionCall %vec3 %helper_read
+OpReturnValue %dhr
+OpFunctionEnd
+%demote = OpFunction %void None %void_fn
+%de = OpLabel
+%der = OpFunctionCall %vec3 %demote_helper
+OpStore %color %der
+OpReturn
+OpFunctionEnd
+
+; Keep unsupported companion semantics explicit.
+%unsupported_view = OpFunction %void None %void_fn
+%uv = OpLabel
+%uvp = OpAccessChain %inuint %weights %thirteen
+%uvval = OpLoad %uint %uvp
+%uvf = OpConvertUToF %float %uvval
+%uvf3 = OpCompositeConstruct %vec3 %uvf %uvf %uvf
+%uvb = OpFunctionCall %vec3 %bary
+%uvr = OpFAdd %vec3 %uvf3 %uvb
+OpStore %color %uvr
+OpReturn
+OpFunctionEnd

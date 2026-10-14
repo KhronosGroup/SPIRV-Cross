@@ -1,0 +1,38 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationEvaluation %main "main" %output %input
+OpExecutionMode %main Triangles
+OpExecutionMode %main SpacingEqual
+OpExecutionMode %main VertexOrderCcw
+OpDecorate %output BuiltIn Position
+OpDecorate %Input Block
+OpMemberDecorate %Input 0 BuiltIn PatchVertices
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v3float = OpTypeVector %float 3
+%v4float = OpTypeVector %float 4
+%int = OpTypeInt 32 1
+%int_0 = OpConstant %int 0
+%int_1 = OpConstant %int 1
+%uint = OpTypeInt 32 0
+%float_1 = OpConstant %float 1
+%ptr_Output = OpTypePointer Output %v4float
+%ptr_Output_v4float = OpTypePointer Output %v4float
+%output = OpVariable %ptr_Output Output
+%Input = OpTypeStruct %uint
+%ptr_Input = OpTypePointer Input %Input
+%ptr_Input_v3float = OpTypePointer Input %v3float
+%ptr_Input_uint = OpTypePointer Input %uint
+%input = OpVariable %ptr_Input Input
+%main = OpFunction %void None %function
+%entry = OpLabel
+%count_ptr = OpAccessChain %ptr_Input_uint %input %int_0
+%count = OpLoad %uint %count_ptr
+%count_f = OpConvertUToF %float %count
+%position = OpCompositeConstruct %v4float %count_f %float_1 %float_1 %float_1
+OpStore %output %position
+OpReturn
+OpFunctionEnd

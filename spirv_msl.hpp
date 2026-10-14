@@ -84,6 +84,79 @@ struct MSLShaderInterfaceVariable
 	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
 };
 
+// Physical scalar fields in a captured producer record, not SPIR-V buffer offsets.
+// Supported scalar types: Half, Short, UShort, Float, Int, UInt. No implicit conversion.
+struct MSLCapturedVertexComponent
+{
+	uint32_t location = 0;
+	uint32_t component = 0;
+	uint32_t byte_offset = 0;
+	SPIRType::BaseType scalar_type = SPIRType::Unknown;
+};
+
+// A captured builtin scalar for replay. Array elements (e.g. ClipDistance) and
+// vector components (e.g. Position) have separate indices; scalar builtins use zero for both.
+struct MSLCapturedVertexBuiltin
+{
+	BuiltIn builtin = BuiltInMax;
+	uint32_t array_index = 0;
+	uint32_t component = 0;
+	uint32_t byte_offset = 0;
+	SPIRType::BaseType scalar_type = SPIRType::Unknown;
+};
+
+struct MSLCapturedVertexLayout
+{
+	uint32_t stride = 0;
+	std::vector<MSLCapturedVertexComponent> components;
+	std::vector<MSLCapturedVertexBuiltin> builtins;
+};
+
+struct MSLCapturedOutputReplayBinding
+{
+	uint32_t vertex_buffer_index = ~0u;
+	uint32_t occurrence_buffer_index = ~0u;
+	uint32_t draw_parameters_buffer_index = ~0u;
+	uint32_t primitive_index_location = ~0u;
+	// Import the captured synthetic Layer into the raster interface. Requires layered
+	// multiview options and a uint Layer in the layout, even if the SPIR-V has no Layer.
+	// Layer is relative to this pass's first view. No extra buffer or draw constants.
+	// Caller must include this opt-in in cache identity and expand capture/occurrence
+	// tables over physical instance/view pairs. Defaults preserve legacy replay.
+	bool multiview_layer = false;
+};
+
+// Optional replay output matching MSLFragmentBarycentricInputBinding. Occurrence
+// corners are packed uint32 scalars in [0, 2], indexed by the same occurrence as
+// the unchanged (record, primitive key) pairs. All defaults disable this output.
+struct MSLCapturedOutputReplayBarycentricBinding
+{
+	uint32_t corner_buffer_index = ~0u;
+	uint32_t perspective_location = ~0u;
+	uint32_t no_perspective_location = ~0u;
+};
+
+struct MSLPerVertexInputBinding
+{
+	uint32_t vertex_buffer_index = ~0u;
+	uint32_t primitive_index_buffer_index = ~0u;
+	// A private flat uint supplied by the rasterizing stage at user(locnN).
+	// Absolute triplet index, including draw/instance/view selection. It is not PrimitiveId.
+	uint32_t primitive_index_location = ~0u;
+	// Optional buffer of one uint per triplet. When set, a fragment PrimitiveId reads it at the triplet index
+	// instead of [[primitive_id]]: after tessellation, Vulkan's PrimitiveId is the patch index, whereas the
+	// replayed draw only knows its triangle index.
+	uint32_t primitive_id_buffer_index = ~0u;
+};
+
+// Private float3 varyings carrying the same one-hot basis at triangle corners 0, 1, 2.
+// The producer must emit (1, 0, 0), (0, 1, 0), (0, 0, 1) in PerVertexKHR order.
+struct MSLFragmentBarycentricInputBinding
+{
+	uint32_t perspective_location = ~0u;
+	uint32_t no_perspective_location = ~0u;
+};
+
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
 // Taken together, the stage, desc_set and binding combine to form a reference to a resource
 // descriptor used in a particular shading stage. The count field indicates the number of
@@ -553,6 +626,44 @@ public:
 		// Requires MSL 3.2 or above, and has no effect with earlier MSL versions.
 		bool use_fast_math_pragmas = false;
 
+		// Options added for vertex output capture, PerVertexKHR inputs and tessellation evaluation as compute.
+		// They are kept at the end of the structure so that the offsets of the earlier members do not move.
+
+		// Bitmask of the user Locations (0 to 31) that the fragment shader of a mesh pipeline reads as PerVertexKHR.
+		// A triangle mesh shader copies its scalar or vector per-vertex outputs at these Locations into three
+		// per-primitive values, the corners in primitive index order; a fragment shader reads its PerVertexKHR
+		// inputs, which must be arrays of scalars or vectors, from these flat values instead of vertex_value or a
+		// captured buffer. Set the same mask on both stages. Each copied output adds three values per primitive.
+		uint32_t mesh_per_vertex_corner_locations = 0;
+
+		// Selects the native path: requires MSL 4.0 and vertex_value support (Apple10 or later).
+		// For older GPUs, use set_msl_per_vertex_input_buffer() instead.
+		// The caller must also ensure triangle input; MSL version alone does not imply support.
+		bool supports_per_vertex_fragment_input = false;
+
+		// Opt-in TessLevel buffer ABI: float outer[4], float inner[2], 24 bytes/patch, alignment 4.
+		// TCS compute and raw TES only, MSL >= 2.0; standalone factor builtins only.
+		// No isolines, multiview, masked factors or explicit IO pointer parameters.
+		// get_tessellation_factors_float32_incompatibility() reports whether a shader qualifies.
+		// SPIR-V factor initializers require OutputVertices 1 (ordinary stores allow multiple invocations).
+		// Never bind this buffer as Metal hardware tessellation factors: convert to a separate half buffer.
+		// Integrators must include this option in their shader/pipeline cache key and version the ABI.
+		bool tessellation_factors_float32 = false;
+
+		// Opt-in TES capture kernel (MSL >= 2.4, triangle/equal-spacing only).
+		// Requires raw_buffer_tese_input, capture_output_to_buffer and a nonzero
+		// OutputVertices execution-mode override giving the input patch size.
+		// indirect_params_buffer_index binds a read-only uint buffer: a four-word
+		// header (invocation count, three reserved zeros), then eight words per invocation:
+		// float xyz bit patterns, patch ID, dense output record index, three reserved zeros.
+		// Dispatch x selects an invocation; excess x and nonzero y/z return before record access.
+		// For ordered per-corner capture, set record index = invocation index; triangle p then
+		// refers to records [3*p, 3*p+1, 3*p+2]. Coordinates and patch IDs are interleaved, not separate arrays.
+		// Coordinates are SPIR-V domain coordinates, with no implicit winding/origin transform.
+		// Caller owns valid coordinates, all buffer bounds/alignment, unique dense records,
+		// synchronization and topology. Patch inputs retain the raw TES input ABI.
+		bool tese_as_compute = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -681,6 +792,69 @@ public:
 	explicit CompilerMSL(const ParsedIR &ir);
 	explicit CompilerMSL(ParsedIR &&ir);
 
+	// Query after successful vertex or tese_as_compute compilation with capture_output_to_buffer enabled.
+	// Returns the physical stride of the final emitted record (including builtins/padding),
+	// and user Location/Component scalar fields suitable for set_msl_per_vertex_input_buffer().
+	// Builtin scalar fields are exported separately for replay; unused Component packing lanes are omitted.
+	// Throws for absent capture output or unrepresentable physical members (including
+	// nonliteral array sizes and non-16/32-bit numeric fields). Recursively exports user
+	// structs, arrays and matrix columns with their explicit Location/Component linkage.
+	// Does not infer draw indexing.
+	MSLCapturedVertexLayout get_msl_captured_vertex_layout() const;
+
+	// Compile a rasterizing vertex replay on a fresh compiler configured with the original SPIR-V.
+	// Emits only captured scalar loads, the normal output interface and a private flat uint key.
+	// Occurrences are packed uint32 (record, primitive key) pairs, 8 bytes each.
+	// Draw parameters are four uint32: occurrence base, vertex ID origin, instance ID origin,
+	// occurrences per instance. Occurrence = base + (instance_id - origin) * stride + vertex_id - origin.
+	// Buffer bases must be aligned to 4 bytes; caller owns bounds, topology, indices and visibility.
+	// MSL >= 2.4, vertex only; unsupported output shapes, builtins and rasterization options throw.
+	// Consumes this compiler even on failure. Does not emit application resources or function bodies.
+	std::string compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding);
+	// Optional one-hot float3 output at either/both private barycentric locations.
+	// Requires a distinct corner buffer; caller supplies the original triangle corner
+	// order, bounds and values in [0, 2]. Never inferred from vertex/record IDs.
+	std::string compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics);
+	// Emit only the listed user output Locations in the raster replay. An empty list
+	// emits no user varyings. The capture record and fixed raster builtins remain
+	// unchanged. The caller must include every ordinary fragment input Location;
+	// PerVertexKHR inputs read the capture record and need not be replay varyings.
+	// Selection is by whole Location, including all Components. A composite that
+	// cannot be selected at this granularity throws rather than silently widening
+	// or dropping the interface. Existing overloads continue to replay everything.
+	// Invalid or unrepresentable selections throw instead of dropping a requested input.
+	std::string compile_captured_output_replay(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics, const std::vector<uint32_t> &user_locations);
+
+	// Opt in to portable fragment PerVertexKHR inputs (MSL >= 2.4).
+	// Mutually exclusive with supports_per_vertex_fragment_input for active PerVertex inputs.
+	// Arrays of 1-3 vertices may contain 16/32-bit numeric scalars/vectors, matrices,
+	// literal arrays and structs. Blocks may use member Location/Component decorations.
+	// PerVertexKHR on individual members is not supported (Vulkan interface matching).
+	// Reads record = indices[3 * privatePrimitiveIndex + vertex], then each scalar at
+	// vertices + record * layout.stride + byte_offset. All arithmetic uses ulong.
+	// Bind vertices with alignment >= 4 and indices with alignment >= 4. The caller owns
+	// bounds, capture visibility, vertex ordering, and the matching private flat varying.
+	// Indices are tightly packed uint scalars (12 bytes per triplet), NOT an array of uint3.
+	// Configure before compile(); does not generate capture/replay or infer producer layout.
+	void set_msl_per_vertex_input_buffer(const MSLCapturedVertexLayout &layout, const MSLPerVertexInputBinding &binding);
+
+	// Whether this TCS or TES qualifies for Options::tessellation_factors_float32 whatever the other options:
+	// empty when it does, else the reason compile() would throw. Call it after overriding execution modes,
+	// before choosing the float32 TessLevel ABI for a TCS/TES pair.
+	std::string get_tessellation_factors_float32_incompatibility();
+	bool needs_per_vertex_input_buffer() const
+	{
+		return per_vertex_input_buffer_used;
+	}
+
+	// Opt in to fragment barycentrics via private user varyings, independent of Metal
+	// barycentric_coord. MSL >= 2.4; configure before compile(). Only active builtins
+	// require locations, distinct from each other, application inputs and the PerVertex key.
+	// Preserves center/centroid/sample and explicit interpolation. NoPersp is always linear.
+	// Explicit interpolation through unresolved/copied input pointers throws.
+	// Does not enable producer basis output; configure the replay overload separately.
+	void set_msl_fragment_barycentric_input(const MSLFragmentBarycentricInputBinding &binding);
+
 	// input is a shader interface variable description used to fix up shader input variables.
 	// If shader inputs are provided, is_msl_shader_input_used() will return true after
 	// calling ::compile() if the location were used by the MSL code.
@@ -806,6 +980,7 @@ public:
 	uint32_t get_fp_fast_math_flags(bool incl_ops) const;
 
 protected:
+	std::string compile_captured_output_replay_impl(const MSLCapturedVertexLayout &layout, const MSLCapturedOutputReplayBinding &binding, const MSLCapturedOutputReplayBarycentricBinding &barycentrics, const std::vector<uint32_t> *user_locations);
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
 	enum SPVFuncImpl : uint8_t
@@ -991,6 +1166,7 @@ protected:
 
 	void replace_illegal_entry_point_names();
 	void sync_entry_point_aliases_and_names();
+	void configure_msl_backend();
 
 	static const std::unordered_set<std::string> &get_reserved_keyword_set();
 	static const std::unordered_set<std::string> &get_illegal_func_names();
@@ -1022,6 +1198,7 @@ protected:
 	uint32_t add_interface_block(StorageClass storage, bool patch = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, StorageClass storage);
 	uint32_t add_meshlet_block(bool per_primitive);
+	void add_mesh_per_vertex_corners(SPIRType &ib_type);
 
 	struct InterfaceBlockMeta
 	{
@@ -1041,8 +1218,34 @@ protected:
 
 	std::string to_tesc_invocation_id();
 	void emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array);
+	void validate_per_vertex_input_buffer();
+	void validate_per_vertex_buffer_binding(uint32_t index, uint32_t count = 1) const;
+	void add_per_vertex_input_from_buffer(const std::string &ib_var_ref, const SPIRVariable &var);
+	void add_per_vertex_input_leaf_from_buffer(const std::string &ib_var_ref, const SPIRType &type, uint32_t var_id, const std::string &path, uint32_t &location, uint32_t component, uint32_t count);
+	MSLCapturedVertexLayout per_vertex_input_layout;
+	MSLPerVertexInputBinding per_vertex_input_binding;
+	std::map<LocationComponentPair, MSLCapturedVertexComponent> per_vertex_input_components;
+	bool msl_compile_completed = false;
+	bool msl_compile_started = false;
+	bool captured_output_replay = false;
+	uint32_t captured_output_replay_key_member = ~0u;
+	std::map<uint32_t, uint32_t> captured_output_component_masks;
+	bool per_vertex_input_buffer_enabled = false;
+	bool per_vertex_input_buffer_used = false;
+	MSLFragmentBarycentricInputBinding fragment_barycentric_input_binding;
+	bool fragment_barycentric_input_enabled = false;
+	std::map<BuiltIn, std::string> fragment_barycentric_input_expressions;
+	std::map<BuiltIn, uint32_t> fragment_barycentric_builtin_ids;
+	std::unordered_set<uint32_t> fragment_barycentric_input_blocks;
+	bool is_portable_barycentric(BuiltIn builtin) const;
+	uint32_t portable_barycentric_location(BuiltIn builtin) const;
+	void prepare_fragment_barycentric_input();
+
+	void add_per_vertex_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, const SPIRVariable &var, const SPIRType &type, const std::string &path, uint32_t &location, uint32_t component, uint32_t vertex_count);
 	void add_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
 	                                     SPIRVariable &var, InterfaceBlockMeta &meta);
+	uint32_t interface_composite_element_count(const SPIRType &type) const;
+	std::string interface_composite_element_access(const SPIRType &type, uint32_t index) const;
 	void add_composite_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
 	                                               SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_plain_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
@@ -1105,6 +1308,7 @@ protected:
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
 	bool is_direct_input_builtin(BuiltIn builtin);
+	bool uses_per_vertex_primitive_id_buffer() const;
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
 	std::string built_in_func_arg(BuiltIn builtin, bool prefix_comma);
@@ -1403,6 +1607,7 @@ protected:
 	bool is_supported_argument_buffer_type(const SPIRType &type) const;
 
 	bool variable_storage_requires_stage_io(StorageClass storage) const;
+	bool is_local_vertex_output(const SPIRVariable &variable) const;
 
 	bool needs_manual_helper_invocation_updates() const
 	{

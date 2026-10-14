@@ -531,6 +531,160 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-small-vector-test spirv-cross-core)
 				set_target_properties(spirv-cross-small-vector-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				set(barycentric-fixtures)
+				foreach(fixture portable interpolate block copied_pointer explicit_only mixed_block mixed_frontfacing mixed_builtins multiword_mask inactive_block empty_root)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_barycentric_${fixture}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-spirv-as} --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_barycentric_${fixture}.spvasm -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_barycentric_${fixture}.spvasm VERBATIM)
+					list(APPEND barycentric-fixtures ${binary})
+				endforeach()
+				set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_barycentric_per_vertex.spv)
+				add_custom_command(OUTPUT ${binary}
+						COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_barycentric_per_vertex.frag -o ${binary}
+						COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+						DEPENDS tests-other/msl_barycentric_per_vertex.frag VERBATIM)
+				list(APPEND barycentric-fixtures ${binary})
+				add_executable(spirv-cross-msl-barycentric-test tests-other/msl_barycentric_portable.cpp ${barycentric-fixtures})
+				target_link_libraries(spirv-cross-msl-barycentric-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-barycentric-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-barycentric-test COMMAND $<TARGET_FILE:spirv-cross-msl-barycentric-test> ${barycentric-fixtures})
+
+				set(capture-composite-fixtures)
+				foreach(stage vert frag)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_capture_composites.${stage}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_composites.${stage} -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_capture_composites.${stage} VERBATIM)
+					list(APPEND capture-composite-fixtures ${binary})
+				endforeach()
+				set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_capture_mixed_components.spv)
+				add_custom_command(OUTPUT ${binary}
+						COMMAND ${spirv-cross-spirv-as} --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_mixed_components.spvasm -o ${binary}
+						COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+						DEPENDS tests-other/msl_capture_mixed_components.spvasm VERBATIM)
+				list(APPEND capture-composite-fixtures ${binary})
+				set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_capture_composites_spec_array.spv)
+				add_custom_command(OUTPUT ${binary}
+						COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_composites_spec_array.vert -o ${binary}
+						COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+						DEPENDS tests-other/msl_capture_composites_spec_array.vert VERBATIM)
+				list(APPEND capture-composite-fixtures ${binary})
+				foreach(stage vert frag)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_capture_composites_typed.${stage}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_composites_typed.${stage} -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_capture_composites_typed.${stage} VERBATIM)
+					list(APPEND capture-composite-fixtures ${binary})
+				endforeach()
+				add_executable(spirv-cross-msl-capture-composites-test tests-other/msl_capture_composites.cpp ${capture-composite-fixtures})
+				target_link_libraries(spirv-cross-msl-capture-composites-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-capture-composites-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-capture-composites-test COMMAND $<TARGET_FILE:spirv-cross-msl-capture-composites-test> ${capture-composite-fixtures})
+
+				add_executable(spirv-cross-msl-interface-locations-test tests-other/msl_interface_locations.cpp)
+				target_link_libraries(spirv-cross-msl-interface-locations-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-interface-locations-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-interface-locations-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-interface-locations-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_interface_locations.vert.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_interface_locations.frag.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_interface_locations.tese.spv)
+
+				add_executable(spirv-cross-msl-capture-replay-test tests-other/msl_capture_replay.cpp)
+				target_link_libraries(spirv-cross-msl-capture-replay-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-capture-replay-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-capture-replay-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-capture-replay-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_simple.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_complex.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_replay_effects.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_replay_unsupported.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_unsupported.spv)
+
+				set(tess-float32-fixtures)
+				foreach(stage tesc tese)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_tess_float32.${stage}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tess_float32.${stage} -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_tess_float32.${stage} VERBATIM)
+					list(APPEND tess-float32-fixtures ${binary})
+				endforeach()
+				foreach(fixture copy tes_copy block)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_tess_float32_${fixture}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-spirv-as} --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tess_float32_${fixture}.spvasm -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_tess_float32_${fixture}.spvasm VERBATIM)
+					list(APPEND tess-float32-fixtures ${binary})
+				endforeach()
+				# Deliberately invalid Vulkan IO pointer call: the compiler must reject it explicitly.
+				set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_tess_float32_parameter.spv)
+				add_custom_command(OUTPUT ${binary}
+						COMMAND ${spirv-cross-spirv-as} --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tess_float32_parameter.spvasm -o ${binary}
+						DEPENDS tests-other/msl_tess_float32_parameter.spvasm VERBATIM)
+				list(APPEND tess-float32-fixtures ${binary})
+				add_executable(spirv-cross-msl-tess-float32-test tests-other/msl_tess_float32.cpp ${tess-float32-fixtures})
+				target_link_libraries(spirv-cross-msl-tess-float32-test spirv-cross-msl)
+				add_test(NAME spirv-cross-msl-tess-float32-test COMMAND $<TARGET_FILE:spirv-cross-msl-tess-float32-test> ${tess-float32-fixtures} ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_simple.spv)
+
+				set(tese-compute-fixtures)
+				foreach(fixture triangle constant resource block quads fractional empty)
+					string(TOUPPER ${fixture} define)
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_tese_compute_${fixture}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 -D${define}=1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tese_compute.tese -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${binary}
+							DEPENDS tests-other/msl_tese_compute.tese VERBATIM)
+					list(APPEND tese-compute-fixtures ${binary})
+				endforeach()
+				set(tese_pervertex_fixture ${CMAKE_CURRENT_BINARY_DIR}/msl_tese_pervertex.spv)
+				add_custom_command(OUTPUT ${tese_pervertex_fixture}
+						COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tese_pervertex.frag -o ${tese_pervertex_fixture}
+						COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${tese_pervertex_fixture}
+						DEPENDS tests-other/msl_tese_pervertex.frag VERBATIM)
+				list(APPEND tese-compute-fixtures ${tese_pervertex_fixture})
+				set(tese_pervertex_primitive_fixture ${CMAKE_CURRENT_BINARY_DIR}/msl_tese_pervertex_primitive.spv)
+				add_custom_command(OUTPUT ${tese_pervertex_primitive_fixture}
+						COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.1 ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tese_pervertex_primitive.frag -o ${tese_pervertex_primitive_fixture}
+						COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.1 ${tese_pervertex_primitive_fixture}
+						DEPENDS tests-other/msl_tese_pervertex_primitive.frag VERBATIM)
+				list(APPEND tese-compute-fixtures ${tese_pervertex_primitive_fixture})
+				add_executable(spirv-cross-msl-tese-compute-test tests-other/msl_tese_compute.cpp ${tese-compute-fixtures})
+				target_link_libraries(spirv-cross-msl-tese-compute-test spirv-cross-msl)
+				add_test(NAME spirv-cross-msl-tese-compute-test COMMAND $<TARGET_FILE:spirv-cross-msl-tese-compute-test> ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_simple.spv ${tese_pervertex_fixture})
+				add_test(NAME spirv-cross-msl-tese-builtin-block-test
+					COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_tese_builtin_block.sh $<TARGET_FILE:spirv-cross> ${spirv-cross-spirv-as} ${spirv-cross-spirv-val} ${CMAKE_CURRENT_SOURCE_DIR}/tests-other)
+
+				add_executable(spirv-cross-msl-capture-layout-test tests-other/msl_capture_layout.cpp)
+				target_link_libraries(spirv-cross-msl-capture-layout-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-capture-layout-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-capture-layout-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-capture-layout-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_simple.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_complex.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_unsupported.spv ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_capture_layout_consumer.spv)
+
+				add_executable(spirv-cross-msl-per-vertex-input-test tests-other/msl_per_vertex_input.cpp)
+				target_link_libraries(spirv-cross-msl-per-vertex-input-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-per-vertex-input-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-per-vertex-input-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-per-vertex-input-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_per_vertex_input.spv)
+
+				add_test(NAME spirv-cross-msl-per-vertex-composites-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-per-vertex-input-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_per_vertex_input_composites.spv --composites)
+				add_test(NAME spirv-cross-msl-per-vertex-members-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-per-vertex-input-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_per_vertex_input_members.spv --reject "Member-decorated PerVertexKHR")
+
+				set(mesh-corner-fixtures)
+				foreach(fixture BASE.mesh MATRIX.mesh LINES.mesh BASE.frag BLOCK.frag MATRIX.frag)
+					string(REGEX REPLACE "\\..*" "" define ${fixture})
+					string(REGEX REPLACE ".*\\." "" stage ${fixture})
+					set(binary ${CMAKE_CURRENT_BINARY_DIR}/msl_mesh_per_vertex_corners_${fixture}.spv)
+					add_custom_command(OUTPUT ${binary}
+							COMMAND ${spirv-cross-glslang} -V --target-env vulkan1.3 -D${define} ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_mesh_per_vertex_corners.${stage} -o ${binary}
+							COMMAND ${spirv-cross-spirv-val} --target-env vulkan1.3 ${binary}
+							DEPENDS tests-other/msl_mesh_per_vertex_corners.${stage} VERBATIM)
+					list(APPEND mesh-corner-fixtures ${binary})
+				endforeach()
+				add_executable(spirv-cross-msl-mesh-corners-test tests-other/msl_mesh_per_vertex_corners.cpp ${mesh-corner-fixtures})
+				target_link_libraries(spirv-cross-msl-mesh-corners-test spirv-cross-msl)
+				set_target_properties(spirv-cross-msl-mesh-corners-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+				add_test(NAME spirv-cross-msl-mesh-corners-test COMMAND $<TARGET_FILE:spirv-cross-msl-mesh-corners-test> ${mesh-corner-fixtures})
+
 				add_executable(spirv-cross-msl-constexpr-test tests-other/msl_constexpr_test.cpp)
 				target_link_libraries(spirv-cross-msl-constexpr-test spirv-cross-c)
 				set_target_properties(spirv-cross-msl-constexpr-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")

@@ -1,0 +1,99 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Legal member-decorated builtins, default loads and explicit interpolation in a helper.
+OpCapability Shader
+OpCapability SampleRateShading
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %weights %color
+OpEntryPoint Fragment %loads "loads" %weights %color
+OpExecutionMode %main OriginUpperLeft
+OpExecutionMode %loads OriginUpperLeft
+OpDecorate %block Block
+OpMemberDecorate %block 0 BuiltIn BaryCoordKHR
+OpMemberDecorate %block 1 BuiltIn BaryCoordNoPerspKHR
+OpMemberDecorate %block 2 BuiltIn FragCoord
+OpMemberDecorate %block 3 BuiltIn FrontFacing
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%uint = OpTypeInt 32 0
+%vec3 = OpTypeVector %float 3
+%vec4 = OpTypeVector %float 4
+%in4 = OpTypePointer Input %vec4
+%bool = OpTypeBool
+%inbool = OpTypePointer Input %bool
+%bvec3 = OpTypeVector %bool 3
+%block = OpTypeStruct %vec3 %vec3 %vec4 %bool
+%inblock = OpTypePointer Input %block
+%in3 = OpTypePointer Input %vec3
+%out3 = OpTypePointer Output %vec3
+%void_fn = OpTypeFunction %void
+%vec_fn = OpTypeFunction %vec3
+%zero = OpConstant %uint 0
+%one = OpConstant %uint 1
+%two = OpConstant %uint 2
+%three = OpConstant %uint 3
+%weights = OpVariable %inblock Input
+%color = OpVariable %out3 Output
+%helper = OpFunction %vec3 None %vec_fn
+%h = OpLabel
+%pp = OpAccessChain %in3 %weights %zero
+%np = OpAccessChain %in3 %weights %one
+%p = OpExtInst %vec3 %glsl InterpolateAtCentroid %pp
+%n = OpExtInst %vec3 %glsl InterpolateAtSample %np %one
+%sum = OpFAdd %vec3 %p %n
+OpReturnValue %sum
+OpFunctionEnd
+%load_helper = OpFunction %vec3 None %vec_fn
+%lh = OpLabel
+%lp = OpAccessChain %in3 %weights %zero
+%ln = OpAccessChain %in3 %weights %one
+%lv0 = OpLoad %vec3 %lp
+%lv1 = OpLoad %vec3 %ln
+%lv = OpFAdd %vec3 %lv0 %lv1
+OpReturnValue %lv
+OpFunctionEnd
+%loads = OpFunction %void None %void_fn
+%le = OpLabel
+%loaded = OpFunctionCall %vec3 %load_helper
+OpStore %color %loaded
+OpReturn
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%m = OpLabel
+%result = OpFunctionCall %vec3 %helper
+%pdefault = OpAccessChain %in3 %weights %zero
+%ndefault = OpAccessChain %in3 %weights %one
+%pd = OpLoad %vec3 %pdefault
+%nd = OpLoad %vec3 %ndefault
+%defaults = OpFAdd %vec3 %pd %nd
+%final = OpFAdd %vec3 %result %defaults
+%fp = OpAccessChain %in4 %weights %two
+%fc = OpLoad %vec4 %fp
+%xyz = OpVectorShuffle %vec3 %fc %fc 0 1 2
+%withfc = OpFAdd %vec3 %final %xyz
+%ffp = OpAccessChain %inbool %weights %three
+%ff = OpLoad %bool %ffp
+%neg = OpFNegate %vec3 %withfc
+%fff = OpCompositeConstruct %bvec3 %ff %ff %ff
+%selected = OpSelect %vec3 %fff %withfc %neg
+OpStore %color %selected
+OpReturn
+OpFunctionEnd

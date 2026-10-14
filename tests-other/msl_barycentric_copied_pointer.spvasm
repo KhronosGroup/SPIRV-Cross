@@ -1,0 +1,244 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+;
+; Licensed under the Apache License, Version 2.0 (the License);
+; you may not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+;
+;     http://www.apache.org/licenses/LICENSE-2.0
+;
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS,
+; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+
+; Valid SPIR-V copied Input pointers retain explicit interpolation source, member
+; and component, independently of default interpolation.
+OpCapability Shader
+OpCapability SampleRateShading
+OpCapability FragmentBarycentricKHR
+OpCapability InterpolationFunction
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%glsl = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %persp %linear %color
+OpEntryPoint Fragment %direct_helper "direct_helper" %persp %linear %user %index %userarr %color
+OpEntryPoint Fragment %block_helper "block_helper" %weights %user %index %color
+OpEntryPoint Fragment %dynamic_array "dynamic_array" %persp %linear %user %index %userarr %color
+OpEntryPoint Fragment %whole_block "whole_block" %weights %color
+OpEntryPoint Fragment %array_helper "array_helper" %persp %linear %user %index %userarr %color
+OpEntryPoint Fragment %nested_array "nested_array" %persp %nested %color
+OpEntryPoint Fragment %component_alias "component_alias" %linear %color
+OpExecutionMode %nested_array OriginUpperLeft
+OpExecutionMode %component_alias OriginUpperLeft
+OpExecutionMode %direct_helper OriginUpperLeft
+OpExecutionMode %block_helper OriginUpperLeft
+OpExecutionMode %dynamic_array OriginUpperLeft
+OpExecutionMode %whole_block OriginUpperLeft
+OpExecutionMode %array_helper OriginUpperLeft
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %persp BuiltIn BaryCoordKHR
+OpDecorate %linear BuiltIn BaryCoordNoPerspKHR
+OpDecorate %block Block
+OpMemberDecorate %block 0 BuiltIn BaryCoordKHR
+OpMemberDecorate %block 1 BuiltIn BaryCoordNoPerspKHR
+OpDecorate %user Location 2
+OpDecorate %user NoPerspective
+OpDecorate %index Location 3
+OpDecorate %index Flat
+OpDecorate %userarr Location 4
+OpDecorate %nested Location 4
+OpDecorate %color Location 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%vec3 = OpTypeVector %float 3
+%uint = OpTypeInt 32 0
+%vec2 = OpTypeVector %float 2
+%u0 = OpConstant %uint 0
+%u1 = OpConstant %uint 1
+%u2 = OpConstant %uint 2
+%u3 = OpConstant %uint 3
+%f0 = OpConstant %float 0
+%f1 = OpConstant %float 1
+%ones = OpConstantComposite %vec3 %f1 %f1 %f1
+%offset = OpConstantComposite %vec2 %f0 %f0
+%block = OpTypeStruct %vec3 %vec3
+%arr = OpTypeArray %vec3 %u2
+%inblock = OpTypePointer Input %block
+%nestedarr = OpTypeArray %arr %u2
+%innested = OpTypePointer Input %nestedarr
+%inarr = OpTypePointer Input %arr
+%in1 = OpTypePointer Input %float
+%inu = OpTypePointer Input %uint
+%vec_fn = OpTypeFunction %vec3
+%in3 = OpTypePointer Input %vec3
+%out3 = OpTypePointer Output %vec3
+%void_fn = OpTypeFunction %void
+%persp = OpVariable %in3 Input
+%linear = OpVariable %in3 Input
+%color = OpVariable %out3 Output
+%weights = OpVariable %inblock Input
+%user = OpVariable %in3 Input
+%index = OpVariable %inu Input
+%userarr = OpVariable %inarr Input
+%nested = OpVariable %innested Input
+%main = OpFunction %void None %void_fn
+%m = OpLabel
+%copied = OpCopyObject %in3 %linear
+%n = OpExtInst %vec3 %glsl InterpolateAtCentroid %copied
+%p = OpLoad %vec3 %persp
+%result = OpFAdd %vec3 %p %n
+OpStore %color %result
+OpReturn
+OpFunctionEnd
+
+%direct_read = OpFunction %vec3 None %vec_fn
+%direct_label = OpLabel
+%direct_ix = OpLoad %uint %index
+%direct_component = OpUMod %uint %direct_ix %u3
+%direct_pbase = OpCopyObject %in3 %persp
+%direct_nbase = OpCopyObject %in3 %linear
+%direct_pcopy = OpCopyObject %in3 %direct_pbase
+%direct_ncopy = OpCopyObject %in3 %direct_nbase
+%direct_pc = OpAccessChain %in1 %direct_pcopy %u1
+%direct_nc = OpAccessChain %in1 %direct_ncopy %direct_component
+%direct_pcc = OpCopyObject %in1 %direct_pc
+%direct_ncc = OpCopyObject %in1 %direct_nc
+%direct_pcc2 = OpCopyObject %in1 %direct_pcc
+%direct_uv = OpCopyObject %in3 %user
+%direct_uv2 = OpCopyObject %in3 %direct_uv
+%direct_ucomponent = OpAccessChain %in1 %direct_uv2 %direct_component
+%direct_ucopy = OpCopyObject %in1 %direct_ucomponent
+%direct_p0 = OpExtInst %vec3 %glsl InterpolateAtCentroid %direct_pcopy
+%direct_n0 = OpExtInst %vec3 %glsl InterpolateAtSample %direct_ncopy %u1
+%direct_u = OpExtInst %vec3 %glsl InterpolateAtOffset %direct_uv2 %offset
+%direct_px = OpExtInst %float %glsl InterpolateAtCentroid %direct_pcc2
+%direct_nx = OpExtInst %float %glsl InterpolateAtOffset %direct_ncc %offset
+%direct_ux = OpExtInst %float %glsl InterpolateAtSample %direct_ucopy %u1
+%direct_loaded = OpLoad %float %direct_pcc2
+%direct_loaded_sum = OpFAdd %float %direct_loaded %direct_px
+%direct_a = OpFAdd %vec3 %direct_p0 %direct_n0
+%direct_b = OpFAdd %vec3 %direct_a %direct_u
+%direct_c = OpCompositeConstruct %vec3 %direct_loaded_sum %direct_nx %direct_ux
+%direct_res = OpFAdd %vec3 %direct_b %direct_c
+OpReturnValue %direct_res
+OpFunctionEnd
+%direct_helper = OpFunction %void None %void_fn
+%direct_entry = OpLabel
+%direct_call = OpFunctionCall %vec3 %direct_read
+OpStore %color %direct_call
+OpReturn
+OpFunctionEnd
+
+%block_read = OpFunction %vec3 None %vec_fn
+%block_label = OpLabel
+%block_ix = OpLoad %uint %index
+%block_component = OpUMod %uint %block_ix %u3
+%block_root = OpCopyObject %inblock %weights
+%block_root2 = OpCopyObject %inblock %block_root
+%block_pbase = OpAccessChain %in3 %block_root2 %u0
+%block_nbase = OpAccessChain %in3 %block_root2 %u1
+%block_pcopy = OpCopyObject %in3 %block_pbase
+%block_ncopy = OpCopyObject %in3 %block_nbase
+%block_pc = OpAccessChain %in1 %block_pcopy %u1
+%block_nc = OpAccessChain %in1 %block_ncopy %block_component
+%block_pcc = OpCopyObject %in1 %block_pc
+%block_ncc = OpCopyObject %in1 %block_nc
+%block_pcc2 = OpCopyObject %in1 %block_pcc
+%block_uv = OpCopyObject %in3 %user
+%block_uv2 = OpCopyObject %in3 %block_uv
+%block_ucomponent = OpAccessChain %in1 %block_uv2 %block_component
+%block_ucopy = OpCopyObject %in1 %block_ucomponent
+%block_p0 = OpExtInst %vec3 %glsl InterpolateAtCentroid %block_pcopy
+%block_n0 = OpExtInst %vec3 %glsl InterpolateAtSample %block_ncopy %u1
+%block_u = OpExtInst %vec3 %glsl InterpolateAtOffset %block_uv2 %offset
+%block_px = OpExtInst %float %glsl InterpolateAtCentroid %block_pcc2
+%block_nx = OpExtInst %float %glsl InterpolateAtOffset %block_ncc %offset
+%block_ux = OpExtInst %float %glsl InterpolateAtSample %block_ucopy %u1
+%block_loaded = OpLoad %float %block_pcc2
+%block_loaded_sum = OpFAdd %float %block_loaded %block_px
+%block_a = OpFAdd %vec3 %block_p0 %block_n0
+%block_b = OpFAdd %vec3 %block_a %block_u
+%block_c = OpCompositeConstruct %vec3 %block_loaded_sum %block_nx %block_ux
+%block_res = OpFAdd %vec3 %block_b %block_c
+OpReturnValue %block_res
+OpFunctionEnd
+%block_helper = OpFunction %void None %void_fn
+%block_entry = OpLabel
+%block_call = OpFunctionCall %vec3 %block_read
+OpStore %color %block_call
+OpReturn
+OpFunctionEnd
+
+; Dynamic array indexing is valid SPIR-V but unsupported by MSL pull-model flattening.
+%dynamic_array = OpFunction %void None %void_fn
+%da = OpLabel
+%dai = OpLoad %uint %index
+%daidx = OpUMod %uint %dai %u2
+%dacopy = OpCopyObject %inarr %userarr
+%dap = OpAccessChain %in3 %dacopy %daidx
+%dapcopy = OpCopyObject %in3 %dap
+%daval = OpExtInst %vec3 %glsl InterpolateAtCentroid %dapcopy
+%dab = OpLoad %vec3 %persp
+%dares = OpFAdd %vec3 %daval %dab
+OpStore %color %dares
+OpReturn
+OpFunctionEnd
+; Whole BuiltIn block loads are valid, but cannot be represented by the split interface.
+%whole_block = OpFunction %void None %void_fn
+%wb = OpLabel
+%wbcopy = OpCopyObject %inblock %weights
+%wbval = OpLoad %block %wbcopy
+%wbp = OpCompositeExtract %vec3 %wbval 0
+%wbn = OpCompositeExtract %vec3 %wbval 1
+%wbr = OpFAdd %vec3 %wbp %wbn
+OpStore %color %wbr
+OpReturn
+OpFunctionEnd
+; Constant array element through a copied root and a copied scalar component.
+%array_read = OpFunction %vec3 None %vec_fn
+%ar = OpLabel
+%arrcopy = OpCopyObject %inarr %userarr
+%arrp = OpAccessChain %in3 %arrcopy %u1
+%arrpcopy = OpCopyObject %in3 %arrp
+%arrc = OpAccessChain %in1 %arrpcopy %u2
+%arrccopy = OpCopyObject %in1 %arrc
+%arrv = OpExtInst %float %glsl InterpolateAtOffset %arrccopy %offset
+%arrv3 = OpCompositeConstruct %vec3 %arrv %arrv %arrv
+OpReturnValue %arrv3
+OpFunctionEnd
+%array_helper = OpFunction %void None %void_fn
+%ae = OpLabel
+%aer = OpFunctionCall %vec3 %array_read
+%aep = OpLoad %vec3 %persp
+%aeres = OpFAdd %vec3 %aer %aep
+OpStore %color %aeres
+OpReturn
+OpFunctionEnd
+
+; Nested composite strides are not represented by the pull-model member mapping.
+%nested_array = OpFunction %void None %void_fn
+%ne = OpLabel
+%neroot = OpCopyObject %innested %nested
+%neptr = OpAccessChain %in3 %neroot %u1 %u1
+%necopy = OpCopyObject %in3 %neptr
+%nev = OpExtInst %vec3 %glsl InterpolateAtCentroid %necopy
+%neb = OpLoad %vec3 %persp
+%ner = OpFAdd %vec3 %nev %neb
+OpStore %color %ner
+OpReturn
+OpFunctionEnd
+
+; An empty access chain aliases a scalar pointer without changing its component.
+%component_alias = OpFunction %void None %void_fn
+%cal = OpLabel
+%caroot = OpCopyObject %in3 %linear
+%cacomponent = OpAccessChain %in1 %caroot %u1
+%caalias = OpAccessChain %in1 %cacomponent
+%cacopy = OpCopyObject %in1 %caalias
+%cavalue = OpExtInst %float %glsl InterpolateAtCentroid %cacopy
+%caresult = OpVectorTimesScalar %vec3 %ones %cavalue
+OpStore %color %caresult
+OpReturn
+OpFunctionEnd

@@ -1,0 +1,62 @@
+; Copyright 2026 Jean-Philippe Meunier
+; SPDX-License-Identifier: Apache-2.0
+OpCapability Tessellation
+OpMemoryModel Logical GLSL450
+OpEntryPoint TessellationEvaluation %main "main" %output %input
+OpExecutionMode %main Triangles
+OpExecutionMode %main SpacingEqual
+OpExecutionMode %main VertexOrderCcw
+OpName %helper "read_builtins"
+OpName %wrapper "forward_builtins"
+OpDecorate %output BuiltIn Position
+OpDecorate %Input Block
+OpMemberDecorate %Input 0 BuiltIn TessCoord
+OpMemberDecorate %Input 1 BuiltIn PrimitiveId
+OpMemberDecorate %Input 2 BuiltIn PatchVertices
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v3float = OpTypeVector %float 3
+%v4float = OpTypeVector %float 4
+%value_function = OpTypeFunction %v4float
+%int = OpTypeInt 32 1
+%int_0 = OpConstant %int 0
+%int_1 = OpConstant %int 1
+%int_2 = OpConstant %int 2
+%uint = OpTypeInt 32 0
+%float_1 = OpConstant %float 1
+%ptr_Output = OpTypePointer Output %v4float
+%ptr_Output_v4float = OpTypePointer Output %v4float
+%output = OpVariable %ptr_Output Output
+%Input = OpTypeStruct %v3float %uint %uint
+%ptr_Input = OpTypePointer Input %Input
+%ptr_Input_v3float = OpTypePointer Input %v3float
+%ptr_Input_uint = OpTypePointer Input %uint
+%input = OpVariable %ptr_Input Input
+%helper = OpFunction %v4float None %value_function
+%helper_entry = OpLabel
+%coord_ptr = OpAccessChain %ptr_Input_v3float %input %int_0
+%coord = OpLoad %v3float %coord_ptr
+%id_ptr = OpAccessChain %ptr_Input_uint %input %int_1
+%id = OpLoad %uint %id_ptr
+%id_f = OpConvertUToF %float %id
+%cx = OpCompositeExtract %float %coord 0
+%x = OpFAdd %float %cx %id_f
+%y = OpCompositeExtract %float %coord 1
+%count_ptr = OpAccessChain %ptr_Input_uint %input %int_2
+%count = OpLoad %uint %count_ptr
+%z = OpConvertUToF %float %count
+%position = OpCompositeConstruct %v4float %x %y %z %float_1
+OpReturnValue %position
+OpFunctionEnd
+%wrapper = OpFunction %v4float None %value_function
+%wrapper_entry = OpLabel
+%forwarded = OpFunctionCall %v4float %helper
+OpReturnValue %forwarded
+OpFunctionEnd
+%main = OpFunction %void None %function
+%entry = OpLabel
+%result = OpFunctionCall %v4float %wrapper
+OpStore %output %result
+OpReturn
+OpFunctionEnd
