@@ -11034,6 +11034,14 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		expr = join("(", dereference_expression(*type, expr), ")");
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
+	// A pointer loaded from memory is a new pointer, so an OpPtrAccessChain on it
+	// must not fold its index into the [n] of the chain that produced it.
+	if (ptr_chain)
+	{
+		auto *base_expr = maybe_get<SPIRExpression>(base);
+		if (base_expr && !base_expr->access_chain)
+			access_chain_is_arrayed = false;
+	}
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool is_packed = has_extended_decoration(base, SPIRVCrossDecorationPhysicalTypePacked);
 	uint32_t physical_type = get_extended_decoration(base, SPIRVCrossDecorationPhysicalTypeID);
