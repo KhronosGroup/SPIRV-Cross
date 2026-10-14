@@ -14012,7 +14012,9 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 				 (stage_in_var_id && get_stage_in_struct_type().self == type.self &&
 				  variable_storage_requires_stage_io(StorageClassInput))) ||
 				is_mesh_shader();
-		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
+		// Metal validates builtin array attributes even when the record is only used in a capture buffer.
+		bool is_captured_output = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation && stage_out_var_id && get_stage_out_struct_type().self == type.self;
+		if ((is_ib_in_out || is_captured_output) && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type, orig_id);
 	}
@@ -16632,7 +16634,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			is_using_builtin_array = true;
 		}
 
-		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage) &&
+		bool is_captured_vertex = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation;
+		if (storage == StorageClassOutput && (variable_storage_requires_stage_io(storage) || is_captured_vertex) &&
 		    !is_stage_output_builtin_masked(builtin_type))
 			is_using_builtin_array = true;
 
