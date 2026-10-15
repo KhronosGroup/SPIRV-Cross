@@ -96,6 +96,8 @@ private:
 	SmallVector<std::pair<uint32_t, uint32_t>> forward_pointer_fixups;
 
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
+	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b,
+	                                    std::unordered_set<uint64_t> &visited) const;
 	bool variable_storage_is_aliased(const SPIRVariable &v) const;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
