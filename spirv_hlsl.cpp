@@ -6737,10 +6737,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		// This must be 32-bit uint, so we're good to go.
 		emit_uninitialized_temporary_expression(ops[0], ops[1]);
-		statement(to_non_uniform_aware_expression(ops[2]), ".GetDimensions(", to_expression(ops[1]), ");");
-		uint32_t offset = type_struct_member_offset(type, ops[3]);
-		uint32_t stride = type_struct_member_array_stride(type, ops[3]);
-		statement(to_expression(ops[1]), " = (", to_expression(ops[1]), " - ", offset, ") / ", stride, ";");
+		if (is_user_type_structured(var->self))
+		{
+			// A structured buffer returns its element count, along with a stride we don't need.
+			auto stride_name = get_unique_identifier();
+			statement("uint ", stride_name, ";");
+			statement(to_non_uniform_aware_expression(ops[2]), ".GetDimensions(", to_expression(ops[1]), ", ",
+			          stride_name, ");");
+		}
+		else
+		{
+			statement(to_non_uniform_aware_expression(ops[2]), ".GetDimensions(", to_expression(ops[1]), ");");
+			uint32_t offset = type_struct_member_offset(type, ops[3]);
+			uint32_t stride = type_struct_member_array_stride(type, ops[3]);
+			statement(to_expression(ops[1]), " = (", to_expression(ops[1]), " - ", offset, ") / ", stride, ";");
+		}
 		break;
 	}
 
