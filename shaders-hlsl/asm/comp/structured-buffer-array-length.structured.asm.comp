@@ -1,0 +1,58 @@
+; SPIR-V
+; Version: 1.3
+; Generator: Google spiregg; 0
+; Bound: 40
+; Schema: 0
+               OpCapability Shader
+               OpExtension "SPV_GOOGLE_hlsl_functionality1"
+               OpExtension "SPV_GOOGLE_user_type"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource HLSL 600
+               OpName %type_StructuredBuffer_v3float "type.StructuredBuffer.v3float"
+               OpName %Points "Points"
+               OpName %type_RWStructuredBuffer_uint "type.RWStructuredBuffer.uint"
+               OpName %Output "Output"
+               OpName %main "main"
+               OpDecorate %Points DescriptorSet 0
+               OpDecorate %Points Binding 0
+               OpDecorate %Output DescriptorSet 0
+               OpDecorate %Output Binding 1
+               OpDecorateString %Points UserTypeGOOGLE "structuredbuffer:<float3>"
+               OpDecorateString %Output UserTypeGOOGLE "rwstructuredbuffer:<uint>"
+               OpDecorate %_runtimearr_v3float ArrayStride 12
+               OpMemberDecorate %type_StructuredBuffer_v3float 0 Offset 0
+               OpMemberDecorate %type_StructuredBuffer_v3float 0 NonWritable
+               OpDecorate %type_StructuredBuffer_v3float BufferBlock
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpMemberDecorate %type_RWStructuredBuffer_uint 0 Offset 0
+               OpDecorate %type_RWStructuredBuffer_uint BufferBlock
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+      %float = OpTypeFloat 32
+    %v3float = OpTypeVector %float 3
+%_runtimearr_v3float = OpTypeRuntimeArray %v3float
+%type_StructuredBuffer_v3float = OpTypeStruct %_runtimearr_v3float
+%_ptr_Uniform_type_StructuredBuffer_v3float = OpTypePointer Uniform %type_StructuredBuffer_v3float
+%_runtimearr_uint = OpTypeRuntimeArray %uint
+%type_RWStructuredBuffer_uint = OpTypeStruct %_runtimearr_uint
+%_ptr_Uniform_type_RWStructuredBuffer_uint = OpTypePointer Uniform %type_RWStructuredBuffer_uint
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+       %void = OpTypeVoid
+         %20 = OpTypeFunction %void
+     %Points = OpVariable %_ptr_Uniform_type_StructuredBuffer_v3float Uniform
+     %Output = OpVariable %_ptr_Uniform_type_RWStructuredBuffer_uint Uniform
+       %main = OpFunction %void None %20
+         %21 = OpLabel
+         %22 = OpArrayLength %uint %Points 0
+         %23 = OpAccessChain %_ptr_Uniform_uint %Output %int_0 %uint_0
+               OpStore %23 %22
+         %24 = OpArrayLength %uint %Output 0
+         %25 = OpAccessChain %_ptr_Uniform_uint %Output %int_0 %uint_1
+               OpStore %25 %24
+               OpReturn
+               OpFunctionEnd
