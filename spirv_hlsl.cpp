@@ -1882,7 +1882,10 @@ void CompilerHLSL::emit_resources()
 	input_builtins.clear(BuiltInSubgroupGtMask);
 	input_builtins.clear(BuiltInSubgroupGeMask);
 
-	if (!input_variables.empty() || !input_builtins.empty())
+	// A geometry shader's signature always takes the input array, even when the shader reads no input.
+	bool is_geometry = get_entry_point().model == ExecutionModelGeometry;
+
+	if (!input_variables.empty() || !input_builtins.empty() || is_geometry)
 	{
 		require_input = true;
 		statement("struct SPIRV_Cross_Input");
