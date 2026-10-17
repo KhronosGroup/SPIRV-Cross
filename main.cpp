@@ -708,6 +708,7 @@ struct CLIArguments
 	SmallVector<uint32_t> msl_device_argument_buffers;
 	SmallVector<pair<uint32_t, uint32_t>> msl_dynamic_buffers;
 	SmallVector<pair<uint32_t, uint32_t>> msl_inline_uniform_blocks;
+	SmallVector<MSLResourceBinding> msl_resource_bindings;
 	SmallVector<MSLShaderInterfaceVariable> msl_shader_inputs;
 	SmallVector<MSLShaderInterfaceVariable> msl_shader_outputs;
 	SmallVector<PLSArg> pls_in;
@@ -913,6 +914,8 @@ static void print_help_msl()
 	                "\t[--msl-decoration-binding]:\n\t\tUse SPIR-V bindings directly as MSL bindings.\n"
 	                "\t\tThis does not work in the general case as there is no descriptor set support, and combined image samplers are split up.\n"
 	                "\t\tHowever, if the shader author knows of binding limitations, this option will avoid the need for reflection on Metal side.\n"
+	                "\t[--msl-resource-binding <set index> <binding> <buffer index> <texture index> <sampler index>]:\n\t\tMaps a descriptor binding of the entry point to explicit MSL buffer, texture and sampler indices.\n"
+	                "\t\tWith argument buffers, these are the [[id(N)]] indices in the argument buffer.\n"
 	                "\t[--msl-force-active-argument-buffer-resources]:\n\t\tAlways emit resources which are part of argument buffers.\n"
 	                "\t\tThis makes sure that similar shaders with same resource declarations can share the argument buffer as declaring an argument buffer implies an ABI.\n"
 	                "\t[--msl-force-native-arrays]:\n\t\tRather than implementing array types as a templated value type ala std::array<T>, use plain, native arrays.\n"
@@ -1436,6 +1439,17 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	if (!entry_point.empty())
 		compiler->set_entry_point(entry_point, model);
 
+	if (args.msl)
+	{
+		// Resource bindings are per stage, so add them once the entry point is known.
+		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
+		for (auto binding : args.msl_resource_bindings)
+		{
+			binding.stage = compiler->get_execution_model();
+			msl_comp->add_msl_resource_binding(binding);
+		}
+	}
+
 	if (!args.set_version && !compiler->get_common_options().version)
 	{
 		fprintf(stderr, "Didn't specify GLSL version and SPIR-V did not specify language.\n");
@@ -1793,6 +1807,18 @@ static int main_inner(int argc, char *argv[])
 		uint32_t binding = parser.next_uint();
 		args.msl_inline_uniform_blocks.push_back(make_pair(desc_set, binding));
 	});
+	cbs.add("--msl-resource-binding",
+	        [&args](CLIParser &parser)
+	        {
+		        // Make sure next_uint() is called in-order.
+		        MSLResourceBinding binding;
+		        binding.desc_set = parser.next_uint();
+		        binding.binding = parser.next_uint();
+		        binding.msl_buffer = parser.next_uint();
+		        binding.msl_texture = parser.next_uint();
+		        binding.msl_sampler = parser.next_uint();
+		        args.msl_resource_bindings.push_back(binding);
+	        });
 	cbs.add("--msl-force-native-arrays", [&args](CLIParser &) { args.msl_force_native_arrays = true; });
 	cbs.add("--msl-disable-frag-depth-builtin", [&args](CLIParser &) { args.msl_enable_frag_depth_builtin = false; });
 	cbs.add("--msl-disable-frag-stencil-ref-builtin",
