@@ -1,0 +1,37 @@
+RWByteAddressBuffer _9 : register(u0);
+RWByteAddressBuffer _11 : register(u1);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input
+{
+    uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+groupshared uint _shared;
+
+void comp_main()
+{
+    uint _22 = -gl_GlobalInvocationID.x;
+    uint _24;
+    _9.InterlockedMin(0, asint(_22), _24);
+    uint _26;
+    _9.InterlockedMax(4, asint(_22), _26);
+    uint _28;
+    _9.InterlockedMin(8, _22, _28);
+    uint _30;
+    _9.InterlockedMax(12, _22, _30);
+    int _32 = int(gl_GlobalInvocationID.x);
+    int _33;
+    _11.InterlockedMin(0, asuint(_32), _33);
+    int _34;
+    _11.InterlockedMin(0, _32, _34);
+    uint _35;
+    InterlockedMin(_shared, _22, _35);
+}
+
+[numthreads(1, 1, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+    comp_main();
+}
