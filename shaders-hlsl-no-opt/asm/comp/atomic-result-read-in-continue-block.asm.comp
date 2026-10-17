@@ -1,0 +1,61 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 40
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %gl_GlobalInvocationID
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource HLSL 500
+               OpName %main "main"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "values"
+               OpName %_ ""
+               OpDecorate %gl_GlobalInvocationID BuiltIn GlobalInvocationId
+               OpDecorate %_runtimearr_int ArrayStride 4
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %SSBO BufferBlock
+               OpDecorate %_ DescriptorSet 0
+               OpDecorate %_ Binding 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+      %float = OpTypeFloat 32
+       %bool = OpTypeBool
+     %v3uint = OpTypeVector %uint 3
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+%gl_GlobalInvocationID = OpVariable %_ptr_Input_v3uint Input
+%_ptr_Input_uint = OpTypePointer Input %uint
+%_runtimearr_int = OpTypeRuntimeArray %int
+       %SSBO = OpTypeStruct %_runtimearr_int
+%_ptr_Uniform_SSBO = OpTypePointer Uniform %SSBO
+          %_ = OpVariable %_ptr_Uniform_SSBO Uniform
+%_ptr_Uniform_int = OpTypePointer Uniform %int
+      %int_0 = OpConstant %int 0
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+  %float_1_5 = OpConstant %float 1.5
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %20 = OpAccessChain %_ptr_Input_uint %gl_GlobalInvocationID %uint_0
+         %21 = OpLoad %uint %20
+               OpBranch %22
+         %22 = OpLabel
+               OpLoopMerge %24 %23 None
+               OpBranch %25
+         %25 = OpLabel
+         %26 = OpAccessChain %_ptr_Uniform_int %_ %int_0 %21
+         %27 = OpLoad %int %26
+         %28 = OpBitcast %float %27
+         %29 = OpFAdd %float %28 %float_1_5
+         %30 = OpBitcast %int %29
+         %31 = OpAtomicCompareExchange %int %26 %uint_1 %uint_0 %uint_0 %30 %27
+               OpBranch %23
+         %23 = OpLabel
+         %32 = OpINotEqual %bool %31 %27
+               OpBranchConditional %32 %22 %24
+         %24 = OpLabel
+               OpReturn
+               OpFunctionEnd
