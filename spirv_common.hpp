@@ -1554,6 +1554,12 @@ struct SPIRConstant : IVariant
 	    : constant_type(constant_type_)
 	    , specialization(specialized)
 	{
+		// A composite constant must have at least one constituent. With zero
+		// constituents vector_elements[0] is read from an uninitialized pointer,
+		// which is an out-of-bounds read on malformed input.
+		if (num_elements == 0)
+			SPIRV_CROSS_THROW("Composite constant must have at least one constituent.");
+
 		bool matrix = vector_elements[0]->m.c[0].vecsize > 1;
 
 		if (num_elements > 4)
