@@ -5662,7 +5662,8 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, Op op)
 		forced_temporaries.insert(ops[1]);
 
 		auto &type = get<SPIRType>(result_type);
-		statement(variable_decl(type, to_name(id)), ";");
+		// Not a plain declaration: the temporary may be hoisted, e.g. when a loop's continue block reads it.
+		emit_uninitialized_temporary(result_type, id);
 
 		auto &data_type = expression_type(ops[2]);
 		auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
