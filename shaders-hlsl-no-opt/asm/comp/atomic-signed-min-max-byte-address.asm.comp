@@ -1,0 +1,73 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 40
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %gl_GlobalInvocationID
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource HLSL 500
+               OpName %main "main"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "values"
+               OpName %shared "shared"
+               OpName %SSBOI "SSBOI"
+               OpMemberName %SSBOI 0 "values"
+               OpDecorate %gl_GlobalInvocationID BuiltIn GlobalInvocationId
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %SSBO BufferBlock
+               OpDecorate %buffer DescriptorSet 0
+               OpDecorate %buffer Binding 0
+               OpDecorate %_runtimearr_int ArrayStride 4
+               OpMemberDecorate %SSBOI 0 Offset 0
+               OpDecorate %SSBOI BufferBlock
+               OpDecorate %ibuffer DescriptorSet 0
+               OpDecorate %ibuffer Binding 1
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+     %v3uint = OpTypeVector %uint 3
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+%gl_GlobalInvocationID = OpVariable %_ptr_Input_v3uint Input
+%_ptr_Input_uint = OpTypePointer Input %uint
+%_runtimearr_uint = OpTypeRuntimeArray %uint
+       %SSBO = OpTypeStruct %_runtimearr_uint
+%_ptr_Uniform_SSBO = OpTypePointer Uniform %SSBO
+     %buffer = OpVariable %_ptr_Uniform_SSBO Uniform
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+%_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+%_runtimearr_int = OpTypeRuntimeArray %int
+      %SSBOI = OpTypeStruct %_runtimearr_int
+%_ptr_Uniform_SSBOI = OpTypePointer Uniform %SSBOI
+    %ibuffer = OpVariable %_ptr_Uniform_SSBOI Uniform
+%_ptr_Uniform_int = OpTypePointer Uniform %int
+     %shared = OpVariable %_ptr_Workgroup_uint Workgroup
+      %int_0 = OpConstant %int 0
+     %int_m1 = OpConstant %int -1
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %20 = OpAccessChain %_ptr_Input_uint %gl_GlobalInvocationID %uint_0
+         %21 = OpLoad %uint %20
+         %22 = OpSNegate %uint %21
+         %23 = OpAccessChain %_ptr_Uniform_uint %buffer %int_0 %uint_0
+         %24 = OpAtomicSMin %uint %23 %uint_1 %uint_0 %22
+         %25 = OpAccessChain %_ptr_Uniform_uint %buffer %int_0 %uint_1
+         %26 = OpAtomicSMax %uint %25 %uint_1 %uint_0 %22
+         %27 = OpAccessChain %_ptr_Uniform_uint %buffer %int_0 %uint_2
+         %28 = OpAtomicUMin %uint %27 %uint_1 %uint_0 %22
+         %29 = OpAccessChain %_ptr_Uniform_uint %buffer %int_0 %uint_3
+         %30 = OpAtomicUMax %uint %29 %uint_1 %uint_0 %22
+         %31 = OpAccessChain %_ptr_Uniform_int %ibuffer %int_0 %uint_0
+         %32 = OpBitcast %int %21
+         %33 = OpAtomicUMin %int %31 %uint_1 %uint_0 %32
+         %34 = OpAtomicSMin %int %31 %uint_1 %uint_0 %32
+         %35 = OpAtomicSMin %uint %shared %uint_2 %uint_0 %22
+               OpReturn
+               OpFunctionEnd
