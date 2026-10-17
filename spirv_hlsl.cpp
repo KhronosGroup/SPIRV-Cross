@@ -5679,6 +5679,18 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, Op op)
 			if (has_decoration(chain->self, DecorationNonUniform))
 				convert_non_uniform_expression(base, chain->self);
 			expr_type = SPIRType::UInt;
+
+			// Its min / max are signed or unsigned by the type of the value, not by the opcode.
+			bool is_signed_op = op == OpAtomicSMin || op == OpAtomicSMax;
+			if (is_signed_op || op == OpAtomicUMin || op == OpAtomicUMax)
+			{
+				auto value_type = expression_type(ops[5]).basetype;
+				if (is_signed_op && value_type == SPIRType::UInt)
+					value_expr = join("asint(", value_expr, ")");
+				else if (!is_signed_op && value_type == SPIRType::Int)
+					value_expr = join("asuint(", value_expr, ")");
+			}
+
 			statement(base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ", value_expr,
 			          ", ", to_name(id), ");");
 		}
