@@ -17714,6 +17714,15 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 		if (is_tese_shader() && is_builtin_variable(variable) && (builtin == BuiltInTessCoord || builtin == BuiltInPrimitiveId))
 			return false;
 
+		// A vertex shader's output block (not gl_PerVertex) is lowered to a thread-local copy which is
+		// written to the buffer on return from main (see get_type_address_space()). Treating it as a
+		// buffer here would cast component stores into it to device pointers, which doesn't compile.
+		if (get_execution_model() == ExecutionModelVertex && variable.storage == StorageClassOutput &&
+		    !is_builtin_variable(variable) && has_decoration(get<SPIRType>(variable.basetype).self, DecorationBlock))
+		{
+			return false;
+		}
+
 		// We won't be able to catch writes to control point outputs here since variable
 		// refers to a function local pointer.
 		// This is fine, as there cannot be concurrent writers to that memory anyways,
