@@ -1079,6 +1079,7 @@ protected:
 
 	void emit_custom_templates();
 	void emit_custom_functions();
+	void emit_precise_helper_begin(const char *signature);
 	void emit_resources();
 	void emit_specialization_constants_and_structs();
 	void emit_interface_block(uint32_t ib_var_id);

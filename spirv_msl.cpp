@@ -6075,6 +6075,28 @@ void CompilerMSL::emit_custom_templates()
 	}
 }
 
+// Begins a helper function implementing NoContraction (precise) arithmetic.
+// From MSL 3.2 the body is compiled with safe math and without contraction
+// through the scoped fp pragmas, so every operation stays exactly as written
+// while the helper can still be inlined. Earlier MSL versions have no such
+// pragmas; there the helper is optnone, which keeps it exact but turns every
+// use into a real function call.
+void CompilerMSL::emit_precise_helper_begin(const char *signature)
+{
+	if (msl_options.supports_msl_version(3, 2))
+	{
+		statement(signature);
+		begin_scope();
+		statement("#pragma metal fp math_mode(safe)");
+		statement("#pragma metal fp contract(off)");
+	}
+	else
+	{
+		statement("[[clang::optnone]] ", signature);
+		begin_scope();
+	}
+}
+
 // Emits any needed custom function bodies.
 // Metal helper functions must be static force-inline, i.e. static inline __attribute__((always_inline))
 // otherwise they will cause problems when linked together in a single Metallib.
@@ -6425,8 +6447,7 @@ void CompilerMSL::emit_custom_functions()
 		// "fadd" intrinsic support
 		case SPVFuncImplFAdd:
 			statement("template<typename T>");
-			statement("[[clang::optnone]] T spvFAdd(T l, T r)");
-			begin_scope();
+			emit_precise_helper_begin("T spvFAdd(T l, T r)");
 			statement("return fma(T(1), l, r);");
 			end_scope();
 			statement("");
@@ -6435,8 +6456,7 @@ void CompilerMSL::emit_custom_functions()
 		// "fsub" intrinsic support
 		case SPVFuncImplFSub:
 			statement("template<typename T>");
-			statement("[[clang::optnone]] T spvFSub(T l, T r)");
-			begin_scope();
+			emit_precise_helper_begin("T spvFSub(T l, T r)");
 			statement("return fma(T(-1), r, l);");
 			end_scope();
 			statement("");
@@ -6445,15 +6465,13 @@ void CompilerMSL::emit_custom_functions()
 		// "fmul' intrinsic support
 		case SPVFuncImplFMul:
 			statement("template<typename T>");
-			statement("[[clang::optnone]] T spvFMul(T l, T r)");
-			begin_scope();
+			emit_precise_helper_begin("T spvFMul(T l, T r)");
 			statement("return fma(l, r, T(-0.0));");
 			end_scope();
 			statement("");
 
 			statement("template<typename T, int Cols, int Rows>");
-			statement("[[clang::optnone]] vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)");
-			begin_scope();
+			emit_precise_helper_begin("vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)");
 			statement("vec<T, Cols> res = vec<T, Cols>(T(-0.0));");
 			statement("for (uint i = Rows; i > 0; --i)");
 			begin_scope();
@@ -6469,8 +6487,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 
 			statement("template<typename T, int Cols, int Rows>");
-			statement("[[clang::optnone]] vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)");
-			begin_scope();
+			emit_precise_helper_begin("vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)");
 			statement("vec<T, Rows> res = vec<T, Rows>(T(-0.0));");
 			statement("for (uint i = Cols; i > 0; --i)");
 			begin_scope();
@@ -6481,8 +6498,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 
 			statement("template<typename T, int LCols, int LRows, int RCols, int RRows>");
-			statement("[[clang::optnone]] matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)");
-			begin_scope();
+			emit_precise_helper_begin("matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)");
 			statement("static_assert(LCols == RRows, \"column-row configuration mismatch\");");
 			statement("matrix<T, RCols, LRows> res;");
 			statement("for (uint i = 0; i < RCols; i++)");
