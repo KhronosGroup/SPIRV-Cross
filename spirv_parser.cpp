@@ -703,7 +703,7 @@ void Parser::parse(const Instruction &instruction)
 		}
 		else if (width == 8)
 		{
-			if (length < 2)
+			if (length < 3)
 				SPIRV_CROSS_THROW("Missing encoding for OpTypeFloat 8.");
 			else if (ops[2] == FPEncodingFloat8E4M3EXT)
 				type.basetype = SPIRType::FloatE4M3;
