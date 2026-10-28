@@ -391,6 +391,15 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-agx-manual-cube-grad-fixup')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
+    if '.resource-binding.' in shader:
+        # Arbitrary for testing purposes.
+        # Set 0, binding 0 gets texture index 0 and sampler index 1, like a combined image sampler in MoltenVK.
+        msl_args.append('--msl-resource-binding')
+        msl_args.append('0')
+        msl_args.append('0')
+        msl_args.append('0')
+        msl_args.append('0')
+        msl_args.append('1')
     if '.rich-descriptor.' in shader:
         msl_args.append('--msl-runtime-array-rich-descriptor')
     if '.replace-recursive-inputs.' in shader:

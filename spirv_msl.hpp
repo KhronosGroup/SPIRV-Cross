@@ -1380,6 +1380,7 @@ protected:
 
 	void emit_argument_buffer_aliased_descriptor(const SPIRVariable &aliased_var,
 	                                             const SPIRVariable &base_var);
+	void emit_argument_buffer_aliased_sampler(const SPIRVariable &aliased_var, const SPIRVariable &base_var);
 
 	void analyze_argument_buffers();
 	bool descriptor_set_is_argument_buffer(uint32_t desc_set) const;

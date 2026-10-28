@@ -20423,6 +20423,17 @@ void CompilerMSL::emit_argument_buffer_aliased_descriptor(const SPIRVariable &al
 	}
 }
 
+void CompilerMSL::emit_argument_buffer_aliased_sampler(const SPIRVariable &aliased_var, const SPIRVariable &base_var)
+{
+	// A combined image sampler has no sampler variable of its own. Its sampler expression is derived from
+	// the texture name, and the aliased texture is a local variable, so the sampler must be one too.
+	auto &base_type = get_variable_data_type(base_var);
+	string base_sampler =
+	    base_type.basetype == SPIRType::SampledImage ? to_sampler_expression(base_var.self) : to_name(base_var.self);
+	string descriptor_storage = descriptor_address_space(aliased_var.self, aliased_var.storage, "");
+	statement(descriptor_storage, " auto &", to_sampler_expression(aliased_var.self), " = ", base_sampler, ";");
+}
+
 void CompilerMSL::analyze_argument_buffers()
 {
 	// Gather all used resources and sort them out into argument buffers.
@@ -20761,6 +20772,17 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 				else
 					buffer_type.member_types.push_back(sampler_type_id);
+
+				if (resource.overlapping_var_id)
+				{
+					auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+					entry_func.fixup_hooks_in.push_back(
+					    [this, resource]()
+					    {
+						    emit_argument_buffer_aliased_sampler(*resource.var,
+							                                     this->get<SPIRVariable>(resource.overlapping_var_id));
+					    });
+				}
 			}
 			else
 			{
