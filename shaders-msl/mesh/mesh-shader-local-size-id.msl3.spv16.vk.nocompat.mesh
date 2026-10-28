@@ -1,0 +1,12 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 2) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+void main()
+{
+	SetMeshOutputsEXT(3, 1);
+	gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(1.0);
+	gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+}
