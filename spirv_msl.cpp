@@ -20380,11 +20380,8 @@ void CompilerMSL::emit_argument_buffer_aliased_sampler(const SPIRVariable &alias
 	auto &base_type = get_variable_data_type(base_var);
 	string base_sampler =
 	    base_type.basetype == SPIRType::SampledImage ? to_sampler_expression(base_var.self) : to_name(base_var.self);
-
 	string descriptor_storage = descriptor_address_space(aliased_var.self, aliased_var.storage, "");
-	statement(descriptor_storage, " auto &", to_sampler_expression(aliased_var.self), " = reinterpret_cast<",
-	          descriptor_storage, " ", sampler_type(get_variable_data_type(aliased_var), aliased_var.self, false),
-	          " &>(", base_sampler, ");");
+	statement(descriptor_storage, " auto &", to_sampler_expression(aliased_var.self), " = ", base_sampler, ";");
 }
 
 void CompilerMSL::analyze_argument_buffers()

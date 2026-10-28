@@ -54,8 +54,8 @@ fragment main0_out main0(main0_in in [[stage_in]], constant spvDescriptorSetBuff
     main0_out out = {};
     constant auto &s0_2d_shadow = reinterpret_cast<constant texture2d<float> &>(spvDescriptorSet0.s0_2d);
     constant auto &s0_cube = reinterpret_cast<constant texturecube<float> &>(spvDescriptorSet0.s0_2d);
-    constant auto &s0_2d_shadowSmplr = reinterpret_cast<constant sampler &>(spvDescriptorSet0.s0_2dSmplr);
-    constant auto &s0_cubeSmplr = reinterpret_cast<constant sampler &>(spvDescriptorSet0.s0_2dSmplr);
+    constant auto &s0_2d_shadowSmplr = spvDescriptorSet0.s0_2dSmplr;
+    constant auto &s0_cubeSmplr = spvDescriptorSet0.s0_2dSmplr;
     out.FragColor = (spvDescriptorSet0.s0_2d.sample(spvDescriptorSet0.s0_2dSmplr, in.vUV.xy) + float4(spvDepthCast(s0_2d_shadow).sample_compare(s0_2d_shadowSmplr, in.vUV.xy, in.vUV.z))) + s0_cube.sample(s0_cubeSmplr, in.vUV);
     return out;
 }
