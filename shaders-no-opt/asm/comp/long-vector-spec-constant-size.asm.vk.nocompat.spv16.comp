@@ -1,0 +1,66 @@
+; SPIR-V
+; Version: 1.6
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 35
+; Schema: 0
+               OpCapability Shader
+               OpCapability LongVectorEXT
+               OpCapability ReplicatedCompositesEXT
+               OpExtension "SPV_EXT_long_vector"
+               OpExtension "SPV_EXT_replicated_composites"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %_
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 450
+               OpSourceExtension "GL_EXT_long_vector"
+               OpName %main "main"
+               OpName %N "N"
+               OpName %v "v"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "data"
+               OpName %_ ""
+               OpDecorate %N SpecId 0
+               OpDecorate %_runtimearr_float ArrayStride 4
+               OpDecorate %SSBO Block
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %_ Binding 0
+               OpDecorate %_ DescriptorSet 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+          %N = OpSpecConstant %uint 8
+          %9 = OpTypeVectorIdEXT %float %N
+%_ptr_Function_9 = OpTypePointer Function %9
+%_runtimearr_float = OpTypeRuntimeArray %float
+       %SSBO = OpTypeStruct %_runtimearr_float
+%_ptr_StorageBuffer_SSBO = OpTypePointer StorageBuffer %SSBO
+          %_ = OpVariable %_ptr_StorageBuffer_SSBO StorageBuffer
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
+    %float_2 = OpConstant %float 2
+      %int_1 = OpConstant %int 1
+      %int_3 = OpConstant %int 3
+%_ptr_Function_float = OpTypePointer Function %float
+     %v3uint = OpTypeVector %uint 3
+     %uint_1 = OpConstant %uint 1
+         %34 = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+          %v = OpVariable %_ptr_Function_9 Function
+         %19 = OpAccessChain %_ptr_StorageBuffer_float %_ %int_0 %int_0
+         %20 = OpLoad %float %19
+         %21 = OpCompositeConstructReplicateEXT %9 %20
+               OpStore %v %21
+         %23 = OpLoad %9 %v
+         %24 = OpCompositeConstructReplicateEXT %9 %float_2
+         %25 = OpFMul %9 %23 %24
+               OpStore %v %25
+         %29 = OpAccessChain %_ptr_Function_float %v %int_3
+         %30 = OpLoad %float %29
+         %31 = OpAccessChain %_ptr_StorageBuffer_float %_ %int_0 %int_1
+               OpStore %31 %30
+               OpReturn
+               OpFunctionEnd

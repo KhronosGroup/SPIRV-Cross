@@ -1,0 +1,18 @@
+#version 450
+#extension GL_EXT_long_vector : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(constant_id = 0) const uint N = 8u;
+
+layout(set = 0, binding = 0, std430) buffer SSBO
+{
+    float data[];
+} _4;
+
+void main()
+{
+    vector<float, N> v = vector<float, N>(_4.data[0]);
+    v *= (vector<float, N>(2.0));
+    _4.data[1] = v[3];
+}
+
