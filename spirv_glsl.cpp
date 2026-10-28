@@ -8193,6 +8193,13 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 	}
 	else if (!has_boolean_mix && lerptype.basetype == SPIRType::Boolean)
 	{
+		// Ternary ? is short circuiting, so it introduces control flow.
+		// If an expression inside the ternary is control flow dependent, we break things.
+		// We could be smarter and restore which blocks are invalid after the ternary but that's too much jank.
+		// It's safer to just flush control dependent stuff to temporaries anyway.
+		assert(current_emitting_block);
+		flush_control_dependent_expressions(current_emitting_block->self);
+
 		// Boolean mix not supported on desktop without extension.
 		// Was added in OpenGL 4.5 with ES 3.1 compat.
 		//
