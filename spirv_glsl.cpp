@@ -17681,14 +17681,18 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 	if (type.op == OpTypeCooperativeVectorNV)
 	{
+		std::string component_type_str = type_to_glsl(get<SPIRType>(type.ext.coopVecNV.component_type_id));
+
+		// This is an alias of OpTypeVectorIdEXT. Without the NV capability it's a long vector.
+		bool coopvec_nv = std::find(ir.declared_capabilities.begin(), ir.declared_capabilities.end(),
+		                            CapabilityCooperativeVectorNV) != ir.declared_capabilities.end();
+		if (long_vector_enabled && !coopvec_nv)
+			return join("vector<", component_type_str, ", ", to_expression(type.ext.coopVecNV.component_count_id), ">");
+
 		require_extension_internal("GL_NV_cooperative_vector");
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cooperative vector NV only available in Vulkan.");
 
-		std::string component_type_str = type_to_glsl(get<SPIRType>(type.ext.coopVecNV.component_type_id));
-
-		// There's two options. This is an alias of VectorTypeIdEXT.
-		// Just use NV_coopvec for now ...
 		return join("coopvecNV<", component_type_str, ", ", to_expression(type.ext.coopVecNV.component_count_id), ">");
 	}
 
