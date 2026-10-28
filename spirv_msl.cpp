@@ -124,7 +124,7 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index)
 {
 	SetBindingPair pair = { desc_set, binding };
-	buffers_requiring_dynamic_offset[pair] = { index, 0, "" };
+	buffers_requiring_dynamic_offset[pair] = { index, {} };
 }
 
 void CompilerMSL::add_inline_uniform_block(uint32_t desc_set, uint32_t binding)
@@ -1504,55 +1504,55 @@ void CompilerMSL::emit_entry_point_declarations()
 	}
 
 	// Emit dynamic buffers here.
+	// A binding point that the shader never references has an empty alias list.
 	for (auto &dynamic_buffer : buffers_requiring_dynamic_offset)
 	{
-		if (!dynamic_buffer.second.var_id)
+		for (auto &alias : dynamic_buffer.second.aliases)
 		{
-			// Could happen if no buffer was used at requested binding point.
-			continue;
-		}
+			const auto &var = get<SPIRVariable>(alias.var_id);
+			uint32_t var_id = var.self;
+			const auto &type = get_variable_data_type(var);
 
-		const auto &var = get<SPIRVariable>(dynamic_buffer.second.var_id);
-		uint32_t var_id = var.self;
-		const auto &type = get_variable_data_type(var);
+			add_local_variable_name(var.self);
+			string name = to_name(var.self);
 
-		add_local_variable_name(var.self);
-		string name = to_name(var.self);
+			uint32_t desc_set = get_decoration(var.self, DecorationDescriptorSet);
+			uint32_t arg_id = argument_buffer_ids[desc_set];
+			uint32_t base_index = dynamic_buffer.second.base_index;
 
-		uint32_t desc_set = get_decoration(var.self, DecorationDescriptorSet);
-		uint32_t arg_id = argument_buffer_ids[desc_set];
-		uint32_t base_index = dynamic_buffer.second.base_index;
-
-		if (is_array(type))
-		{
-			is_using_builtin_array = true;
-			statement(get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
-			          type_to_array_glsl(type, var_id), " =");
-
-			uint32_t array_size = get_resource_array_size(type, var_id);
-			if (array_size == 0)
-				SPIRV_CROSS_THROW("Size of runtime array with dynamic offset could not be determined from resource bindings.");
-
-			begin_scope();
-
-			for (uint32_t i = 0; i < array_size; i++)
+			if (is_array(type))
 			{
-				statement("(", get_variable_address_space(var), " ", type_to_glsl(type), "* ",
-				          to_restrict(var_id, false), ")((", get_variable_address_space(var), " char* ",
-				          to_restrict(var_id, false), ")", to_name(arg_id), ".", dynamic_buffer.second.mbr_name,
-				          "[", i, "]", " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + i, "]),");
-			}
+				is_using_builtin_array = true;
+				statement(get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true),
+				          name, type_to_array_glsl(type, var_id), " =");
 
-			end_scope_decl();
-			statement_no_indent("");
-			is_using_builtin_array = false;
-		}
-		else
-		{
-			statement(get_variable_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
-			          get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
-			          get_variable_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
-			          dynamic_buffer.second.mbr_name, " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
+				uint32_t array_size = get_resource_array_size(type, var_id);
+				if (array_size == 0)
+					SPIRV_CROSS_THROW(
+					    "Size of runtime array with dynamic offset could not be determined from resource bindings.");
+
+				begin_scope();
+
+				for (uint32_t i = 0; i < array_size; i++)
+				{
+					statement("(", get_variable_address_space(var), " ", type_to_glsl(type), "* ",
+					          to_restrict(var_id, false), ")((", get_variable_address_space(var), " char* ",
+					          to_restrict(var_id, false), ")", to_name(arg_id), ".", alias.mbr_name, "[", i, "]", " + ",
+					          to_name(dynamic_offsets_buffer_id), "[", base_index + i, "]),");
+				}
+
+				end_scope_decl();
+				statement_no_indent("");
+				is_using_builtin_array = false;
+			}
+			else
+			{
+				statement(get_variable_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
+				          get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false),
+				          ")((", get_variable_address_space(var), " char* ", to_restrict(var_id, false), ")",
+				          to_name(arg_id), ".", alias.mbr_name, " + ", to_name(dynamic_offsets_buffer_id), "[",
+				          base_index, "]);");
+			}
 		}
 	}
 
@@ -20792,8 +20792,7 @@ void CompilerMSL::analyze_argument_buffers()
 					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
 					buffer_type.member_types.push_back(var.basetype);
 					auto &dynamic_buffer = buffers_requiring_dynamic_offset[pair];
-					dynamic_buffer.var_id = var.self;
-					dynamic_buffer.mbr_name = mbr_name;
+					dynamic_buffer.aliases.push_back({ var.self, mbr_name });
 				}
 				else if (inline_uniform_blocks.count(pair))
 				{

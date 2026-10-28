@@ -1362,11 +1362,17 @@ protected:
 	SmallVector<SPIRVariable *> entry_point_bindings;
 
 	// Must be ordered since array is in a specific order.
+	struct DynamicBufferAlias
+	{
+		uint32_t var_id;
+		std::string mbr_name;
+	};
 	struct DynamicBuffer
 	{
 		uint32_t base_index;
-		uint32_t var_id;
-		std::string mbr_name;
+		// Every variable bound to this set and binding. Aliased views of one
+		// buffer each need their own offset-adjusted declaration.
+		SmallVector<DynamicBufferAlias> aliases;
 	};
 	std::map<SetBindingPair, DynamicBuffer> buffers_requiring_dynamic_offset;
 
