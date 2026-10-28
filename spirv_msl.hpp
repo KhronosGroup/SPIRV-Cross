@@ -553,6 +553,18 @@ public:
 		// Requires MSL 3.2 or above, and has no effect with earlier MSL versions.
 		bool use_fast_math_pragmas = false;
 
+		// Enables PerVertexKHR fragment inputs, emitted as vertex_value<T>.
+		// Requires MSL 4.0 and a GPU supporting vertex_value (Apple10 or later);
+		// the MSL version alone does not imply support.
+		bool supports_per_vertex_fragment_input = false;
+
+		// Number of vertices in the primitives rasterized with the fragment shader:
+		// 3 for triangles, 2 for lines, 1 for points.
+		// Metal returns zero for missing vertices, whereas Vulkan returns the valid vertex
+		// with the highest index, so PerVertexKHR reads past this count are redirected to it.
+		// Only used with supports_per_vertex_fragment_input.
+		uint32_t per_vertex_primitive_vertex_count = 3;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -1044,6 +1056,9 @@ protected:
 
 	std::string to_tesc_invocation_id();
 	void emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array);
+	void add_per_vertex_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type,
+	                                             const SPIRVariable &var, const SPIRType &type, const std::string &path,
+	                                             uint32_t &location, uint32_t component, uint32_t vertex_count);
 	void add_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
 	                                     SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_composite_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,

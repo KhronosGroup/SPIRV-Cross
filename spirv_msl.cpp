@@ -3909,6 +3909,75 @@ void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, boo
 	}
 }
 
+// Keep the SPIR-V input as a thread-local array so dynamic indices and function arguments
+// use the ordinary access-chain path. Only the flattened stage-in leaves use vertex_value.
+void CompilerMSL::add_per_vertex_input_to_interface_block(const string &ib_var_ref, SPIRType &ib_type,
+                                                          const SPIRVariable &var, const SPIRType &type,
+                                                          const string &path, uint32_t &location, uint32_t component,
+                                                          uint32_t vertex_count)
+{
+	if (is_array(type) || is_matrix(type))
+	{
+		if (is_array(type) && !type.array_size_literal.back())
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays must have a literal size in MSL.");
+		uint32_t count = is_array(type) ? to_array_size_literal(type) : type.columns;
+		if (!count)
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays must have a nonzero size in MSL.");
+		for (uint32_t i = 0; i < count; i++)
+			add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get<SPIRType>(type.parent_type),
+			                                        join(path, "[", i, "]"), location, component, vertex_count);
+		return;
+	}
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		{
+			if (has_member_decoration(type.self, i, DecorationBuiltIn) ||
+			    has_member_decoration(type.self, i, DecorationPerVertexKHR))
+				SPIRV_CROSS_THROW("PerVertexKHR input blocks with BuiltIn or member PerVertexKHR decorations are not "
+				                  "supported in MSL.");
+			if (has_member_decoration(type.self, i, DecorationLocation))
+				location = get_member_decoration(type.self, i, DecorationLocation);
+			uint32_t member_component = has_member_decoration(type.self, i, DecorationComponent) ?
+			                                get_member_decoration(type.self, i, DecorationComponent) :
+			                                component;
+			add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get<SPIRType>(type.member_types[i]),
+			                                        join(path, ".", to_member_name(type, i)), location,
+			                                        member_component, vertex_count);
+		}
+		return;
+	}
+	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Half && type.basetype != SPIRType::Int &&
+	    type.basetype != SPIRType::UInt && type.basetype != SPIRType::Short && type.basetype != SPIRType::UShort)
+		SPIRV_CROSS_THROW(
+		    "PerVertexKHR inputs in MSL require 16-bit or 32-bit floating-point or integer scalars or vectors.");
+	if (location == k_unknown_location)
+		SPIRV_CROSS_THROW("PerVertexKHR inputs in MSL require a Location decoration.");
+	uint32_t type_id = ensure_correct_input_type(type.self, location, component, 0, false);
+	if (get<SPIRType>(type_id).basetype != type.basetype)
+		SPIRV_CROSS_THROW("PerVertexKHR input type remapping is not supported in MSL.");
+	uint32_t member_index = uint32_t(ib_type.member_types.size());
+	ib_type.member_types.push_back(type_id);
+	set_member_name(ib_type.self, member_index, join("spvPerVertex", var.self, "_", member_index));
+	set_member_decoration(ib_type.self, member_index, DecorationLocation, location);
+	set_member_decoration(ib_type.self, member_index, DecorationComponent, component);
+	set_member_decoration(ib_type.self, member_index, DecorationPerVertexKHR);
+	mark_location_as_used_by_shader(location, get<SPIRType>(type_id), StorageClassInput);
+	location++;
+	string member_name = to_member_name(ib_type, member_index);
+	string swizzle = get<SPIRType>(type_id).vecsize != type.vecsize ? vector_swizzle(type.vecsize, 0) : "";
+	uint32_t var_id = var.self;
+	uint32_t primitive_vertex_count = msl_options.per_vertex_primitive_vertex_count;
+	get<SPIRFunction>(ir.default_entry_point).fixup_hooks_in.push_back([=]() {
+		// Metal returns zero for vertices the primitive does not have, while Vulkan returns
+		// the valid vertex with the highest index.
+		static const char *vertices[] = { "first", "second", "third" };
+		for (uint32_t i = 0; i < vertex_count; i++)
+			statement(to_name(var_id), "[", i, "]", path, " = ", ib_var_ref, ".", member_name,
+			          ".get(vertex_index::", vertices[min(i, primitive_vertex_count - 1)], ")", swizzle, ";");
+	});
+}
+
 void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const string &ib_var_ref, SPIRType &ib_type,
                                                   SPIRVariable &var, InterfaceBlockMeta &meta)
 {
@@ -3947,7 +4016,30 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	}
 
 	if (storage == StorageClassInput && has_decoration(var.self, DecorationPerVertexKHR))
-		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
+	{
+		if (get_execution_model() != ExecutionModelFragment)
+			SPIRV_CROSS_THROW("PerVertexKHR inputs are only supported in fragment shaders in MSL.");
+		if (!msl_options.supports_msl_version(4, 0))
+			SPIRV_CROSS_THROW("PerVertexKHR inputs require MSL 4.0 and a GPU supporting vertex_value.");
+		if (!msl_options.supports_per_vertex_fragment_input)
+			SPIRV_CROSS_THROW(
+			    "PerVertexKHR inputs require supports_per_vertex_fragment_input and a GPU supporting vertex_value.");
+		if (is_builtin || !is_array(var_type) || !var_type.array_size_literal.back())
+			SPIRV_CROSS_THROW("PerVertexKHR inputs in MSL must be non-builtin arrays with a literal size.");
+		uint32_t vertex_count = to_array_size_literal(var_type);
+		if (vertex_count == 0 || vertex_count > 3)
+			SPIRV_CROSS_THROW("PerVertexKHR input arrays in MSL must contain one to three vertices.");
+		if (msl_options.per_vertex_primitive_vertex_count == 0 || msl_options.per_vertex_primitive_vertex_count > 3)
+			SPIRV_CROSS_THROW("per_vertex_primitive_vertex_count must be 1, 2 or 3.");
+		add_resource_name(var.self);
+		emit_local_masked_variable(var, false);
+		uint32_t location = has_decoration(var.self, DecorationLocation) ?
+		                        get_decoration(var.self, DecorationLocation) :
+		                        k_unknown_location;
+		add_per_vertex_input_to_interface_block(ib_var_ref, ib_type, var, get_variable_element_type(var), "", location,
+		                                        get_decoration(var.self, DecorationComponent), vertex_count);
+		return;
+	}
 
 	// If variable names alias, they will end up with wrong names in the interface struct, because
 	// there might be aliases in the member name cache and there would be a mismatch in fixup_in code.
@@ -14139,6 +14231,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		if (array_stride != native_stride)
 			decl_type = join("spvPaddedArrayElement<", decl_type, ", ", array_stride, ">");
 	}
+
+	if (stage_in_var_id && type.self == get_stage_in_struct_type().self &&
+	    has_member_decoration(type.self, index, DecorationPerVertexKHR))
+		decl_type = join("vertex_value<", decl_type, ">");
 
 	const char *overlapping_binding_tag =
 			has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding) ?
