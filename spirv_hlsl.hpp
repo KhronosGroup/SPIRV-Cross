@@ -395,6 +395,36 @@ private:
 
 	void validate_shader_model();
 
+	// Cooperative matrices map to SM 6.10 dx::linalg::Matrix, declared once per type as a typedef.
+	const SPIRType *get_cooperative_matrix_type(const SPIRType &type) const;
+	std::string cooperative_matrix_type_name(const SPIRType &type) const;
+	std::string cooperative_matrix_dx_type(const SPIRType &type) const;
+	void emit_cooperative_matrix_typedefs();
+	void emit_cooperative_matrix_load(const uint32_t *ops, uint32_t length);
+	void emit_cooperative_matrix_store(const uint32_t *ops, uint32_t length);
+	uint32_t cooperative_matrix_literal(uint32_t id, const char *what) const;
+	std::string cooperative_matrix_layout(uint32_t layout_id);
+	std::string cooperative_matrix_stride(uint32_t stride_id, const SPIRType &pointee);
+	uint32_t cooperative_matrix_alignment(const uint32_t *memory_operands, uint32_t count) const;
+	std::string cooperative_matrix_groupshared_args(uint32_t ptr, const SPIRType &matrix_type, uint32_t stride_id);
+	std::string constant_cooperative_matrix_expression(const SPIRConstant &c) override;
+	void emit_cooperative_matrix_muladd(const uint32_t *ops, uint32_t length);
+	bool maybe_emit_cooperative_matrix_op(const Instruction &instruction);
+	std::string cooperative_matrix_copy(uint32_t id);
+	void emit_cooperative_matrix_elementwise(uint32_t result_type, uint32_t id, uint32_t op0, const char *op,
+	                                         uint32_t op1);
+	void emit_cooperative_matrix_convert(uint32_t result_type, uint32_t id, uint32_t op0, Op opcode);
+	bool emit_cooperative_matrix_element_access_chain(const uint32_t *ops, uint32_t length);
+
+	// Pointers to one component of a cooperative matrix: dx::linalg reads and writes those with Get / Set.
+	struct CooperativeMatrixElement
+	{
+		std::string matrix;
+		uint32_t index;
+		uint32_t base;
+	};
+	std::unordered_map<uint32_t, CooperativeMatrixElement> cooperative_matrix_elements;
+
 	std::string get_unique_identifier();
 	uint32_t unique_identifier_count = 0;
 

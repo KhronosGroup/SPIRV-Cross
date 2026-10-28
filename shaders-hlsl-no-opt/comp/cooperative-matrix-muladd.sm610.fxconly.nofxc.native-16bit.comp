@@ -1,0 +1,48 @@
+#version 450
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_KHR_memory_scope_semantics : require
+
+layout(local_size_x = 32) in;
+
+layout(set = 0, binding = 0) buffer SSBO
+{
+	uint length_a;
+	uint length_c;
+	float scale;
+	uint pad;
+	float data[];
+} ssbo;
+
+layout(set = 0, binding = 1) buffer SSBOInt
+{
+	int data[];
+} ssbo_int;
+
+void main()
+{
+	// Splat from a constant and from a runtime value.
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> a = coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(1.5hf);
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB> b = coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB>(float16_t(ssbo.scale));
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> c;
+	coopMatLoad(c, ssbo.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// D = A * B + C, into a float and into a float16 accumulator.
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> d = coopMatMulAdd(a, b, c);
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> c16 = coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator>(0.0hf);
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> d16 = coopMatMulAdd(a, b, c16);
+	coopMatStore(d, ssbo.data, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+	coopMatStore(d16, ssbo.data, 512, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// Signed 8-bit inputs into a signed 32-bit accumulator.
+	coopmat<int8_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> ia = coopmat<int8_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(int8_t(-3));
+	coopmat<int8_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB> ib = coopmat<int8_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB>(int8_t(7));
+	coopmat<int, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> ic = coopmat<int, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator>(0);
+	ic = coopMatMulAdd(ia, ib, ic);
+	coopMatStore(ic, ssbo_int.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// Length is a property of the type.
+	ssbo.length_a = a.length();
+	ssbo.length_c = d.length();
+}
