@@ -3259,6 +3259,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 {
 	if (is_tessellation_shader() && has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
 		SPIRV_CROSS_THROW("Component decoration is not supported in tessellation shaders.");
+	if (storage == StorageClassInput && has_member_decoration(var_type.self, mbr_idx, DecorationPerVertexKHR))
+		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -3499,6 +3501,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
                                                                const string &var_chain_qual,
                                                                uint32_t &location, uint32_t &var_mbr_idx)
 {
+	if (storage == StorageClassInput && has_member_decoration(var_type.self, mbr_idx, DecorationPerVertexKHR))
+		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
