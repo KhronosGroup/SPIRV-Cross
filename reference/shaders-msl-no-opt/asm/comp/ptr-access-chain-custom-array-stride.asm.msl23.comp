@@ -16,7 +16,9 @@ constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(64u, 1u, 1u);
 kernel void main0(constant Registers& _7 [[buffer(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     device float3* _41 = reinterpret_cast<device float3*>(as_type<ulong>(_7.c));
+    float3 _51 = float3(*reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_41) + gl_GlobalInvocationID.x * 12));
+    float3 _52 = (reinterpret_cast<device float3*>(as_type<ulong>(_7.d)))[gl_GlobalInvocationID.x];
     *reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_7.a) + gl_GlobalInvocationID.x * 12) = float3(*reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_7.a) + gl_GlobalInvocationID.x * 12)) + _7.b[gl_GlobalInvocationID.x];
-    *reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_41) + gl_GlobalInvocationID.x * 12) = float3(*reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_41) + gl_GlobalInvocationID.x * 12)) + (reinterpret_cast<device float3*>(as_type<ulong>(_7.d)))[gl_GlobalInvocationID.x];
+    *reinterpret_cast<device packed_float3 *>(reinterpret_cast<ulong>(_41) + gl_GlobalInvocationID.x * 12) = _51 + _52;
 }
 
