@@ -10474,6 +10474,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t arg = ops[2];
 		string exp = join("spvQuantizeToF16(", to_expression(arg), ")");
 		emit_op(result_type, id, exp, should_forward(arg));
+		inherit_expression_dependencies(id, arg);
 		break;
 	}
 
