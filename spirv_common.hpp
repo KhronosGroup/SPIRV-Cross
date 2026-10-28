@@ -1358,7 +1358,7 @@ struct SPIRConstant : IVariant
 		else
 		{
 			// Reuse the FP16 to FP32 code. Cute bit-hackery.
-			return f16_to_f32((int16_t(int8_t(v)) << 7) & (0xffff ^ 0x4000)) * 256.0f;
+			return f16_to_f32((uint16_t(int8_t(v)) << 7) & (0xffff ^ 0x4000)) * 256.0f;
 		}
 	}
 
