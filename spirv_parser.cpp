@@ -153,6 +153,19 @@ void Parser::parse()
 	if (current_block)
 		SPIRV_CROSS_THROW("Block was not terminated.");
 
+	// Callers index the callee's parameter list with the call's argument index,
+	// so the argument count must match. The callee may be declared after the call.
+	for (auto &i : instructions)
+	{
+		if (static_cast<Op>(i.op) != OpFunctionCall)
+			continue;
+		if (i.length < 3)
+			SPIRV_CROSS_THROW("Invalid OpFunctionCall.");
+		auto &callee = get<SPIRFunction>(stream(i)[2]);
+		if (i.length - 3 != callee.arguments.size())
+			SPIRV_CROSS_THROW("OpFunctionCall argument count does not match callee.");
+	}
+
 	// Now that all definitions are bound to a kind, we can filter the library
 	// exports and populate the exported functions.
 	for (uint32_t id : ir.library_exports)
