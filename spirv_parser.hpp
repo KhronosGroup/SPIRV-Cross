@@ -64,13 +64,17 @@ private:
 	template <typename T>
 	T &get(uint32_t id)
 	{
+		if (id >= ir.ids.size())
+			SPIRV_CROSS_THROW("ID is out of range.");
 		return variant_get<T>(ir.ids[id]);
 	}
 
 	template <typename T>
 	T *maybe_get(uint32_t id)
 	{
-		if (ir.ids[id].get_type() == static_cast<Types>(T::type))
+		if (id >= ir.ids.size())
+			return nullptr;
+		else if (ir.ids[id].get_type() == static_cast<Types>(T::type))
 			return &get<T>(id);
 		else
 			return nullptr;
@@ -79,13 +83,17 @@ private:
 	template <typename T>
 	const T &get(uint32_t id) const
 	{
+		if (id >= ir.ids.size())
+			SPIRV_CROSS_THROW("ID is out of range.");
 		return variant_get<T>(ir.ids[id]);
 	}
 
 	template <typename T>
 	const T *maybe_get(uint32_t id) const
 	{
-		if (ir.ids[id].get_type() == T::type)
+		if (id >= ir.ids.size())
+			return nullptr;
+		else if (ir.ids[id].get_type() == T::type)
 			return &get<T>(id);
 		else
 			return nullptr;

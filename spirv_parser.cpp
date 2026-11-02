@@ -157,7 +157,7 @@ void Parser::parse()
 	// exports and populate the exported functions.
 	for (uint32_t id : ir.library_exports)
 	{
-		if (ir.ids[id].get_type() == TypeFunction)
+		if (id < ir.ids.size() && ir.ids[id].get_type() == TypeFunction)
 			ir.library_exported_functions.push_back(id);
 	}
 
