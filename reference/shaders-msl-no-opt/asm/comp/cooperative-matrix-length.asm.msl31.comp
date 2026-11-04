@@ -11,6 +11,6 @@ struct SSBO
 
 kernel void main0(device SSBO& ssbo [[buffer(0)]])
 {
-    ssbo.data[0u] = uint(sizeof(simdgroup_float8x8::storage_type) / sizeof(float));
+    ssbo.data[0u] = uint(2);
 }
 

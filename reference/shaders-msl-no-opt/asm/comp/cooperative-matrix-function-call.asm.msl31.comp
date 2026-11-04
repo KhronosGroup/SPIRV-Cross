@@ -1,0 +1,30 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#include <metal_simdgroup_matrix>
+
+using namespace metal;
+
+struct SSBO
+{
+    float data[1];
+};
+
+static inline __attribute__((always_inline))
+simdgroup_float8x8 twice(simdgroup_float8x8 v)
+{
+    simdgroup_float8x8 _26;
+    _26.thread_elements()[0u] = v.thread_elements()[0u] * 2.0;
+    _26.thread_elements()[1u] = v.thread_elements()[1u] * 2.0;
+    return _26;
+}
+
+kernel void main0(device SSBO& ssbo [[buffer(0)]])
+{
+    simdgroup_float8x8 _21;
+    simdgroup_load(_21, &ssbo.data[0u], 8u);
+    simdgroup_float8x8 _23 = twice(_21);
+    simdgroup_store(_23, &ssbo.data[0u], 8u);
+}
+

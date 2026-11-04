@@ -1190,9 +1190,13 @@ protected:
 	void emit_cooperative_matrix_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	void emit_cooperative_matrix_select_op(uint32_t result_type, uint32_t result_id, uint32_t cond, uint32_t op0,
 	                                       uint32_t op1);
+	std::string to_cooperative_matrix_transpose(uint32_t layout);
+	std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
+	                                bool inside_struct_scope = false) override;
 	bool maybe_emit_cooperative_matrix_op(const Instruction &instruction);
 	void validate_cooperative_matrix_type(const SPIRType &type);
 	void validate_cooperative_matrix_types();
+	bool emit_cooperative_matrix_static_asserts(const SPIRType &type, std::unordered_set<uint64_t> &asserted_operands);
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
 	bool uses_explicit_early_fragment_test();
@@ -1397,6 +1401,7 @@ protected:
 	uint32_t build_msl_interpolant_type(uint32_t type_id, bool is_noperspective);
 
 	bool suppress_missing_prototypes = false;
+	bool uses_cooperative_matrix = false;
 	bool suppress_incompatible_pointer_types_discard_qualifiers = false;
 	bool suppress_sometimes_unitialized = false;
 
