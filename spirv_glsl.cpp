@@ -11491,6 +11491,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 				ignore_potential_sliced_writes = true;
 
+			if (type->op == OpTypeCooperativeMatrixKHR)
+				expr += backend.cooperative_matrix_element_access;
+
 			if (!row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				// On some backends, we might not be able to safely access individual scalars in a vector.
@@ -11516,7 +11519,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					expr += join("[", out_of_bounds ? 0 : index, "]");
 				}
 			}
-			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
+			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion &&
+			         type->op != OpTypeCooperativeMatrixKHR)
 			{
 				auto &c = get<SPIRConstant>(index);
 				bool out_of_bounds = (c.scalar() >= type->vecsize);
