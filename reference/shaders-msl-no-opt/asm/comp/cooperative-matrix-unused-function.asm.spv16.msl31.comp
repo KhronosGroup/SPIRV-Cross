@@ -1,0 +1,18 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+constant uint DIM_tmp [[function_constant(0)]];
+constant uint DIM = is_function_constant_defined(DIM_tmp) ? DIM_tmp : 8u;
+
+struct Buf
+{
+    float data[1];
+};
+
+kernel void main0(device Buf& _2 [[buffer(0)]], uint3 gl_LocalInvocationID [[thread_position_in_threadgroup]])
+{
+    _2.data[gl_LocalInvocationID.x] = float(DIM);
+}
+

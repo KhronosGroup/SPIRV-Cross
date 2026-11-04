@@ -1,0 +1,62 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+#include <metal_simdgroup_matrix>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+struct SSBO
+{
+    float data[1];
+};
+
+kernel void main0(device SSBO& ssbo [[buffer(0)]])
+{
+    simdgroup_float8x8 _20;
+    _20.thread_elements()[0u] = 1.0;
+    _20.thread_elements()[1u] = 1.0;
+    spvUnsafeArray<simdgroup_float8x8, 2> mats;
+    mats[1u] = _20;
+    simdgroup_store(mats[1u], &ssbo.data[0u], 8u);
+}
+
