@@ -9606,7 +9606,7 @@ void CompilerMSL::validate_cooperative_matrix_type(const SPIRType &type)
 	// compiled, so like array lengths they become macros, which the API user must set to those values.
 	// emit_cooperative_matrix_static_asserts() makes the MSL fail to compile if they are set to anything else.
 	for_each_cooperative_matrix_operand(type, [&](uint32_t id, uint32_t required_value, const char *error) {
-		auto *c = maybe_get<SPIRConstant>(id);
+		auto *c = this->maybe_get<SPIRConstant>(id);
 		if (c && !c->specialization)
 		{
 			if (c->scalar() != required_value)
@@ -9625,7 +9625,7 @@ bool CompilerMSL::emit_cooperative_matrix_static_asserts(const SPIRType &type,
 {
 	bool emitted = false;
 	for_each_cooperative_matrix_operand(type, [&](uint32_t id, uint32_t required_value, const char *error) {
-		auto *c = maybe_get<SPIRConstant>(id);
+		auto *c = this->maybe_get<SPIRConstant>(id);
 		if ((c && !c->specialization) || !asserted_operands.insert((uint64_t(id) << 32) | required_value).second)
 			return;
 		statement("static_assert(", to_expression(id), " == ", required_value, ", \"", error, "\");");
