@@ -1,0 +1,53 @@
+#version 450
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_KHR_memory_scope_semantics : require
+
+layout(local_size_x = 32) in;
+
+layout(set = 0, binding = 0) buffer SSBO
+{
+	float scale;
+	uint pad[3];
+	float data[];
+} ssbo;
+
+layout(set = 0, binding = 1) buffer SSBOInt
+{
+	int data[];
+} ssbo_int;
+
+void main()
+{
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> a;
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> b;
+	coopMatLoad(a, ssbo.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+	coopMatLoad(b, ssbo.data, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// Element-wise arithmetic, with a scalar and negated.
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> f = (a + b) * (a - b) / b;
+	f = -(f * ssbo.scale);
+
+	// Conversions keep the use.
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> h = coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(f);
+	coopmat<int, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> i = coopmat<int, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(h);
+	i = (i + i) * i - i / (i + i);
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> back = coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(i);
+
+	// Reading and writing the components this invocation holds.
+	for (int k = 0; k < back.length(); k++)
+		back[k] += 50.0;
+
+	// An array of matrices.
+	coopmat<float, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> arr[2];
+	arr[0] = back;
+	arr[1] = f;
+	arr[1][0] = arr[0][1];
+
+	coopMatStore(arr[1], ssbo.data, 512, 16, gl_CooperativeMatrixLayoutRowMajor);
+	coopMatStore(i, ssbo_int.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// int <-> uint of one width is a bitcast.
+	coopmat<uint, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> u = coopmat<uint, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA>(i);
+	coopMatStore(u, ssbo_int.data, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+}

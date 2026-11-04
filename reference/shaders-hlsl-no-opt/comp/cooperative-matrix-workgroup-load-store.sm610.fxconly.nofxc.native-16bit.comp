@@ -1,0 +1,44 @@
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F32, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::ThreadGroup> spvCoopMatF32_16x16_Accumulator_ThreadGroup;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::B, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_B_Wave;
+
+struct Tiles
+{
+    uint head;
+    half data[256];
+};
+
+static const uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
+
+RWByteAddressBuffer out32 : register(u0, space0);
+
+static uint3 gl_WorkGroupID;
+struct SPIRV_Cross_Input
+{
+    uint3 gl_WorkGroupID : SV_GroupID;
+};
+
+groupshared half tile16[512];
+groupshared uint tile32[512];
+groupshared Tiles tiles;
+
+void comp_main()
+{
+    spvCoopMatF16_16x16_A_Wave _24 = spvCoopMatF16_16x16_A_Wave::Load(tile16, 256u, 16u, dx::linalg::MatrixLayout::RowMajor);
+    spvCoopMatF16_16x16_A_Wave a = _24;
+    a.Store(tile16, 0u, 16u, dx::linalg::MatrixLayout::ColMajor);
+    spvCoopMatF32_16x16_Accumulator_ThreadGroup _48 = spvCoopMatF32_16x16_Accumulator_ThreadGroup::Load(tile32, 4u * gl_WorkGroupID.x, 16u, dx::linalg::MatrixLayout::ColMajor);
+    spvCoopMatF32_16x16_Accumulator_ThreadGroup c = _48;
+    c.Store(tile32, 256u, 16u, dx::linalg::MatrixLayout::RowMajor);
+    spvCoopMatF16_16x16_B_Wave _58 = spvCoopMatF16_16x16_B_Wave::Load(tile32, 256, 16, dx::linalg::MatrixLayout::RowMajor);
+    spvCoopMatF16_16x16_B_Wave b = _58;
+    b.Store(tiles.data, 0u, 16u, dx::linalg::MatrixLayout::RowMajor);
+    c.Store(out32, 0, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+}
+
+[numthreads(32, 1, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_WorkGroupID = stage_input.gl_WorkGroupID;
+    comp_main();
+}

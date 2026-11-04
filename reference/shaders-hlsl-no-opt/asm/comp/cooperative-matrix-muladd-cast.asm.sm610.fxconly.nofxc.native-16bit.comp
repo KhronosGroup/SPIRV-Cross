@@ -1,0 +1,25 @@
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::B, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_B_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_Accumulator_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F32, 16, 16, dx::linalg::MatrixUse::Accumulator, dx::linalg::MatrixScope::Wave> spvCoopMatF32_16x16_Accumulator_Wave;
+
+static const uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
+
+RWByteAddressBuffer ssbo : register(u0, space0);
+
+void comp_main()
+{
+    spvCoopMatF16_16x16_A_Wave a = spvCoopMatF16_16x16_A_Wave::Splat(half(1.0));
+    spvCoopMatF16_16x16_B_Wave b = spvCoopMatF16_16x16_B_Wave::Splat(half(2.0));
+    spvCoopMatF16_16x16_Accumulator_Wave c = spvCoopMatF16_16x16_Accumulator_Wave::Splat(half(0.5));
+    spvCoopMatF32_16x16_Accumulator_Wave _37 = c.Cast<dx::linalg::ComponentType::F32>();
+    _37.MultiplyAccumulate(a, b);
+    spvCoopMatF32_16x16_Accumulator_Wave d = _37;
+    d.Store(ssbo, 0, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+}
+
+[numthreads(32, 1, 1)]
+void main()
+{
+    comp_main();
+}
