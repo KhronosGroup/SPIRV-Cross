@@ -763,6 +763,20 @@ void CompilerHLSL::emit_builtin_primitive_outputs_in_struct()
 void CompilerHLSL::emit_builtin_inputs_in_struct()
 {
 	bool legacy = hlsl_options.shader_model <= 30;
+	auto &execution = get_entry_point();
+
+	// Interpolation decorations the front-end placed on the FragCoord input variable (DXC emits Centroid / Sample for
+	// "centroid float4 pos : SV_Position" etc.). GLSL cannot decorate gl_FragCoord, so this is usually empty.
+	Bitset fragcoord_flags;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, const SPIRVariable &var) {
+		if (var.storage == StorageClassInput && has_decoration(id, DecorationBuiltIn) &&
+		    get_decoration(id, DecorationBuiltIn) == BuiltInFragCoord)
+			fragcoord_flags = get_decoration_bitset(id);
+	});
+	bool conservative_depth = hlsl_options.shader_model >= 50 && execution.model == ExecutionModelFragment &&
+	                          (execution.flags.get(ExecutionModeDepthGreater) || execution.flags.get(ExecutionModeDepthLess));
+	std::string fragcoord_type;
+
 	active_input_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		const char *semantic = nullptr;
@@ -774,7 +788,19 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = legacy ? "POSITION" : "SV_Position";
 			break;
 		case BuiltInFragCoord:
-			type = "float4";
+			// SV_Position as a pixel-shader input is always linear noperspective; it may additionally be evaluated at the
+			// centroid or per sample. (1) Honour a Centroid / Sample decoration on the FragCoord variable. (2) When the
+			// shader outputs conservative depth (SV_DepthGreaterEqual / SV_DepthLessEqual, SM 5.0+) the D3D11 bytecode
+			// validator REQUIRES the centroid or sample form ("Interpolation mode for PS input position must be
+			// linear_noperspective_centroid or linear_noperspective_sample when outputting oDepthGE or oDepthLE"), so
+			// default to centroid in that case if the source said nothing. Everything else stays a plain float4.
+			if (fragcoord_flags.get(DecorationSample))
+				fragcoord_type = "linear noperspective sample float4";
+			else if (fragcoord_flags.get(DecorationCentroid) || conservative_depth)
+				fragcoord_type = "linear noperspective centroid float4";
+			else
+				fragcoord_type = "float4";
+			type = fragcoord_type.c_str();
 			semantic = legacy ? "VPOS" : "SV_Position";
 			break;
 
