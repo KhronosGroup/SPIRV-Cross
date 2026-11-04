@@ -13878,6 +13878,46 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			can_modify_in_place = false;
 		}
 
+		// The destination might be a bool member of a struct which is remapped to another type,
+		// in which case we must convert the value we're inserting as well.
+		const SPIRType *remapped_bool_struct_type = nullptr;
+		if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
+		    expression_type(obj).basetype == SPIRType::Boolean)
+		{
+			auto *type = &get<SPIRType>(result_type);
+			for (uint32_t i = 0; i < length; i++)
+			{
+				if (type->basetype == SPIRType::Struct)
+				{
+					remapped_bool_struct_type = type;
+					type = &get<SPIRType>(type->member_types[elems[i]]);
+				}
+				else if (is_array(*type))
+					type = &get<SPIRType>(type->parent_type);
+				else
+					break;
+			}
+		}
+
+		// to_unpacked_expression can force temporaries, so only evaluate it where the value is used.
+		auto rhs_expression = [&]() -> string
+		{
+			string rhs = to_unpacked_expression(obj);
+			if (remapped_bool_struct_type)
+			{
+				auto &obj_type = expression_type(obj);
+				if (is_array(obj_type))
+					rhs = to_rerolled_array_expression(*remapped_bool_struct_type, rhs, obj_type);
+				else
+				{
+					auto remapped_type = obj_type;
+					remapped_type.basetype = backend.boolean_in_struct_remapped_type;
+					rhs = join(type_to_glsl(remapped_type), "(", rhs, ")");
+				}
+			}
+			return rhs;
+		};
+
 		if (can_modify_in_place)
 		{
 			// Have to make sure the modified SSA value is bound to a temporary so we can modify it in-place.
@@ -13886,7 +13926,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
 			                                   nullptr, nullptr);
-			statement(chain, " = ", to_unpacked_expression(obj), ";");
+			statement(chain, " = ", rhs_expression(), ";");
 			set<SPIRExpression>(id, to_expression(composite), result_type, true);
 			invalid_expressions.insert(composite);
 			composite_insert_overwritten.insert(composite);
@@ -13905,7 +13945,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 
 			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
-			statement(chain, " = ", to_unpacked_expression(obj), ";");
+			statement(chain, " = ", rhs_expression(), ";");
 		}
 
 		break;
