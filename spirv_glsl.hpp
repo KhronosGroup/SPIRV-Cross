@@ -796,6 +796,9 @@ protected:
 
 	StorageClass get_expression_effective_storage_class(uint32_t ptr);
 	virtual bool access_chain_needs_stage_io_builtin_translation(uint32_t base);
+	// Backends that declare an arrayed builtin input block (gl_in[]) as one flat array per builtin
+	// return that array's name here, so gl_in[i].gl_Position becomes <name>[i]. Empty = keep the block.
+	virtual std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin);
 
 	virtual bool check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type);
 	virtual bool prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
