@@ -1129,6 +1129,9 @@ void Parser::parse(const Instruction &instruction)
 	case OpSpecConstantComposite:
 	case OpConstantComposite:
 	{
+		if (length < 2)
+			SPIRV_CROSS_THROW("OpConstantComposite not enough arguments.");
+
 		uint32_t id = ops[1];
 		uint32_t type = ops[0];
 
@@ -1191,6 +1194,9 @@ void Parser::parse(const Instruction &instruction)
 	case OpConstantDataKHR:
 	case OpSpecConstantDataKHR:
 	{
+		if (length < 2)
+			SPIRV_CROSS_THROW("OpConstantDataKHR not enough arguments.");
+
 		uint32_t id = ops[1];
 		uint32_t type = ops[0];
 		set<SPIRConstantData>(id, type, ops + 2, length - 2, op == OpSpecConstantDataKHR);
