@@ -941,7 +941,7 @@ struct sB
 {
     spvStorage_float2x2 mA;
     spvStorage_float3x2 mB;
-    uint3 mC;
+    packed_uint3 mC;
 };
 
 struct sC
@@ -1150,7 +1150,7 @@ kernel void main0(device block& _424 [[buffer(0)]])
     bool _364;
     if (_355)
     {
-        _364 = all(uint3(3u, 1u, 5u) == s1.a.mA.mB.mC);
+        _364 = all(uint3(3u, 1u, 5u) == uint3(s1.a.mA.mB.mC));
     }
     else
     {

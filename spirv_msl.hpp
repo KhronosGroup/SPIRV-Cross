@@ -1017,6 +1017,7 @@ protected:
 	void mark_packable_structs();
 	void mark_as_packable(SPIRType &type);
 	void mark_as_workgroup_struct(SPIRType &type);
+	void mark_workgroup_struct_vec3_packed(SPIRType &type);
 
 	std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
@@ -1264,6 +1265,7 @@ protected:
 	std::unordered_map<uint32_t, MSLShaderInterfaceVariable> inputs_by_builtin;
 	std::map<LocationComponentPair, MSLShaderInterfaceVariable> outputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInterfaceVariable> outputs_by_builtin;
+	std::unordered_set<uint32_t> workgroup_vec3_packed_structs;
 	std::unordered_set<uint32_t> location_inputs_in_use;
 	std::unordered_set<uint32_t> location_inputs_in_use_fallback;
 	std::unordered_set<uint32_t> location_outputs_in_use;

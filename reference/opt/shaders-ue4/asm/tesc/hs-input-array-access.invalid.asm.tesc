@@ -66,7 +66,7 @@ struct FHullShaderConstantDominantVertexData
 {
     float2 UV;
     float4 Normal;
-    float3 Tangent;
+    packed_float3 Tangent;
 };
 
 struct FHullShaderConstantDominantEdgeData
@@ -75,15 +75,15 @@ struct FHullShaderConstantDominantEdgeData
     float2 UV1;
     float4 Normal0;
     float4 Normal1;
-    float3 Tangent0;
-    float3 Tangent1;
+    packed_float3 Tangent0;
+    packed_float3 Tangent1;
 };
 
 struct FPNTessellationHSToDS
 {
     FHitProxyVSToDS PassSpecificData;
     spvUnsafeArray<float4, 3> WorldPosition;
-    float3 DisplacementScale;
+    packed_float3 DisplacementScale;
     float TessellationMultiplier;
     float WorldDisplacementMultiplier;
     FHullShaderConstantDominantVertexData DominantVertex;
