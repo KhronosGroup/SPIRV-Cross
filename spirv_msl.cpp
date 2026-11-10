@@ -2545,7 +2545,10 @@ void CompilerMSL::mark_packable_structs()
 		{
 			auto *type = &this->get<SPIRType>(var.basetype);
 			if (type->basetype == SPIRType::Struct)
+			{
 				mark_as_workgroup_struct(*type);
+				mark_workgroup_struct_vec3_packed(*type);
+			}
 		}
 	});
 
@@ -2618,6 +2621,44 @@ void CompilerMSL::mark_as_workgroup_struct(SPIRType &type)
 				mark_as_workgroup_struct(mbr_type_alias);
 			}
 		}
+	}
+}
+
+// Metal pads a three-component vector to the size of a four-component vector in threadgroup memory.
+// Mark every 3-component vector member (or array of them) of a struct used with workgroup storage as packed,
+// so it takes 3 components worth of space, as it does in the source shader.
+// Nested structs are visited recursively.
+void CompilerMSL::mark_workgroup_struct_vec3_packed(SPIRType &type)
+{
+	// If this is not the base type (eg. it's a pointer or array), tunnel down
+	if (type.parent_type)
+	{
+		mark_workgroup_struct_vec3_packed(get<SPIRType>(type.parent_type));
+		return;
+	}
+
+	if (type.basetype != SPIRType::Struct)
+		return;
+
+	// Handle possible recursion when a struct contains a pointer to its own type nested somewhere.
+	if (!workgroup_vec3_packed_structs.insert(type.self).second)
+		return;
+
+	uint32_t mbr_cnt = uint32_t(type.member_types.size());
+	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[mbr_idx]);
+
+		bool is_vec3 = mbr_type.vecsize == 3 && mbr_type.columns == 1 && !mbr_type.pointer &&
+		               (mbr_type.width == 32 || mbr_type.width == 16) &&
+		               (mbr_type.basetype == SPIRType::Float || mbr_type.basetype == SPIRType::Half ||
+		                mbr_type.basetype == SPIRType::Int || mbr_type.basetype == SPIRType::UInt ||
+		                mbr_type.basetype == SPIRType::Short || mbr_type.basetype == SPIRType::UShort);
+
+		if (is_vec3)
+			set_extended_member_decoration(type.self, mbr_idx, SPIRVCrossDecorationPhysicalTypePacked);
+		else
+			mark_workgroup_struct_vec3_packed(mbr_type);
 	}
 }
 
@@ -11504,6 +11545,13 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 	else if (rhs_var && rhs_storage != StorageClassGeneric && type_is_explicit_layout(get<SPIRType>(rhs_var->basetype)))
 		rhs_is_array_template = false;
 
+	// Arrays reached through a packed struct member (e.g. packed vec3 arrays in workgroup structs)
+	// are declared as plain arrays, not array templates.
+	if (has_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked))
+		lhs_is_array_template = false;
+	if (has_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypePacked))
+		rhs_is_array_template = false;
+
 	// Special consideration for clip/culldistance. Normally composites are lowered, but clip/cull is special for reasons ...
 	if (lhs_var && lhs_storage == StorageClassOutput && is_builtin_variable(*lhs_var))
 		lhs_is_array_template = false;
@@ -11532,6 +11580,27 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 		// Assignment from an array initializer is fine.
 		auto &type = expression_type(rhs_id);
 		auto *var = maybe_get_backing_variable(rhs_id);
+
+		// An array reached through a packed struct member can have a different element type than the other side
+		// (e.g. packed_float3 vs float3), which the array copy helpers do not support. Copy element by element.
+		if (has_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked) ||
+		    has_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypePacked))
+		{
+			string rhs = to_expression(rhs_id);
+			string index_expr;
+			uint32_t dims = uint32_t(type.array.size());
+			for (uint32_t d = dims; d; d--)
+			{
+				string idx = join("_spv_i", d - 1);
+				statement("for (uint ", idx, " = 0; ", idx, " < ", to_array_size(type, d - 1), "; ", idx, "++)");
+				begin_scope();
+				index_expr += join("[", idx, "]");
+			}
+			statement(lhs, index_expr, " = ", rhs, index_expr, ";");
+			for (uint32_t d = 0; d < dims; d++)
+				end_scope();
+			return true;
+		}
 
 		// Unfortunately, we cannot template on address space in MSL,
 		// so explicit address space redirection it is ...
@@ -14002,7 +14071,12 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			add_typedef_line(td_line);
 		}
 		else if (!is_scalar(physical_type)) // scalar type is already packed.
+		{
 			pack_pfx = "packed_";
+			// The pack prefix causes problems with array<T> wrappers.
+			if (is_array(physical_type))
+				is_using_builtin_array = true;
+		}
 	}
 	else if (is_matrix(physical_type))
 	{

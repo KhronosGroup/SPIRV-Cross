@@ -12521,8 +12521,12 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 			if (i)
 				op += ", ";
 
+			// Members with a packed physical type (e.g. MSL workgroup structs with packed vec3 arrays)
+			// are declared like buffer block members, i.e. not as array value types.
 			bool uses_buffer_offset =
-			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, DecorationOffset);
+			    type.basetype == SPIRType::Struct &&
+			    (has_member_decoration(type.self, i, DecorationOffset) ||
+			     has_extended_member_decoration(type.self, i, SPIRVCrossDecorationPhysicalTypePacked));
 			subop = to_composite_constructor_expression(type, elems[i], uses_buffer_offset);
 		}
 
