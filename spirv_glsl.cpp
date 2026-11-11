@@ -20472,6 +20472,9 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		{
 			auto &lhs_expr = set<SPIRExpression>(lhs_id, std::move(lhs), lhs_type_id, true);
 			lhs_expr.need_transpose = lhs_meta.need_transpose;
+			// The LHS names a member of the destination. Mark it as an access chain so that
+			// a physical pointer member is assigned as a value instead of being stored through.
+			lhs_expr.access_chain = true;
 
 			if (lhs_meta.storage_is_packed)
 				set_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked);
