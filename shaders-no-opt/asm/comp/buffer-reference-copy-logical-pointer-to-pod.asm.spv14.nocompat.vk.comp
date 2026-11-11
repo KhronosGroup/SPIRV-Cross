@@ -1,0 +1,65 @@
+; SPIR-V
+; Version: 1.4
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 31
+; Schema: 0
+               OpCapability Shader
+               OpCapability PhysicalStorageBufferAddresses
+               OpExtension "SPV_KHR_physical_storage_buffer"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel PhysicalStorageBuffer64 GLSL450
+               OpEntryPoint GLCompute %main "main" %_
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 450
+               OpSourceExtension "GL_EXT_buffer_reference"
+               OpName %main "main"
+               OpName %Row "Row"
+               OpMemberName %Row 0 "a"
+               OpMemberName %Row 1 "count"
+               OpName %r "r"
+               OpName %Row_0 "Row"
+               OpMemberName %Row_0 0 "a"
+               OpMemberName %Row_0 1 "count"
+               OpName %Table "Table"
+               OpMemberName %Table 0 "rows"
+               OpName %_ ""
+               OpDecorate %r AliasedPointer
+               OpMemberDecorate %Row_0 0 Offset 0
+               OpMemberDecorate %Row_0 1 Offset 8
+               OpDecorate %_runtimearr_Row_0 ArrayStride 16
+               OpDecorate %Table Block
+               OpMemberDecorate %Table 0 Offset 0
+               OpDecorate %_ Binding 0
+               OpDecorate %_ DescriptorSet 0
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+%_ptr_PhysicalStorageBuffer_uint = OpTypePointer PhysicalStorageBuffer %uint
+        %Row = OpTypeStruct %_ptr_PhysicalStorageBuffer_uint %uint
+%_ptr_Function_Row = OpTypePointer Function %Row
+      %Row_0 = OpTypeStruct %_ptr_PhysicalStorageBuffer_uint %uint
+%_runtimearr_Row_0 = OpTypeRuntimeArray %Row_0
+      %Table = OpTypeStruct %_runtimearr_Row_0
+%_ptr_StorageBuffer_Table = OpTypePointer StorageBuffer %Table
+          %_ = OpVariable %_ptr_StorageBuffer_Table StorageBuffer
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_StorageBuffer_Row_0 = OpTypePointer StorageBuffer %Row_0
+      %int_1 = OpConstant %int 1
+     %v3uint = OpTypeVector %uint 3
+     %uint_1 = OpConstant %uint 1
+%gl_WorkGroupSize = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+          %r = OpVariable %_ptr_Function_Row Function
+         %21 = OpAccessChain %_ptr_StorageBuffer_Row_0 %_ %int_0 %int_0
+         %22 = OpLoad %Row_0 %21
+         %23 = OpCopyLogical %Row %22
+               OpStore %r %23
+         %25 = OpLoad %Row %r
+         %26 = OpAccessChain %_ptr_StorageBuffer_Row_0 %_ %int_0 %int_1
+         %27 = OpCopyLogical %Row_0 %25
+               OpStore %26 %27
+               OpReturn
+               OpFunctionEnd

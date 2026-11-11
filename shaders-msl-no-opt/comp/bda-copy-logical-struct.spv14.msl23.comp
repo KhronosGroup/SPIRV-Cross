@@ -1,0 +1,28 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+
+layout(local_size_x = 1) in;
+
+layout(buffer_reference, std430) buffer Words
+{
+	uint words[];
+};
+
+struct Row
+{
+	Words a;
+	Words b;
+	uint count;
+};
+
+layout(set = 0, binding = 0, std430) buffer Table
+{
+	Row rows[];
+};
+
+void main()
+{
+	Row r = rows[0];
+	r.a.words[0] = r.b.words[0] + r.count;
+	rows[1] = r;
+}
