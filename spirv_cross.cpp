@@ -2387,6 +2387,8 @@ bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint
 	seen.insert(index);
 
 	auto &type = compiler.expression_type(id);
+	if (index >= uint32_t(type.member_types.size()))
+		SPIRV_CROSS_THROW("Member index is out of bounds!");
 	uint32_t offset = compiler.type_struct_member_offset(type, index);
 
 	size_t range;
@@ -4728,6 +4730,8 @@ bool Compiler::ActiveBuiltinHandler::handle(Op opcode, const uint32_t *args, uin
 			else if (type->basetype == SPIRType::Struct)
 			{
 				uint32_t index = compiler.get<SPIRConstant>(args[i]).scalar();
+				if (index >= uint32_t(type->member_types.size()))
+					SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 				if (index < uint32_t(compiler.ir.meta[type->self].members.size()))
 				{
