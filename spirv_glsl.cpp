@@ -2774,6 +2774,9 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
 
+	if (ssbo && !options.es && options.version < 430)
+		require_extension_internal("GL_ARB_shader_storage_buffer_object");
+
 	bool shared = storage == StorageClassWorkgroup;
 	if (shared)
 		require_extension_internal("GL_EXT_shared_memory_block");
