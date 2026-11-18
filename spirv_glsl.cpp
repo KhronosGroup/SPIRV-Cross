@@ -10017,15 +10017,16 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	const uint32_t *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
 
-	if (!options.vulkan_semantics && !is_supported_subgroup_op_in_opengl(op, ops))
-		SPIRV_CROSS_THROW("This subgroup operation is only supported in Vulkan semantics.");
+	bool khr_subgroup = options.vulkan_semantics || (options.es ? options.version >= 310 : options.version >= 140);
+	if (!khr_subgroup && !is_supported_subgroup_op_in_opengl(op, ops))
+		SPIRV_CROSS_THROW("This subgroup operation is only supported in Vulkan semantics or with GL_KHR_shader_subgroup.");
 
 	// If we need to do implicit bitcasts, make sure we do it with the correct type.
 	uint32_t integer_width = get_integer_width_for_instruction(i);
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
 
-	if (options.vulkan_semantics)
+	if (khr_subgroup)
 	{
 		auto &return_type = get<SPIRType>(ops[0]);
 		switch (return_type.basetype)

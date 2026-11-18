@@ -1,0 +1,37 @@
+#version 450
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_KHR_shader_subgroup_clustered : require
+#extension GL_KHR_shader_subgroup_quad : require
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	uint u;
+	int i;
+	float f;
+	bool b;
+};
+
+void main()
+{
+	// arithmetic
+	u = subgroupMin(u) + subgroupMax(u) + subgroupAnd(u) + subgroupOr(u) + subgroupXor(u);
+	i = subgroupInclusiveMin(i) + subgroupExclusiveMax(i);
+	f = subgroupMin(f) + subgroupInclusiveMax(f);
+	b = subgroupAnd(b) || subgroupOr(b) || subgroupXor(b);
+
+	// shuffle
+	f = subgroupShuffle(f, 1u) + subgroupShuffleXor(f, 2u);
+
+	// shuffle relative
+	u = subgroupShuffleUp(u, 1u) + subgroupShuffleDown(u, 1u);
+
+	// clustered
+	u = subgroupClusteredAdd(u, 4u) + subgroupClusteredMin(u, 4u) + subgroupClusteredXor(u, 4u);
+	b = subgroupClusteredOr(b, 8u);
+
+	// quad
+	f = subgroupQuadBroadcast(f, 2u) + subgroupQuadSwapHorizontal(f) + subgroupQuadSwapVertical(f) + subgroupQuadSwapDiagonal(f);
+}
