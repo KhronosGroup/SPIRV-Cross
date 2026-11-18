@@ -1783,7 +1783,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		uint32_t alignment = 1;
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
-			auto member_flags = ir.meta[type.self].members[i].decoration_flags;
+			auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 			alignment =
 			    max(alignment, type_to_packed_alignment(get<SPIRType>(type.member_types[i]), member_flags, packing));
 		}
@@ -1927,7 +1927,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
-			auto member_flags = ir.meta[type.self].members[i].decoration_flags;
+			auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 			auto &member_type = get<SPIRType>(type.member_types[i]);
 
 			uint32_t packed_alignment = type_to_packed_alignment(member_type, member_flags, packing);
@@ -2027,8 +2027,7 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	{
 		auto &memb_type = get<SPIRType>(type.member_types[i]);
 
-		auto *type_meta = ir.find_meta(type.self);
-		auto member_flags = type_meta ? type_meta->members[i].decoration_flags : Bitset{};
+		auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 
 		// Verify alignment rules.
 		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
