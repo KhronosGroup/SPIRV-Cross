@@ -458,6 +458,7 @@ protected:
 	virtual void emit_texture_op(const Instruction &i, bool sparse);
 	virtual std::string to_texture_op(const Instruction &i, bool sparse, bool *forward,
 	                                  SmallVector<uint32_t> &inherited_expressions);
+	virtual bool supports_depth_image_without_comparison() const;
 	virtual void emit_subgroup_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0);
 	virtual std::string builtin_to_glsl(BuiltIn builtin, StorageClass storage);

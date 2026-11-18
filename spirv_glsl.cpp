@@ -8335,6 +8335,9 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	}
 	else
 	{
+		if (!supports_depth_image_without_comparison() && comparison_ids.count(samp_id) && !comparison_ids.count(result_id))
+			SPIRV_CROSS_THROW("Cannot use the same sampler for comparison and normal sampling in GLSL.");
+
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
 		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
 	}
@@ -8445,6 +8448,11 @@ void CompilerGLSL::emit_texture_op(const Instruction &i, bool sparse)
 	}
 }
 
+bool CompilerGLSL::supports_depth_image_without_comparison() const
+{
+	return false;
+}
+
 std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool *forward,
                                         SmallVector<uint32_t> &inherited_expressions)
 {
@@ -8547,6 +8555,9 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	// Bypass pointers because we need the real image struct
 	auto &type = expression_type(img);
 	auto &imgtype = get<SPIRType>(type.self);
+
+	if (!dref && is_depth_image(imgtype, img) && !supports_depth_image_without_comparison())
+		SPIRV_CROSS_THROW("Cannot sample a depth/comparison image without a comparison value in GLSL.");
 
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
