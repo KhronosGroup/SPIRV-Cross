@@ -5997,6 +5997,22 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
+	case OpUCountLeadingZerosINTEL:
+	case OpUCountTrailingZerosINTEL:
+	case OpAbsISubINTEL:
+	case OpAbsUSubINTEL:
+	case OpIAddSatINTEL:
+	case OpUAddSatINTEL:
+	case OpIAverageINTEL:
+	case OpUAverageINTEL:
+	case OpIAverageRoundedINTEL:
+	case OpUAverageRoundedINTEL:
+	case OpISubSatINTEL:
+	case OpUSubSatINTEL:
+	case OpIMul32x16INTEL:
+	case OpUMul32x16INTEL:
+		SPIRV_CROSS_THROW("SPV_INTEL_shader_integer_functions2 is not supported in HLSL.");
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	{

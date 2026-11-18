@@ -15039,6 +15039,85 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	// SPV_INTEL_shader_integer_functions2
+	case OpUCountLeadingZerosINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "countLeadingZeros", uint_type, uint_type);
+		break;
+
+	case OpUCountTrailingZerosINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "countTrailingZeros", uint_type, uint_type);
+		break;
+
+	case OpAbsISubINTEL:
+	case OpAbsUSubINTEL:
+	{
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		string cast_op0, cast_op1;
+		auto input_type = opcode == OpAbsISubINTEL ? int_type : uint_type;
+		auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, input_type, ops[2], ops[3], false);
+		expected_type.basetype = uint_type;
+		auto &out_type = get<SPIRType>(ops[0]);
+		auto expr = join("absoluteDifference(", cast_op0, ", ", cast_op1, ")");
+		if (out_type.basetype != uint_type)
+			expr = join(bitcast_glsl_op(out_type, expected_type), "(", expr, ")");
+		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[3]));
+		inherit_expression_dependencies(ops[1], ops[2]);
+		inherit_expression_dependencies(ops[1], ops[3]);
+		break;
+	}
+
+	case OpIAddSatINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(addSaturate, int_type);
+		break;
+
+	case OpUAddSatINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(addSaturate, uint_type);
+		break;
+
+	case OpIAverageINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(average, int_type);
+		break;
+
+	case OpUAverageINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(average, uint_type);
+		break;
+
+	case OpIAverageRoundedINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(averageRounded, int_type);
+		break;
+
+	case OpUAverageRoundedINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(averageRounded, uint_type);
+		break;
+
+	case OpISubSatINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(subtractSaturate, int_type);
+		break;
+
+	case OpUSubSatINTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(subtractSaturate, uint_type);
+		break;
+
+	case OpIMul32x16INTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(multiply32x16, int_type);
+		break;
+
+	case OpUMul32x16INTEL:
+		require_extension_internal("GL_INTEL_shader_integer_functions2");
+		GLSL_BFOP_CAST(multiply32x16, uint_type);
+		break;
+
 	// Atomics
 	case OpAtomicExchange:
 	{
