@@ -13380,6 +13380,11 @@ void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id
 	set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
 }
 
+bool CompilerMSL::supports_depth_image_without_comparison() const
+{
+	return true;
+}
+
 string CompilerMSL::to_texture_op(const Instruction &i, bool sparse, bool *forward,
                                   SmallVector<uint32_t> &inherited_expressions)
 {

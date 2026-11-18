@@ -943,6 +943,7 @@ protected:
 	                                   SPIRType::BaseType expected_result_type);
 	std::string to_texture_op(const Instruction &i, bool sparse, bool *forward,
 	                          SmallVector<uint32_t> &inherited_expressions) override;
+	bool supports_depth_image_without_comparison() const override;
 	void emit_fixup() override;
 	std::string to_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                             const std::string &qualifier = "");
