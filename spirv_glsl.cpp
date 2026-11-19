@@ -12629,7 +12629,7 @@ bool CompilerGLSL::skip_argument(uint32_t id) const
 	return false;
 }
 
-bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string &lhs, const string &rhs)
+bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string &lhs, const string &rhs, uint32_t lhs_id)
 {
 	// Do this with strings because we have a very clear pattern we can check for and it avoids
 	// adding lots of special cases to the code emission.
@@ -12656,6 +12656,11 @@ bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string
 
 	char bop = rhs[op];
 	auto expr = rhs.substr(lhs.size() + 3);
+
+	// PowerVR GLES drivers silently drop bitwise compound assignments (|=, &=, ^=) when the lhs is
+	// mediump/lowp and the rhs has higher precision. Write these out as "a = a | b" instead.
+	if (options.es && (bop == '|' || bop == '&' || bop == '^') && lhs_id && has_decoration(lhs_id, DecorationRelaxedPrecision))
+		return false;
 
 	// Avoids false positives where we get a = a * b + c.
 	// Normally, these expressions are always enclosed, but unexpected code paths may end up hitting this.
@@ -12795,7 +12800,7 @@ void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_ex
 			// While this is purely cosmetic, this is important for legacy ESSL where loop
 			// variable increments must be in either i++ or i += const-expr.
 			// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-			if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
+			if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs, lhs_expression))
 				statement(lhs, " = ", rhs, ";");
 		}
 		register_write(lhs_expression);
@@ -18509,7 +18514,7 @@ void CompilerGLSL::flush_phi(BlockID from, BlockID to)
 				else
 					rhs = to_pointer_expression(phi.local_variable);
 
-				if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs))
+				if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs, phi.function_variable))
 					statement(lhs, " = ", rhs, ";");
 			}
 
