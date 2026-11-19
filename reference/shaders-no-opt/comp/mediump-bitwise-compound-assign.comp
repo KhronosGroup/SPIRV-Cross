@@ -1,0 +1,69 @@
+#version 310 es
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct S
+{
+    mediump uint v;
+    uint w;
+};
+
+layout(binding = 0, std430) readonly buffer Input
+{
+    uvec2 inputs[];
+} _29;
+
+layout(binding = 1, std430) writeonly buffer Output
+{
+    uint outputs[];
+} _165;
+
+shared mediump uint sh[64];
+
+void inout_param(inout mediump uint a, uint b)
+{
+    a = a | b;
+}
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+    uint x = _29.inputs[idx].x;
+    uint y = _29.inputs[idx].y;
+    mediump uint a = x;
+    a = a | y;
+    a = a & y;
+    a = a ^ y;
+    mediump uint b = x;
+    b = b | y;
+    uint s = y & 7u;
+    mediump uint d = x;
+    d = d << s;
+    d = d >> s;
+    mediump uvec2 c = uvec2(x, 0u);
+    c = c | uvec2(y);
+    mediump uint arr[2] = uint[](0u, x);
+    uint i = (y >> 20u) & 1u;
+    arr[i] = arr[i] | y;
+    S st;
+    st.v = x;
+    st.w = 0u;
+    st.v = st.v | y;
+    mediump uvec2 vec = uvec2(x, 0u);
+    vec.x = vec.x | y;
+    vec[i] = vec[i] ^ y;
+    sh[gl_LocalInvocationID.x] = x;
+    sh[gl_LocalInvocationID.x] = sh[gl_LocalInvocationID.x] & y;
+    mediump uint p = x;
+    mediump uint param = p;
+    uint param_1 = y;
+    inout_param(param, param_1);
+    p = param;
+    uint h = x;
+    h |= y;
+    h &= y;
+    h ^= y;
+    h = h << s;
+    h = h >> s;
+    _165.outputs[idx] = (((((((((a + b) + c.x) + c.y) + d) + h) + arr[i]) + st.v) + vec.x) + sh[gl_LocalInvocationID.x]) + p;
+}
+
