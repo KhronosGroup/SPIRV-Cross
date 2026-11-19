@@ -4313,7 +4313,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		if (get_execution_model() == ExecutionModelFragment && storage == StorageClassOutput && !patch &&
 		    ((is_builtin && ((bi_type == BuiltInFragDepth && (!msl_options.enable_frag_depth_builtin || uses_explicit_early_fragment_test())) ||
 		                     (bi_type == BuiltInFragStencilRefEXT && (!msl_options.enable_frag_stencil_ref_builtin || uses_explicit_early_fragment_test())))) ||
-		     (!is_builtin && !(msl_options.enable_frag_output_mask & (1 << location)))))
+		     (!is_builtin && location < 32 && !(msl_options.enable_frag_output_mask & (1u << location)))))
 		{
 			hidden = true;
 			disabled_frag_outputs.push_back(var_id);
@@ -14506,7 +14506,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		}
 		uint32_t locn = get_member_location(type.self, index);
 		// Metal will likely complain about missing color attachments, too.
-		if (locn != k_unknown_location && !(msl_options.enable_frag_output_mask & (1 << locn)))
+		if (locn != k_unknown_location && locn < 32 && !(msl_options.enable_frag_output_mask & (1u << locn)))
 			return "";
 		if (locn != k_unknown_location && has_member_decoration(type.self, index, DecorationIndex))
 			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex),
