@@ -1,0 +1,61 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 32
+; Schema: 0
+               OpCapability Shader
+               OpCapability IntegerFunctions2INTEL
+               OpExtension "SPV_INTEL_shader_integer_functions2"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 450
+               OpName %main "main"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "i0"
+               OpMemberName %SSBO 1 "i1"
+               OpMemberName %SSBO 2 "u0"
+               OpMemberName %SSBO 3 "u1"
+               OpName %ssbo "ssbo"
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpMemberDecorate %SSBO 1 Offset 4
+               OpMemberDecorate %SSBO 2 Offset 8
+               OpMemberDecorate %SSBO 3 Offset 12
+               OpDecorate %SSBO BufferBlock
+               OpDecorate %ssbo DescriptorSet 0
+               OpDecorate %ssbo Binding 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+       %uint = OpTypeInt 32 0
+       %SSBO = OpTypeStruct %int %int %uint %uint
+%_ptr_Uniform_SSBO = OpTypePointer Uniform %SSBO
+       %ssbo = OpVariable %_ptr_Uniform_SSBO Uniform
+%_ptr_Uniform_int = OpTypePointer Uniform %int
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_2 = OpConstant %int 2
+      %int_3 = OpConstant %int 3
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %p0 = OpAccessChain %_ptr_Uniform_int %ssbo %int_0
+         %p1 = OpAccessChain %_ptr_Uniform_int %ssbo %int_1
+         %p2 = OpAccessChain %_ptr_Uniform_uint %ssbo %int_2
+         %p3 = OpAccessChain %_ptr_Uniform_uint %ssbo %int_3
+         %i0 = OpLoad %int %p0
+         %i1 = OpLoad %int %p1
+         %u0 = OpLoad %uint %p2
+         %u1 = OpLoad %uint %p3
+          %a = OpAbsISubINTEL %int %i0 %i1
+               OpStore %p0 %a
+          %b = OpIAddSatINTEL %uint %u0 %u1
+               OpStore %p2 %b
+          %c = OpUCountLeadingZerosINTEL %int %i1
+               OpStore %p1 %c
+          %d = OpUAverageINTEL %int %i0 %i1
+               OpStore %p0 %d
+          %e = OpAbsUSubINTEL %uint %i0 %u1
+               OpStore %p3 %e
+               OpReturn
+               OpFunctionEnd

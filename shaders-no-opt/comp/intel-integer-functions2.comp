@@ -1,0 +1,31 @@
+#version 450
+#extension GL_INTEL_shader_integer_functions2 : require
+layout(local_size_x = 1) in;
+
+layout(std430, binding = 0) buffer SSBO
+{
+	uint u0, u1;
+	int i0, i1;
+	uvec2 uv0, uv1;
+	ivec4 iv0, iv1;
+};
+
+void main()
+{
+	u0 = countLeadingZeros(u0) + countTrailingZeros(u1);
+	uv0 = countLeadingZeros(uv0) + countTrailingZeros(uv1);
+
+	u0 = absoluteDifference(i0, i1) + absoluteDifference(u0, u1);
+	uv0 = absoluteDifference(iv0.xy, iv1.xy) + absoluteDifference(uv0, uv1);
+
+	i0 = addSaturate(i0, i1) + subtractSaturate(i0, i1);
+	u0 = addSaturate(u0, u1) + subtractSaturate(u0, u1);
+	iv0 = addSaturate(iv0, iv1) + subtractSaturate(iv0, iv1);
+
+	i0 = average(i0, i1) + averageRounded(i0, i1);
+	uv0 = average(uv0, uv1) + averageRounded(uv0, uv1);
+
+	i0 = multiply32x16(i0, i1);
+	u0 = multiply32x16(u0, u1);
+	iv0 = multiply32x16(iv0, iv1);
+}
