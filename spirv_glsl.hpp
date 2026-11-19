@@ -1055,7 +1055,8 @@ protected:
 	void emit_while_loop_initializers(const SPIRBlock &block);
 	std::string undef_loop_variable_initializer_suffix(const SPIRVariable &var);
 	bool for_loop_initializers_are_same_type(const SPIRBlock &block);
-	bool optimize_read_modify_write(const SPIRType &type, const std::string &lhs, const std::string &rhs);
+	bool optimize_read_modify_write(const SPIRType &type, const std::string &lhs, const std::string &rhs,
+	                                 uint32_t lhs_id = 0);
 	void fixup_image_load_store_access();
 
 	bool type_is_empty(const SPIRType &type);
