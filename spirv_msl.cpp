@@ -3926,9 +3926,10 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	// IO blocks are not masked here, we need to mask them per-member instead.
 	if (storage == StorageClassOutput && is_stage_output_variable_masked(var))
 	{
-		// If we ignore an output, we must still emit it, since it might be used by app.
-		// Instead, just emit it as early declaration.
-		emit_local_masked_variable(var, meta.strip_array);
+		// Mesh outputs already have a local threadgroup declaration. Other stages still
+		// need local storage for masked outputs the shader may read or write.
+		if (!is_mesh_shader())
+			emit_local_masked_variable(var, meta.strip_array);
 		return;
 	}
 
