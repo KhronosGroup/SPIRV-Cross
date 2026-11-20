@@ -3947,7 +3947,36 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	}
 
 	if (storage == StorageClassInput && has_decoration(var.self, DecorationPerVertexKHR))
-		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
+	{
+		if (!msl_options.supports_msl_version(4, 0) || get_execution_model() != ExecutionModelFragment ||
+		    var_type.array.size() != 1 || to_array_size_literal(var_type) != 3 || !var_type.parent_type ||
+		    var_type.basetype == SPIRType::Struct || is_matrix(var_type) ||
+		    !has_decoration(var.self, DecorationLocation) || has_decoration(var.self, DecorationComponent))
+			SPIRV_CROSS_THROW("PerVertexKHR requires a three-vertex scalar or vector input in MSL 4.0.");
+
+		add_header_line("#include <metal_vertex_value>");
+		add_resource_name(var.self);
+		const auto member = uint32_t(ib_type.member_types.size());
+		const auto location = get_decoration(var.self, DecorationLocation);
+		const auto name = join("spvPerVertex", location);
+		ib_type.member_types.push_back(var_type.parent_type);
+		set_member_name(ib_type.self, member, name);
+		set_member_decoration(ib_type.self, member, DecorationLocation, location);
+		set_member_decoration(ib_type.self, member, DecorationPerVertexKHR);
+		set_extended_member_decoration(ib_type.self, member, SPIRVCrossDecorationInterfaceOrigID, var.self);
+		mark_location_as_used_by_shader(location, get<SPIRType>(var_type.parent_type), storage);
+
+		emit_local_masked_variable(var, false);
+		const auto member_ref = join(ib_var_ref, ".", name);
+		ID id = var.self;
+		entry_func.fixup_hooks_in.push_back([this, id, member_ref]() {
+			const auto local = to_name(id);
+			statement(local, "[0] = ", member_ref, ".get(vertex_index::first);");
+			statement(local, "[1] = ", member_ref, ".get(vertex_index::second);");
+			statement(local, "[2] = ", member_ref, ".get(vertex_index::third);");
+		});
+		return;
+	}
 
 	// If variable names alias, they will end up with wrong names in the interface struct, because
 	// there might be aliases in the member name cache and there would be a mismatch in fixup_in code.
@@ -14155,6 +14184,13 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
                                      const string &qualifier, uint32_t)
 {
+	if (has_member_decoration(type.self, index, DecorationPerVertexKHR))
+	{
+		statement("vertex_value<", type_to_glsl(get<SPIRType>(member_type_id)), "> ",
+		          to_member_name(type, index), member_attribute_qualifier(type, index), ";");
+		return;
+	}
+
 	// If this member requires padding to maintain its declared offset, emit a dummy padding member before it.
 	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPaddingTarget))
 	{
