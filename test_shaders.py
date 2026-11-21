@@ -385,6 +385,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-emulate-depth-clip-enable')
     if '.fixup-clipspace.' in shader:
         msl_args.append('--fixup-clipspace')
+    if '.flip-vert-y.' in shader:
+        msl_args.append('--flip-vert-y')
     if '.lod-as-grad.' in shader:
         msl_args.append('--msl-sample-dref-lod-array-as-grad')
     if '.agx-cube-grad.' in shader:
