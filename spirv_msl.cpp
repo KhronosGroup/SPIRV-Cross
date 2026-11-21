@@ -21229,6 +21229,12 @@ void CompilerMSL::emit_mesh_outputs()
 					statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index, "] = ", to_name(orig_var), "[spvVI]", access, ";");
 				}
 			}
+			else if (has_decoration(orig_var, DecorationBuiltIn) &&
+			         BuiltIn(get_decoration(orig_var, DecorationBuiltIn)) == BuiltInPosition)
+			{
+				// Position can also be a standalone output array instead of a gl_MeshPerVertexEXT member.
+				builtin = BuiltInPosition;
+			}
 
 			auto &elem_type = get_variable_element_type(orig);
 			uint32_t part = get_member_decoration(type_vert.self, index, DecorationIndex);
