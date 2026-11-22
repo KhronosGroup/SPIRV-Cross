@@ -11510,6 +11510,11 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 	if (rhs_var && rhs_storage == StorageClassOutput && is_builtin_variable(*rhs_var))
 		rhs_is_array_template = false;
 
+	// Mesh shader outputs are remapped to threadgroup storage, but clip distance is still a native array there.
+	if (lhs_var && is_mesh_shader() && lhs_var->storage == StorageClassOutput &&
+	    has_decoration(lhs_id, DecorationBuiltIn) && get_decoration(lhs_id, DecorationBuiltIn) == BuiltInClipDistance)
+		lhs_is_array_template = false;
+
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
 	if (lhs_is_array_template && rhs_is_array_template && !using_builtin_array())

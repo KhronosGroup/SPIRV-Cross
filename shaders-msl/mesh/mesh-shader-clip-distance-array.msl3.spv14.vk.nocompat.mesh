@@ -1,0 +1,30 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+out gl_MeshPerVertexEXT
+{
+	vec4 gl_Position;
+	float gl_ClipDistance[4];
+} gl_MeshVerticesEXT[];
+
+vec4 distances(vec4 pos, out float clip[4])
+{
+	for (int i = 0; i < 4; i++)
+		clip[i] = pos[i];
+	return pos;
+}
+
+void main()
+{
+	SetMeshOutputsEXT(3, 1);
+	for (int i = 0; i < 3; i++)
+	{
+		float clip[4];
+		gl_MeshVerticesEXT[i].gl_Position = distances(vec4(i), clip);
+		gl_MeshVerticesEXT[i].gl_ClipDistance = clip;
+	}
+	gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+}
