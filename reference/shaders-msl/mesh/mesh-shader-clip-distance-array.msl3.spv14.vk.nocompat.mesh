@@ -1,0 +1,255 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+    
+    object_data T& operator [] (size_t pos) object_data
+    {
+        return elements[pos];
+    }
+    constexpr const object_data T& operator [] (size_t pos) const object_data
+    {
+        return elements[pos];
+    }
+};
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToStack(thread T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToThreadGroup(threadgroup T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToStack(thread T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToThreadGroup(threadgroup T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToStack(thread T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToThreadGroup(threadgroup T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToDevice(device T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromConstantToDevice(device T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromStackToDevice(device T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromThreadGroupToDevice(device T (&dst)[N], threadgroup const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToStack(thread T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint N>
+inline void spvArrayCopyFromDeviceToThreadGroup(threadgroup T (&dst)[N], device const T (&src)[N])
+{
+    for (uint i = 0; i < N; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+void spvSetMeshOutputsEXT(uint gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes, uint vertexCount, uint primitiveCount)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spvMeshSizes.x = vertexCount;
+        spvMeshSizes.y = primitiveCount;
+    }
+}
+
+struct gl_MeshPerVertexEXT
+{
+    float4 gl_Position [[position]];
+    float gl_ClipDistance [[clip_distance]] [4];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+    float gl_ClipDistance [[clip_distance]] [4];
+    float gl_ClipDistance_0 [[user(clip0)]];
+    float gl_ClipDistance_1 [[user(clip1)]];
+    float gl_ClipDistance_2 [[user(clip2)]];
+    float gl_ClipDistance_3 [[user(clip3)]];
+};
+
+using spvMesh_t = mesh<spvPerVertex, void, 3, 1, topology::triangle>;
+
+static inline __attribute__((always_inline))
+float4 distances(thread const float4& pos, thread spvUnsafeArray<float, 4>& clip)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        clip[i] = pos[i];
+    }
+    return pos;
+}
+
+static inline __attribute__((always_inline))
+void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 3>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
+{
+    spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 3u, 1u);
+    spvUnsafeArray<float, 4> param_1;
+    for (int i = 0; i < 3; i++)
+    {
+        float4 param = float4(float(i));
+        float4 _65 = distances(param, param_1);
+        spvUnsafeArray<float, 4> clip = param_1;
+        gl_MeshVerticesEXT[i].gl_Position = _65;
+        spvArrayCopyFromStackToThreadGroup(gl_MeshVerticesEXT[i].gl_ClipDistance, clip.elements);
+    }
+    gl_PrimitiveTriangleIndicesEXT[0] = uint3(0u, 1u, 2u);
+}
+
+[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], spvMesh_t spvMesh)
+{
+    threadgroup uint2 spvMeshSizes;
+    threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 3> gl_MeshVerticesEXT;
+    threadgroup spvUnsafeArray<uint3, 1> gl_PrimitiveTriangleIndicesEXT;
+    if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
+    _4(gl_MeshVerticesEXT, gl_PrimitiveTriangleIndicesEXT, gl_LocalInvocationIndex, spvMeshSizes);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (spvMeshSizes.y == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spvMeshSizes.y);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
+    {
+        spvPerVertex spvV = {};
+        spvV.gl_Position = gl_MeshVerticesEXT[spvVI].gl_Position;
+        spvV.gl_ClipDistance[0] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
+        spvV.gl_ClipDistance_0 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
+        spvV.gl_ClipDistance[1] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[1];
+        spvV.gl_ClipDistance_1 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[1];
+        spvV.gl_ClipDistance[2] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[2];
+        spvV.gl_ClipDistance_2 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[2];
+        spvV.gl_ClipDistance[3] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[3];
+        spvV.gl_ClipDistance_3 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[3];
+        spvMesh.set_vertex(spvVI, spvV);
+    }
+    const uint spvPI = gl_LocalInvocationIndex;
+    if (gl_LocalInvocationIndex < spvMeshSizes.y)
+    {
+        spvMesh.set_index(spvPI * 3u + 0u, gl_PrimitiveTriangleIndicesEXT[spvPI].x);
+        spvMesh.set_index(spvPI * 3u + 1u, gl_PrimitiveTriangleIndicesEXT[spvPI].y);
+        spvMesh.set_index(spvPI * 3u + 2u, gl_PrimitiveTriangleIndicesEXT[spvPI].z);
+    }
+}
+
