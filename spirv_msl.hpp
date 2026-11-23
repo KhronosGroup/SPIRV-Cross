@@ -848,6 +848,7 @@ protected:
 		SPVFuncImplSubgroupBroadcast,
 		SPVFuncImplSubgroupBroadcastFirst,
 		SPVFuncImplSubgroupBallot,
+		SPVFuncImplSubgroupInvocationIdFromBallot,
 		SPVFuncImplSubgroupBallotBitExtract,
 		SPVFuncImplSubgroupBallotFindLSB,
 		SPVFuncImplSubgroupBallotFindMSB,
@@ -1109,6 +1110,7 @@ protected:
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
 	bool is_direct_input_builtin(BuiltIn builtin);
+	bool subgroup_invocation_id_from_ballot() const;
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
 	std::string built_in_func_arg(BuiltIn builtin, bool prefix_comma);
