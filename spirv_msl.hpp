@@ -927,6 +927,7 @@ protected:
 	void emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	std::string to_ptr_expression(uint32_t id, bool register_expression_read = true);
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_binary_ord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;

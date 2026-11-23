@@ -330,7 +330,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     float2 _283 = dfdy(float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y));
     float2 _284 = abs(_283);
     float3 _287 = dfdy(_149);
-    if (PrimitiveDither.PrimitiveDither_LODFactor != 0.0)
+    if ((isordered(PrimitiveDither.PrimitiveDither_LODFactor, 0.0) && PrimitiveDither.PrimitiveDither_LODFactor != 0.0))
     {
         if (abs(PrimitiveDither.PrimitiveDither_LODFactor) > 0.001000000047497451305389404296875)
         {
