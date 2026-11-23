@@ -18,7 +18,7 @@ fragment main0_out main0()
     do
     {
         float2 _35 = float2(0.0);
-        if (_35.x != 0.0)
+        if ((isordered(_35.x, 0.0) && _35.x != 0.0))
         {
             _37 = float4(1.0, 0.0, 0.0, 1.0);
             break;

@@ -29,7 +29,7 @@ fragment main0_out main0(main0_in in [[stage_in]])
     float t0 = a;
     float t1 = b;
     bool c1 = (isunordered(a, b) || a == b);
-    c1 = a != b;
+    c1 = (isordered(a, b) && a != b);
     bool c2 = a != b;
     bool c3 = (isunordered(a, b) || a < b);
     bool c4 = (isunordered(a, b) || a > b);

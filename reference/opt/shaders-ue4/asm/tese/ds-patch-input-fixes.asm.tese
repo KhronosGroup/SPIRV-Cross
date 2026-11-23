@@ -260,6 +260,7 @@ struct main0_patchIn
     float _285 = float(int(gl_TessCoord.z == 0.0));
     float _286 = _279 + _282;
     float _287 = _286 + _285;
+    float _293 = float(int(_287 == 1.0));
     float4 _387;
     float3 _388;
     if (float(int(_287 == 2.0)) == 1.0)
@@ -274,7 +275,7 @@ struct main0_patchIn
     {
         float4 _358;
         float3 _359;
-        if (float(int(_287 == 1.0)) != 0.0)
+        if ((isordered(_293, 0.0) && _293 != 0.0))
         {
             float4 _304 = float4(_279);
             float4 _306 = float4(_282);

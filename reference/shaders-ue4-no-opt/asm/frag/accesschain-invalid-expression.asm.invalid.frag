@@ -299,7 +299,8 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     float _442 = _253 * _253;
     float _443 = fast::max(0.0, dot(_206, _429)) * _442;
     float _446 = _442 / (dot(_440, _440) + (_443 * _443));
-    bool _458 = float(_Globals.MobileReflectionParams.w > 0.0) != 0.0;
+    float _457 = float(_Globals.MobileReflectionParams.w > 0.0);
+    bool _458 = (isordered(_457, 0.0) && _457 != 0.0);
     float4 _468 = ReflectionCubemap.sample(ReflectionCubemapSampler, ((-_181) + ((_206 * float3(_208)) * float3(2.0))), level(((_458 ? _Globals.MobileReflectionParams.w : View.View_ReflectionCubemapMaxMip) - 1.0) - (1.0 - (1.2000000476837158203125 * log2(_253)))));
     float3 _481;
     if (_458)

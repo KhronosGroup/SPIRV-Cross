@@ -8821,6 +8821,20 @@ void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id,
 	inherit_expression_dependencies(result_id, op1);
 }
 
+void CompilerMSL::emit_binary_ord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                     const char *op)
+{
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id,
+	        join("(isordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
+	             ") && ", to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1),
+	             ")"),
+	        forward);
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
 bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id, uint32_t ptr)
 {
 	auto &ptr_type = expression_type(ptr);
@@ -9814,6 +9828,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define MSL_UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 #define MSL_UNORD_BOP(op) emit_binary_unord_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define MSL_ORD_BOP(op) emit_binary_ord_op(ops[0], ops[1], ops[2], ops[3], #op)
 
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
@@ -9882,12 +9897,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpLogicalNotEqual:
-	case OpFOrdNotEqual:
-		// TODO: Should probably negate the == result here.
-		// Typically OrdNotEqual comes from GLSL which itself does not really specify what
-		// happens with NaN.
-		// Consider fixing this if we run into real issues.
 		MSL_BOP(!=);
+		break;
+
+	case OpFOrdNotEqual:
+		// != in MSL, as in C, is the unordered not-equal: true when either operand is NaN.
+		// OpFOrdNotEqual must be false then, so only compare ordered operands.
+		MSL_ORD_BOP(!=);
 		break;
 
 	case OpUGreaterThan:
