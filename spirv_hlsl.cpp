@@ -3654,6 +3654,9 @@ void CompilerHLSL::emit_hlsl_tesc_entry_point()
 	};
 
 	// Patch constant function.
+	// Note: this function runs tesc_main() once per output control point, so the whole body is executed N times per
+	// patch. Pure computation is cheap (FXC removes most of the duplicated work), but a hull shader with side
+	// effects, such as UAV writes or atomics, would repeat them N times.
 	SmallVector<string> arguments;
 	if (require_input)
 		arguments.push_back(input_patch);
