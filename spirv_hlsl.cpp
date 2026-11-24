@@ -550,11 +550,13 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	bool tesc_cp_input = get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassInput;
 	if (tese_cp_input || tesc_cp_input)
 	{
-		// glslang sizes per-control-point inputs to gl_MaxPatchVertices; only the patch size is used.
+		// Only the patch size is copied in, but the shader may index up to the declared size.
 		auto type = get<SPIRType>(var.basetype);
 		if (!type.array.empty())
 		{
-			type.array.back() = tesc_cp_input ? tessellation_input_control_points() : tessellation_patch_vertices();
+			uint32_t patch_size = tesc_cp_input ? tessellation_input_control_points() : tessellation_patch_vertices();
+			if (!keeps_declared_control_point_input_size(type, patch_size))
+				type.array.back() = patch_size;
 			type.array_size_literal.back() = true;
 		}
 		statement("static ", variable_decl(type, to_name(var.self), var.self), ";");
@@ -1358,10 +1360,10 @@ void CompilerHLSL::emit_builtin_variables()
 					array_size = input_vertices_from_execution_mode(get_entry_point());
 				else if (storage == StorageClass::StorageClassInput &&
 				         get_execution_model() == ExecutionModelTessellationControl)
-					array_size = tessellation_input_control_points();
+					array_size = std::max(tessellation_input_control_points(), declared_control_point_input_size(builtin));
 				else if (get_execution_model() == ExecutionModelTessellationEvaluation &&
 				         storage == StorageClass::StorageClassInput)
-					array_size = tessellation_patch_vertices();
+					array_size = std::max(tessellation_patch_vertices(), declared_control_point_input_size(builtin));
 				else if (get_execution_model() == ExecutionModelTessellationControl &&
 				         storage == StorageClass::StorageClassOutput)
 					array_size = tessellation_patch_vertices(); // every output control point (gl_out[])
@@ -3283,6 +3285,79 @@ void CompilerHLSL::emit_tess_factors_in_struct()
 	{
 		statement("float gl_TessLevelOuter[3] : SV_TessFactor;");
 		statement("float gl_TessLevelInner : SV_InsideTessFactor;");
+	}
+}
+
+// glslang sizes implicit per-control-point input arrays to gl_MaxPatchVertices, which is 32 in the Vulkan limits.
+// Such an array says nothing beyond "arrayed per control point", so it is still shrunk to the patch size.
+// Any other literal size larger than the patch size is the shader's own and stays: it may index up to it.
+bool CompilerHLSL::keeps_declared_control_point_input_size(const SPIRType &type, uint32_t patch_size) const
+{
+	const uint32_t max_patch_vertices = 32;
+	return !type.array.empty() && type.array_size_literal.back() && type.array.back() > patch_size &&
+	       type.array.back() != max_patch_vertices;
+}
+
+// Declared outermost array size of the per-control-point input that holds the builtin
+// (gl_in[] or a standalone arrayed builtin), 0 if none.
+uint32_t CompilerHLSL::declared_control_point_input_size(BuiltIn builtin) const
+{
+	uint32_t size = 0;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (var.storage != StorageClassInput || !interface_variable_exists_in_entry_point(var.self))
+			return;
+		auto &type = this->get<SPIRType>(var.basetype);
+		if (type.array.empty() || !keeps_declared_control_point_input_size(type, 0))
+			return;
+		bool holds = has_decoration(var.self, DecorationBuiltIn) && BuiltIn(get_decoration(var.self, DecorationBuiltIn)) == builtin;
+		for (uint32_t i = 0; !holds && i < uint32_t(type.member_types.size()); i++)
+			holds = has_member_decoration(type.self, i, DecorationBuiltIn) &&
+			        BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)) == builtin;
+		if (holds)
+			size = type.array.back();
+	});
+	return size;
+}
+
+// SPIR-V may put the domain, spacing and winding on either tessellation stage, and the patch size on the
+// control stage only. When the module also has the other stage, take from it what this one lacks.
+void CompilerHLSL::complete_tessellation_execution_modes()
+{
+	auto &execution = get_entry_point();
+	ExecutionModel other_model;
+	if (execution.model == ExecutionModelTessellationControl)
+		other_model = ExecutionModelTessellationEvaluation;
+	else if (execution.model == ExecutionModelTessellationEvaluation)
+		other_model = ExecutionModelTessellationControl;
+	else
+		return;
+
+	for (auto &ep : ir.entry_points)
+	{
+		auto &other = ep.second;
+		if (other.model != other_model)
+			continue;
+
+		// Each group is one choice; take the other stage's only when this stage made none.
+		auto take = [&](std::initializer_list<ExecutionMode> group) {
+			for (auto mode : group)
+				if (execution.flags.get(mode))
+					return;
+			for (auto mode : group)
+				if (other.flags.get(mode))
+					execution.flags.set(mode);
+		};
+		take({ ExecutionModeTriangles, ExecutionModeQuads, ExecutionModeIsolines });
+		take({ ExecutionModeSpacingEqual, ExecutionModeSpacingFractionalEven, ExecutionModeSpacingFractionalOdd });
+		take({ ExecutionModeVertexOrderCw, ExecutionModeVertexOrderCcw });
+		take({ ExecutionModePointMode });
+
+		if (!execution.flags.get(ExecutionModeOutputVertices) && other.flags.get(ExecutionModeOutputVertices))
+		{
+			execution.flags.set(ExecutionModeOutputVertices);
+			execution.output_vertices = other.output_vertices;
+		}
+		break;
 	}
 }
 
@@ -7725,6 +7800,7 @@ string CompilerHLSL::compile()
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
 
+	complete_tessellation_execution_modes();
 	fixup_anonymous_struct_names();
 	fixup_type_alias();
 	reorder_type_alias();

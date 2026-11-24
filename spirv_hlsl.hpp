@@ -249,6 +249,9 @@ private:
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
 	uint32_t tessellation_patch_vertices() const;
 	uint32_t tessellation_input_control_points() const;
+	uint32_t declared_control_point_input_size(BuiltIn builtin) const;
+	bool keeps_declared_control_point_input_size(const SPIRType &type, uint32_t patch_size) const;
+	void complete_tessellation_execution_modes();
 	bool is_tess_patch_variable(const SPIRVariable &var) const;
 	void emit_tess_factors_in_struct();
 	struct TessControlPointIO
