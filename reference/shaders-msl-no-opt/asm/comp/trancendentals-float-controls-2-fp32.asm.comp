@@ -6,8 +6,9 @@
 using namespace metal;
 
 template<typename T>
-[[clang::optnone]] T spvFAdd(T l, T r)
+static inline __attribute__((always_inline)) T spvFAdd(T l, T r)
 {
+    #pragma clang fp contract(off)
     return fma(T(1), l, r);
 }
 

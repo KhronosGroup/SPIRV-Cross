@@ -6106,8 +6106,8 @@ void CompilerMSL::emit_custom_templates()
 // From MSL 3.2 the body is compiled with safe math and without contraction
 // through the scoped fp pragmas, so every operation stays exactly as written
 // while the helper can still be inlined. Earlier MSL versions have no such
-// pragmas; there the helper is optnone, which keeps it exact but turns every
-// use into a real function call.
+// pragmas; there clang's own "#pragma clang fp contract(off)" keeps the
+// helper's operations from being contracted, and the helper is forced inline.
 void CompilerMSL::emit_precise_helper_begin(const char *signature)
 {
 	if (msl_options.supports_msl_version(3, 2))
@@ -6119,8 +6119,9 @@ void CompilerMSL::emit_precise_helper_begin(const char *signature)
 	}
 	else
 	{
-		statement("[[clang::optnone]] ", signature);
+		statement("static inline __attribute__((always_inline)) ", signature);
 		begin_scope();
+		statement("#pragma clang fp contract(off)");
 	}
 }
 
