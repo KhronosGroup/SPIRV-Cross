@@ -1,0 +1,50 @@
+; SPIR-V
+; Version: 1.3
+; A call whose argument is an expression of a loaded variable must not be forwarded past a
+; store to that variable: the result is f(-1.0), not f(-5.0).
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %f "f"
+               OpName %x "x"
+               OpName %Out "Out"
+               OpName %out "out"
+               OpDecorate %_runtimearr_float ArrayStride 4
+               OpMemberDecorate %Out 0 Offset 0
+               OpDecorate %Out Block
+               OpDecorate %out DescriptorSet 0
+               OpDecorate %out Binding 0
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+    %float_1 = OpConstant %float 1
+    %float_5 = OpConstant %float 5
+%_runtimearr_float = OpTypeRuntimeArray %float
+        %Out = OpTypeStruct %_runtimearr_float
+%_ptr_StorageBuffer_Out = OpTypePointer StorageBuffer %Out
+%_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
+%_ptr_Function_float = OpTypePointer Function %float
+        %out = OpVariable %_ptr_StorageBuffer_Out StorageBuffer
+       %fn_v = OpTypeFunction %void
+      %fn_ff = OpTypeFunction %float %float
+          %f = OpFunction %float None %fn_ff
+          %a = OpFunctionParameter %float
+         %fl = OpLabel
+         %fr = OpFMul %float %a %a
+               OpReturnValue %fr
+               OpFunctionEnd
+       %main = OpFunction %void None %fn_v
+      %entry = OpLabel
+          %x = OpVariable %_ptr_Function_float Function
+               OpStore %x %float_1
+         %lx = OpLoad %float %x
+         %nx = OpFNegate %float %lx
+          %r = OpFunctionCall %float %f %nx
+               OpStore %x %float_5
+        %dst = OpAccessChain %_ptr_StorageBuffer_float %out %int_0 %int_0
+               OpStore %dst %r
+               OpReturn
+               OpFunctionEnd
