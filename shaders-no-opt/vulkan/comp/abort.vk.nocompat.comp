@@ -1,0 +1,10 @@
+#version 450
+#extension GL_EXT_abort : require
+
+void main()
+{
+	if (gl_WorkGroupID.x == 2)
+		abortEXT("nya nya", 40);
+	else
+		abortEXT("nya nya2");
+}
