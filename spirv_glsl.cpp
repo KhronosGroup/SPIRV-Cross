@@ -13675,6 +13675,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			for (uint32_t i = 0; i < length; i++)
 				register_read(id, arg[i], forward);
 
+			// A forwarded call also depends on whatever its arguments depend on, e.g. on a
+			// variable that an argument such as -x loaded, which may be stored to before the
+			// result is used.
+			for (uint32_t i = 0; i < length; i++)
+				inherit_expression_dependencies(id, arg[i]);
+
 			// If we're going to forward the temporary result,
 			// put dependencies on every variable that must not change.
 			if (forward)
