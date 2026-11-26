@@ -13817,6 +13817,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
 			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT,
 			                                  &meta, nullptr);
+
+			const SPIRType *remapped_bool_struct_type = nullptr;
+			if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean && type.basetype == SPIRType::Boolean)
+			{
+				const auto *obj_type = &expression_type(ops[2]);
+				for (uint32_t i = 0; i < length; i++)
+				{
+					if (is_array(*obj_type))
+						obj_type = &get<SPIRType>(obj_type->parent_type);
+					else if (obj_type->basetype == SPIRType::Struct)
+					{
+						remapped_bool_struct_type = obj_type;
+						obj_type = &get<SPIRType>(obj_type->member_types[ops[3 + i]]);
+					}
+					else
+						break;
+				}
+			}
+
+			if (remapped_bool_struct_type)
+			{
+				if (is_array(type))
+					expr = to_rerolled_array_expression(type, expr, type);
+				else
+					expr = join(type_to_glsl(type), "(", expr, ")");
+			}
+
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
