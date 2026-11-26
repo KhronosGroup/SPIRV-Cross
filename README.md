@@ -32,7 +32,7 @@ However, most missing features are expected to be "trivial" improvements at this
 SPIRV-Cross is not a SPIR-V validator and has no intention of being one.
 SPIRV-Cross expects valid SPIR-V, otherwise undefined behavior may happen. This is similar to Vulkan drivers.
 Application is responsible for validating untrusted SPIR-V before consuming it.
-`spirv-val` from [https://github.com/KhronosGroup/SPIRV-Tools](SPIRV-Tools) should always be used before compiling a shader.
+`spirv-val` from [https://github.com/KhronosGroup/SPIRV-Tools](SPIRV-Tools) should always be used before compiling an untrusted shader.
 Bug reports or pull requests that fix "bugs" with invalid SPIR-V may be discarded.
 SPIRV-Cross will sometimes check for invalid SPIR-V and report it when it helps developers debug, but it is not a general rule.
 
