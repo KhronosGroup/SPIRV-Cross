@@ -14523,6 +14523,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 		auto &type = get<SPIRType>(result_type);
 
+		// SPIR-V doesn't short circuit, but HLLs started doing that.
+		// This messes with subgroup operations, etc.
+		flush_control_dependent_expressions(current_emitting_block->self);
+
 		if (type.vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "||", false, SPIRType::Unknown);
 		else
@@ -14536,6 +14540,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto result_type = ops[0];
 		auto id = ops[1];
 		auto &type = get<SPIRType>(result_type);
+
+		// SPIR-V doesn't short circuit, but HLLs started doing that at some point.
+		// This messes with subgroup operations, etc.
+		flush_control_dependent_expressions(current_emitting_block->self);
 
 		if (type.vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&", false, SPIRType::Unknown);
