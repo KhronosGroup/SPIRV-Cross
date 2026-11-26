@@ -464,9 +464,8 @@ protected:
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "", uint32_t base_offset = 0);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0, bool member = false);
-	std::string constant_expression(const SPIRConstant &c,
-	                                bool inside_block_like_struct_scope = false,
-	                                bool inside_struct_scope = false);
+	virtual std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
+	                                        bool inside_struct_scope = false);
 	virtual std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
@@ -648,6 +647,7 @@ protected:
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		const char *boolean_mix_function = "mix";
 		const char *printf_function = "debugPrintfEXT";
+		const char *cooperative_matrix_element_access = "";
 		std::string constant_null_initializer = "";
 		SPIRType::BaseType boolean_in_struct_remapped_type = SPIRType::Boolean;
 		bool swizzle_is_function = false;
@@ -796,6 +796,9 @@ protected:
 
 	StorageClass get_expression_effective_storage_class(uint32_t ptr);
 	virtual bool access_chain_needs_stage_io_builtin_translation(uint32_t base);
+	// Backends that declare an arrayed builtin input block (gl_in[]) as one flat array per builtin
+	// return that array's name here, so gl_in[i].gl_Position becomes <name>[i]. Empty = keep the block.
+	virtual std::string flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin);
 
 	virtual bool check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type);
 	virtual bool prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
@@ -839,6 +842,8 @@ protected:
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
 	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
+	void reroll_composite_insert_extract(std::string &expr, const SPIRType &expression_type,
+		const SPIRType &return_type, const SPIRType &composite_type, const uint32_t *chain, uint32_t count);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);

@@ -1,0 +1,68 @@
+; SPIR-V
+; Version: 1.3
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 36
+; Schema: 0
+               OpCapability Shader
+               OpCapability GroupNonUniform
+               OpCapability GroupNonUniformBallot
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 450
+               OpSourceExtension "GL_KHR_shader_subgroup_ballot"
+               OpSourceExtension "GL_KHR_shader_subgroup_basic"
+               OpName %main "main"
+               OpName %blah "blah"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "v"
+               OpName %_ ""
+               OpDecorate %SSBO Block
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %_ Binding 0
+               OpDecorate %_ DescriptorSet 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %bool = OpTypeBool
+%_ptr_Function_bool = OpTypePointer Function %bool
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+       %SSBO = OpTypeStruct %v3uint
+%_ptr_StorageBuffer_SSBO = OpTypePointer StorageBuffer %SSBO
+          %_ = OpVariable %_ptr_StorageBuffer_SSBO StorageBuffer
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+     %uint_0 = OpConstant %uint 0
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+     %uint_3 = OpConstant %uint 3
+    %uint_40 = OpConstant %uint 40
+     %uint_1 = OpConstant %uint 1
+    %uint_50 = OpConstant %uint 50
+    %uint_60 = OpConstant %uint 60
+    %uint_70 = OpConstant %uint 70
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+       %blah = OpVariable %_ptr_Function_bool Function
+         %18 = OpAccessChain %_ptr_StorageBuffer_uint %_ %int_0 %uint_0
+         %19 = OpLoad %uint %18
+         %ptr1 = OpAccessChain %_ptr_StorageBuffer_uint %_ %int_0 %uint_1
+         %load1 = OpLoad %uint %18
+         %21 = OpGroupNonUniformBroadcastFirst %uint %uint_3 %19
+         %29 = OpGroupNonUniformBroadcastFirst %uint %uint_3 %load1
+         %23 = OpINotEqual %bool %21 %uint_40
+         %31 = OpINotEqual %bool %29 %uint_50
+		 %anded = OpLogicalAnd %bool %23 %31
+         %broad0 = OpGroupNonUniformBroadcastFirst %uint %uint_3 %19
+         %broad1 = OpGroupNonUniformBroadcastFirst %uint %uint_3 %load1
+         %eq0 = OpINotEqual %bool %broad0 %uint_60
+         %eq1 = OpINotEqual %bool %broad1 %uint_70
+		 %ored = OpLogicalOr %bool %eq0 %eq1
+
+         %and_res = OpSelect %uint %anded %uint_1 %uint_0
+         %or_res = OpSelect %uint %ored %uint_1 %uint_0
+         %ptr0 = OpAccessChain %_ptr_StorageBuffer_uint %_ %int_0 %uint_0
+               OpStore %ptr0 %and_res
+               OpStore %ptr1 %or_res
+               OpReturn
+               OpFunctionEnd

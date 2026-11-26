@@ -544,6 +544,9 @@ void ParsedIR::set_member_decoration(TypeID id, uint32_t index, Decoration decor
 // as an array length. The id must be a constant instruction (SPIRConstant or SPIRConstantOp).
 void ParsedIR::mark_used_as_array_length(ID id)
 {
+	if (id >= ids.size())
+		return;
+
 	switch (ids[id].get_type())
 	{
 	case TypeConstant:
@@ -991,7 +994,8 @@ void ParsedIR::reset_all_of_type(Types type)
 
 void ParsedIR::add_typed_id(Types type, ID id)
 {
-	assert(id < ids.size());
+	if (id >= ids.size())
+		SPIRV_CROSS_THROW("ID is out of range.");
 
 	if (loop_iteration_depth_hard != 0)
 		SPIRV_CROSS_THROW("Cannot add typed ID while looping over it.");

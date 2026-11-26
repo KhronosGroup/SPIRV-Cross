@@ -1,0 +1,21 @@
+#version 450
+#extension GL_KHR_shader_subgroup_ballot : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) buffer SSBO
+{
+    uvec3 v;
+} _7;
+
+void main()
+{
+    uint _19 = _7.v.x;
+    uint _30 = _7.v.x;
+    uint _21 = subgroupBroadcastFirst(_19);
+    uint _29 = subgroupBroadcastFirst(_30);
+    uint _33 = subgroupBroadcastFirst(_19);
+    uint _34 = subgroupBroadcastFirst(_30);
+    _7.v.x = uint((_21 != 40u) && (_29 != 50u));
+    _7.v.y = uint((_33 != 60u) || (_34 != 70u));
+}
+
