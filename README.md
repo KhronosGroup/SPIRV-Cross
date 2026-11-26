@@ -27,6 +27,15 @@ The goal is to emit GLSL or MSL that looks like it was written by a human and no
 NOTE: Individual features are expected to be mostly complete, but it is possible that certain obscure GLSL features are not yet supported.
 However, most missing features are expected to be "trivial" improvements at this stage.
 
+## Security note
+
+SPIRV-Cross is not a SPIR-V validator and has no intention of being one.
+SPIRV-Cross expects valid SPIR-V, otherwise undefined behavior may happen. This is similar to Vulkan drivers.
+Application is responsible for validating untrusted SPIR-V before consuming it.
+`spirv-val` from [https://github.com/KhronosGroup/SPIRV-Tools](SPIRV-Tools) should always be used before compiling an untrusted shader.
+Bug reports or pull requests that fix "bugs" with invalid SPIR-V may be discarded.
+SPIRV-Cross will sometimes check for invalid SPIR-V and report it when it helps developers debug, but it is not a general rule.
+
 ## Building
 
 SPIRV-Cross has been tested on Linux, iOS/OSX, Windows and Android. CMake is the main build system.
