@@ -1,0 +1,56 @@
+; SPIR-V
+; Version: 1.6
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 27
+; Schema: 0
+               OpCapability Shader
+               OpCapability CooperativeMatrixKHR
+               OpCapability VulkanMemoryModel
+               OpExtension "SPV_KHR_cooperative_matrix"
+               OpExtension "SPV_KHR_vulkan_memory_model"
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 32 1 1
+               OpName %main "main"
+               OpName %twice "twice"
+               OpName %v "v"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "data"
+               OpName %ssbo "ssbo"
+               OpDecorate %arr_float ArrayStride 4
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %SSBO Block
+               OpDecorate %ssbo DescriptorSet 0
+               OpDecorate %ssbo Binding 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+     %uint_8 = OpConstant %uint 8
+    %float_2 = OpConstant %float 2
+  %arr_float = OpTypeRuntimeArray %float
+       %SSBO = OpTypeStruct %arr_float
+   %ptr_ssbo = OpTypePointer StorageBuffer %SSBO
+       %ssbo = OpVariable %ptr_ssbo StorageBuffer
+  %ptr_float = OpTypePointer StorageBuffer %float
+%coopmat_f32 = OpTypeCooperativeMatrixKHR %float %uint_3 %uint_8 %uint_8 %uint_2
+; A function that takes and returns a cooperative matrix by value.
+    %fn_type = OpTypeFunction %coopmat_f32 %coopmat_f32
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %20 = OpAccessChain %ptr_float %ssbo %uint_0 %uint_0
+         %21 = OpCooperativeMatrixLoadKHR %coopmat_f32 %20 %uint_0 %uint_8
+         %22 = OpFunctionCall %coopmat_f32 %twice %21
+         %23 = OpCopyObject %coopmat_f32 %22
+               OpCooperativeMatrixStoreKHR %20 %23 %uint_0 %uint_8
+               OpReturn
+               OpFunctionEnd
+      %twice = OpFunction %coopmat_f32 None %fn_type
+          %v = OpFunctionParameter %coopmat_f32
+         %25 = OpLabel
+         %26 = OpMatrixTimesScalar %coopmat_f32 %v %float_2
+               OpReturnValue %26
+               OpFunctionEnd

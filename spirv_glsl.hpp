@@ -464,9 +464,8 @@ protected:
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "", uint32_t base_offset = 0);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0, bool member = false);
-	std::string constant_expression(const SPIRConstant &c,
-	                                bool inside_block_like_struct_scope = false,
-	                                bool inside_struct_scope = false);
+	virtual std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
+	                                        bool inside_struct_scope = false);
 	virtual std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
@@ -648,6 +647,7 @@ protected:
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		const char *boolean_mix_function = "mix";
 		const char *printf_function = "debugPrintfEXT";
+		const char *cooperative_matrix_element_access = "";
 		std::string constant_null_initializer = "";
 		SPIRType::BaseType boolean_in_struct_remapped_type = SPIRType::Boolean;
 		bool swizzle_is_function = false;

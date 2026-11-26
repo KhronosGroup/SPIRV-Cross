@@ -1,0 +1,18 @@
+#version 450
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) buffer SSBO
+{
+    float data[];
+} ssbo;
+
+void main()
+{
+    coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> mat = coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator>(1.0);
+    mat[gl_LocalInvocationIndex % 2u] = 2.0;
+    mat[1u] += 3.0;
+    coopMatStore(mat, ssbo.data, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+}
+
