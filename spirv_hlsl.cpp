@@ -3056,8 +3056,9 @@ void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	}
 	else
 	{
+		VariableID combined_id;
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
-		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id, combined_id), true, true);
 	}
 }
 
@@ -3210,7 +3211,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		    arg_type.image.dim != DimBuffer)
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
-			arglist.push_back(join(is_depth_image(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
+			arglist.push_back(join(is_depth_image(arg.id) ? "SamplerComparisonState " : "SamplerState ",
 			                       to_sampler_expression(arg.id), type_to_array_glsl(arg_type, arg.id)));
 		}
 
@@ -3989,7 +3990,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 		{
 			texop += img_expr;
 
-			if (is_depth_image(imgtype, img))
+			if (is_depth_image(img))
 			{
 				if (gather)
 				{
@@ -4470,7 +4471,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
-			if (is_depth_image(type, var.self))
+			if (is_depth_image(var.self))
 				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type, var.self),
 				          to_resource_binding_sampler(var), ";");
 			else

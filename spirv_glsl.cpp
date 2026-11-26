@@ -8051,7 +8051,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	// GLES has very limited support for shadow samplers.
 	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
 	// everything else can just throw
-	bool is_comparison = is_depth_image(imgtype, tex);
+	bool is_comparison = is_depth_image(tex);
 	if (is_comparison && is_legacy_es())
 	{
 		if (op == "texture" || op == "textureProj")
@@ -8265,7 +8265,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
 }
 
-string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID samp_id)
+string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID samp_id, VariableID &out_combined_id)
 {
 	// Keep track of the array indices we have used to load the image.
 	// We'll need to use the same array index into the combined image sampler array.
@@ -8276,6 +8276,8 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 		array_expr = image_expr.substr(array_index, string::npos);
 
 	auto &args = current_function->arguments;
+
+	out_combined_id = 0;
 
 	// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
 	// all possible combinations into new sampler2D uniforms.
@@ -8307,7 +8309,10 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 		});
 
 		if (itr != end(combined))
+		{
+			out_combined_id = itr->id;
 			return to_expression(itr->id) + array_expr;
+		}
 		else
 		{
 			SPIRV_CROSS_THROW("Cannot find mapping for combined sampler parameter, was "
@@ -8324,7 +8329,10 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 		});
 
 		if (itr != end(combined_image_samplers))
+		{
+			out_combined_id = itr->combined_id;
 			return to_expression(itr->combined_id) + array_expr;
+		}
 		else
 		{
 			SPIRV_CROSS_THROW("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
@@ -8383,7 +8391,8 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	else
 	{
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
-		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
+		VariableID combined_id;
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id, combined_id), true, true);
 	}
 
 	// Make sure to suppress usage tracking and any expression invalidation.
@@ -8676,7 +8685,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	if (bias != 0 && dref != 0 && !fetch && !gather &&
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) ||
 	     (imgtype.image.arrayed && imgtype.image.dim == DimCube)) &&
-	    is_depth_image(imgtype, img))
+	    is_depth_image(img))
 	{
 		require_extension_internal("GL_EXT_texture_shadow_lod");
 	}
@@ -8725,7 +8734,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4, but only in desktop GLSL. Swizzle here.
-	if (is_legacy() && !options.es && is_depth_image(imgtype, img))
+	if (is_legacy() && !options.es && is_depth_image(img))
 		expr += ".r";
 
 	// Sampling from a texture which was deduced to be a depth image, might actually return 1 component here.
@@ -8736,16 +8745,16 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		const auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
 		VariableID image_id = combined ? combined->image : img;
 
-		if (combined && is_depth_image(imgtype, combined->image))
+		if (combined && is_depth_image(combined->image))
 			image_is_depth = true;
-		else if (is_depth_image(imgtype, img))
+		else if (is_depth_image(img))
 			image_is_depth = true;
 
 		// We must also check the backing variable for the image.
 		// We might have loaded an OpImage, and used that handle for two different purposes.
 		// Once with comparison, once without.
 		auto *image_variable = maybe_get_backing_variable(image_id);
-		if (image_variable && is_depth_image(get<SPIRType>(image_variable->basetype), image_variable->self))
+		if (image_variable && is_depth_image(image_variable->self))
 			image_is_depth = true;
 
 		if (image_is_depth)
@@ -8818,7 +8827,7 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    is_depth_image(imgtype, tex) && args.lod && !args.base.is_fetch)
+	    is_depth_image(tex) && args.lod && !args.base.is_fetch)
 	{
 		if (has_extension("GL_EXT_texture_shadow_lod") ||
 		    options.vulkan_semantics || !expression_is_constant_null(args.lod))
@@ -8897,7 +8906,8 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 					SPIRV_CROSS_THROW("Cannot find dummy sampler ID. Was "
 					                  "build_dummy_sampler_for_combined_images() called?");
 
-				return to_combined_image_sampler(id, dummy_sampler_id);
+				VariableID combined_id;
+				return to_combined_image_sampler(id, dummy_sampler_id, combined_id);
 			}
 		}
 	}
@@ -8966,7 +8976,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	// If GL_EXT_texture_shadow_lod is in use, textureLod is available directly with arbitrary LOD.
 	bool workaround_lod_array_shadow_as_grad =
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    is_depth_image(imgtype, img) && args.lod != 0 && !args.base.is_fetch &&
+	    is_depth_image(img) && args.lod != 0 && !args.base.is_fetch &&
 	    !has_extension("GL_EXT_texture_shadow_lod");
 
 	if (args.dref)
@@ -13612,7 +13622,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			auto image_id = combined.global_image ? combined.image_id : VariableID(arg[combined.image_id]);
 			auto sampler_id = combined.global_sampler ? combined.sampler_id : VariableID(arg[combined.sampler_id]);
-			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
+			VariableID combined_id;
+			auto expr = to_combined_image_sampler(image_id, sampler_id, combined_id);
+
+			// Need to propagate this state to the shadow arguments.
+			// The current setup is far too messy to set this up properly during analysis.
+			if (comparison_ids.count(combined_id))
+			{
+				assert(callee.combined_parameters.size() == callee.shadow_arguments.size());
+				if (comparison_ids.insert(callee.shadow_arguments[&combined - callee.combined_parameters.data()].id).second)
+					force_recompile();
+			}
+
+			arglist.push_back(expr);
 		}
 
 		append_global_func_args(callee, length, arglist);
@@ -17638,7 +17660,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 
 	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
 	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) &&
-	    is_depth_image(type, id))
+	    is_depth_image(id))
 	{
 		res += "Shadow";
 
@@ -20655,7 +20677,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 
 bool CompilerGLSL::variable_is_depth_or_compare(VariableID id) const
 {
-	return is_depth_image(get<SPIRType>(get<SPIRVariable>(id).basetype), id);
+	return is_depth_image(id);
 }
 
 const char *CompilerGLSL::ShaderSubgroupSupportHelper::get_extension_name(Candidate c)
