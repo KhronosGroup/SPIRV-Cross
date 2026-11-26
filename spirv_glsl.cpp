@@ -5775,6 +5775,51 @@ string CompilerGLSL::to_extract_constant_composite_expression(uint32_t result_ty
 	return constant_expression(tmp);
 }
 
+void CompilerGLSL::reroll_composite_insert_extract(std::string &expr, const SPIRType &expression_type,
+	const SPIRType &return_type, const SPIRType &composite_type, const uint32_t *chain, uint32_t count)
+{
+	const SPIRType *remapped_bool_struct_type = nullptr;
+	const auto *obj_type = &composite_type;
+
+	if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean && expression_type.basetype == SPIRType::Boolean)
+	{
+		for (uint32_t i = 0; i < count; i++)
+		{
+			if (is_array(*obj_type))
+			{
+				obj_type = &get<SPIRType>(obj_type->parent_type);
+			}
+			else if (obj_type->basetype == SPIRType::Struct)
+			{
+				remapped_bool_struct_type = obj_type;
+				obj_type = &get<SPIRType>(obj_type->member_types[chain[i]]);
+			}
+			else if (obj_type->parent_type)
+			{
+				obj_type = &get<SPIRType>(obj_type->parent_type);
+			}
+		}
+	}
+
+	if (remapped_bool_struct_type)
+	{
+		if (is_array(*obj_type))
+		{
+			expr = to_rerolled_array_expression(return_type, expr, *obj_type);
+		}
+		else if (return_type.basetype == SPIRType::Struct)
+		{
+			auto tmp_type = *obj_type;
+			tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+			expr = join(type_to_glsl(tmp_type), "(", expr, ")");
+		}
+		else
+		{
+			expr = join(type_to_glsl(*obj_type), "(", expr, ")");
+		}
+	}
+}
+
 string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
                                                   const string &base_expr, const SPIRType &type)
 {
@@ -13818,31 +13863,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT,
 			                                  &meta, nullptr);
 
-			const SPIRType *remapped_bool_struct_type = nullptr;
-			if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean && type.basetype == SPIRType::Boolean)
-			{
-				const auto *obj_type = &expression_type(ops[2]);
-				for (uint32_t i = 0; i < length; i++)
-				{
-					if (is_array(*obj_type))
-						obj_type = &get<SPIRType>(obj_type->parent_type);
-					else if (obj_type->basetype == SPIRType::Struct)
-					{
-						remapped_bool_struct_type = obj_type;
-						obj_type = &get<SPIRType>(obj_type->member_types[ops[3 + i]]);
-					}
-					else
-						break;
-				}
-			}
-
-			if (remapped_bool_struct_type)
-			{
-				if (is_array(type))
-					expr = to_rerolled_array_expression(type, expr, type);
-				else
-					expr = join(type_to_glsl(type), "(", expr, ")");
-			}
+			reroll_composite_insert_extract(expr, type, type, expression_type(ops[2]), &ops[3], length);
 
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
@@ -13870,6 +13891,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t composite = ops[3];
 		const auto *elems = &ops[4];
 		length -= 4;
+		auto &res_type = get<SPIRType>(result_type);
 
 		flush_variable_declaration(composite);
 
@@ -13897,53 +13919,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (backend.requires_relaxed_precision_analysis &&
 		         has_decoration(composite, DecorationRelaxedPrecision) !=
 		         has_decoration(id, DecorationRelaxedPrecision) &&
-		         get<SPIRType>(result_type).basetype != SPIRType::Struct)
+		         res_type.basetype != SPIRType::Struct)
 		{
 			// Similarly, if precision does not match for input and output,
 			// we cannot alias them. If we write a composite into a relaxed precision
 			// ID, we might get a false truncation.
 			can_modify_in_place = false;
 		}
-
-		// The destination might be a bool member of a struct which is remapped to another type,
-		// in which case we must convert the value we're inserting as well.
-		const SPIRType *remapped_bool_struct_type = nullptr;
-		if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
-		    expression_type(obj).basetype == SPIRType::Boolean)
-		{
-			auto *type = &get<SPIRType>(result_type);
-			for (uint32_t i = 0; i < length; i++)
-			{
-				if (is_array(*type))
-					type = &get<SPIRType>(type->parent_type);
-				else if (type->basetype == SPIRType::Struct)
-				{
-					remapped_bool_struct_type = type;
-					type = &get<SPIRType>(type->member_types[elems[i]]);
-				}
-				else
-					break;
-			}
-		}
-
-		// to_unpacked_expression can force temporaries, so only evaluate it where the value is used.
-		auto rhs_expression = [&]() -> string
-		{
-			string rhs = to_unpacked_expression(obj);
-			if (remapped_bool_struct_type)
-			{
-				auto &obj_type = expression_type(obj);
-				if (is_array(obj_type))
-					rhs = to_rerolled_array_expression(*remapped_bool_struct_type, rhs, obj_type);
-				else
-				{
-					auto remapped_type = obj_type;
-					remapped_type.basetype = backend.boolean_in_struct_remapped_type;
-					rhs = join(type_to_glsl(remapped_type), "(", rhs, ")");
-				}
-			}
-			return rhs;
-		};
 
 		if (can_modify_in_place)
 		{
@@ -13953,7 +13935,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
 			                                   nullptr, nullptr);
-			statement(chain, " = ", rhs_expression(), ";");
+			auto expr = to_unpacked_expression(obj);
+
+			reroll_composite_insert_extract(expr, expression_type(obj), res_type, res_type, elems, length);
+
+			statement(chain, " = ", expr, ";");
 			set<SPIRExpression>(id, to_expression(composite), result_type, true);
 			invalid_expressions.insert(composite);
 			composite_insert_overwritten.insert(composite);
@@ -13972,7 +13958,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 
 			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
-			statement(chain, " = ", rhs_expression(), ";");
+			auto expr = to_unpacked_expression(obj);
+
+			reroll_composite_insert_extract(expr, expression_type(obj), res_type, res_type, elems, length);
+
+			statement(chain, " = ", expr, ";");
 		}
 
 		break;

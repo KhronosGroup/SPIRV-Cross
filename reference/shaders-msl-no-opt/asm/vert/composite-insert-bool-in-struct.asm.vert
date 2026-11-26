@@ -82,10 +82,10 @@ vertex main0_out main0(uint gl_VertexIndex [[vertex_id]])
     _19 _52;
     _52._m0 = { short2(_51[0]), short2(_51[1]) };
     out.gl_Position = _40._m0;
-    out.m_4 = uint2(_40._m1);
-    out.m_5 = uint2(_45._m1);
-    out.m_6 = uint2(_48._m0[1]);
-    out.m_7 = uint2(_52._m0[0]);
+    out.m_4 = uint2(bool2(_40._m1));
+    out.m_5 = uint2(bool2(_45._m1));
+    out.m_6 = uint2(bool2(_48._m0[1]));
+    out.m_7 = uint2(bool2(_52._m0[0]));
     return out;
 }
 
