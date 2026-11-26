@@ -874,7 +874,7 @@ protected:
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);
 	std::string layout_for_variable(const SPIRVariable &variable);
-	std::string to_combined_image_sampler(VariableID image_id, VariableID samp_id);
+	std::string to_combined_image_sampler(VariableID image_id, VariableID samp_id, VariableID &combined_id);
 	virtual bool skip_argument(uint32_t id) const;
 	virtual bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 	                             StorageClass lhs_storage, StorageClass rhs_storage);

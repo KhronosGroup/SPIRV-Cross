@@ -141,7 +141,7 @@ void in_function(thread float4& r0, const device array<texture2d<float>, 8>& t00
     uint _218 = i + 6u;
     spvImageFence(u3[_218]);
     r3.w = as_type<float>(u3[_218].read(uint(0)).x);
-    r4 = float4(t40.sample(s40, float2(0.0), level(0.0)));
+    r4 = t40.sample(s40, float2(0.0), level(0.0));
     r4.x = as_type<float>(t41.read(uint2(int2(0)), 0).x);
     r4.y = as_type<float>(t42.read(uint2(int2(0)), 0).x);
     r4.z = b40.v + b41.v;

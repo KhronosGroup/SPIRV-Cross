@@ -1061,7 +1061,6 @@ struct SPIRFunction : IVariant
 		VariableID sampler_id;
 		bool global_image;
 		bool global_sampler;
-		bool depth;
 	};
 
 	TypeID return_type;
