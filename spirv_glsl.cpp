@@ -13887,13 +13887,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			auto *type = &get<SPIRType>(result_type);
 			for (uint32_t i = 0; i < length; i++)
 			{
-				if (type->basetype == SPIRType::Struct)
+				if (is_array(*type))
+					type = &get<SPIRType>(type->parent_type);
+				else if (type->basetype == SPIRType::Struct)
 				{
 					remapped_bool_struct_type = type;
 					type = &get<SPIRType>(type->member_types[elems[i]]);
 				}
-				else if (is_array(*type))
-					type = &get<SPIRType>(type->parent_type);
 				else
 					break;
 			}
