@@ -840,8 +840,13 @@ protected:
 			const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
 			bool register_expression_read = true);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
-	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
+
+	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id,
+	                                                bool block_like_type, bool force_outer_initializer_scope);
+
+	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type,
+	                                         bool force_outer_initializer_scope);
+
 	void reroll_composite_insert_extract(std::string &expr, const SPIRType &expression_type,
 		const SPIRType &return_type, const SPIRType &composite_type, const uint32_t *chain, uint32_t count);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);

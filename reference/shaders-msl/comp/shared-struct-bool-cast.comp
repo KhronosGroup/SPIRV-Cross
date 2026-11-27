@@ -7,7 +7,7 @@ using namespace metal;
 
 struct S1
 {
-    int3 a;
+    packed_int3 a;
     uint2 b;
     short4 c;
     uint d;
@@ -58,7 +58,7 @@ kernel void main0(device block& _132 [[buffer(0)]])
     if (allOk)
     {
         int3 param = int3(6, 8, 8);
-        int3 param_1 = s1.a;
+        int3 param_1 = int3(s1.a);
         _99 = compare_ivec3(param, param_1);
     }
     else

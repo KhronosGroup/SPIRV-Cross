@@ -5,8 +5,12 @@
 
 using namespace metal;
 
+template <typename T> struct spvIsArray { enum : bool { value = false }; };
+template <typename T> struct spvIsArray<T[]> { enum : bool { value = true }; };
+template <typename T, uint N> struct spvIsArray<T[N]> { enum : bool { value = true }; };
+
 template<typename T, uint N>
-inline void spvArrayCopyFromConstantToStack(thread T (&dst)[N], constant T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromConstantToStack(thread T (&dst)[N], constant T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -15,7 +19,7 @@ inline void spvArrayCopyFromConstantToStack(thread T (&dst)[N], constant T (&src
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromConstantToThreadGroup(threadgroup T (&dst)[N], constant T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromConstantToThreadGroup(threadgroup T (&dst)[N], constant T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -24,7 +28,7 @@ inline void spvArrayCopyFromConstantToThreadGroup(threadgroup T (&dst)[N], const
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromStackToStack(thread T (&dst)[N], thread const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromStackToStack(thread T (&dst)[N], thread const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -33,7 +37,7 @@ inline void spvArrayCopyFromStackToStack(thread T (&dst)[N], thread const T (&sr
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromStackToThreadGroup(threadgroup T (&dst)[N], thread const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromStackToThreadGroup(threadgroup T (&dst)[N], thread const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -42,7 +46,7 @@ inline void spvArrayCopyFromStackToThreadGroup(threadgroup T (&dst)[N], thread c
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromThreadGroupToStack(thread T (&dst)[N], threadgroup const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromThreadGroupToStack(thread T (&dst)[N], threadgroup const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -51,7 +55,7 @@ inline void spvArrayCopyFromThreadGroupToStack(thread T (&dst)[N], threadgroup c
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromThreadGroupToThreadGroup(threadgroup T (&dst)[N], threadgroup const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromThreadGroupToThreadGroup(threadgroup T (&dst)[N], threadgroup const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -60,7 +64,7 @@ inline void spvArrayCopyFromThreadGroupToThreadGroup(threadgroup T (&dst)[N], th
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromDeviceToDevice(device T (&dst)[N], device const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromDeviceToDevice(device T (&dst)[N], device const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -69,7 +73,7 @@ inline void spvArrayCopyFromDeviceToDevice(device T (&dst)[N], device const T (&
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromConstantToDevice(device T (&dst)[N], constant T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromConstantToDevice(device T (&dst)[N], constant T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -78,7 +82,7 @@ inline void spvArrayCopyFromConstantToDevice(device T (&dst)[N], constant T (&sr
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromStackToDevice(device T (&dst)[N], thread const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromStackToDevice(device T (&dst)[N], thread const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -87,7 +91,7 @@ inline void spvArrayCopyFromStackToDevice(device T (&dst)[N], thread const T (&s
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromThreadGroupToDevice(device T (&dst)[N], threadgroup const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromThreadGroupToDevice(device T (&dst)[N], threadgroup const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -96,7 +100,7 @@ inline void spvArrayCopyFromThreadGroupToDevice(device T (&dst)[N], threadgroup 
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromDeviceToStack(thread T (&dst)[N], device const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromDeviceToStack(thread T (&dst)[N], device const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {
@@ -105,7 +109,7 @@ inline void spvArrayCopyFromDeviceToStack(thread T (&dst)[N], device const T (&s
 }
 
 template<typename T, uint N>
-inline void spvArrayCopyFromDeviceToThreadGroup(threadgroup T (&dst)[N], device const T (&src)[N])
+inline enable_if_t<!spvIsArray<T>::value> spvArrayCopyFromDeviceToThreadGroup(threadgroup T (&dst)[N], device const T (&src)[N])
 {
     for (uint i = 0; i < N; i++)
     {

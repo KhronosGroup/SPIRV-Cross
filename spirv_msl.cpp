@@ -2547,7 +2547,10 @@ void CompilerMSL::mark_packable_structs()
 		{
 			auto *type = &this->get<SPIRType>(var.basetype);
 			if (type->basetype == SPIRType::Struct)
+			{
 				mark_as_workgroup_struct(*type);
+				mark_workgroup_struct_vec3_packed(*type);
+			}
 		}
 	});
 
@@ -2620,6 +2623,40 @@ void CompilerMSL::mark_as_workgroup_struct(SPIRType &type)
 				mark_as_workgroup_struct(mbr_type_alias);
 			}
 		}
+	}
+}
+
+// Metal pads a three-component vector to the size of a four-component vector in threadgroup memory.
+// Mark every 3-component vector member (or array of them) of a struct used with workgroup storage as packed,
+// so it takes 3 components worth of space, as it does in the source shader.
+// Nested structs are visited recursively.
+void CompilerMSL::mark_workgroup_struct_vec3_packed(SPIRType &type)
+{
+	// If this is not the base type (eg. it's a pointer or array), tunnel down
+	if (type.parent_type)
+	{
+		mark_workgroup_struct_vec3_packed(get<SPIRType>(type.parent_type));
+		return;
+	}
+
+	if (type.basetype != SPIRType::Struct)
+		return;
+
+	// Handle possible recursion when a struct contains a pointer to its own type nested somewhere.
+	if (!workgroup_vec3_packed_structs.insert(type.self).second)
+		return;
+
+	uint32_t mbr_cnt = uint32_t(type.member_types.size());
+	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[mbr_idx]);
+
+		bool is_vec3 = mbr_type.vecsize == 3 && mbr_type.columns == 1 && !mbr_type.pointer;
+
+		if (is_vec3)
+			set_extended_member_decoration(type.self, mbr_idx, SPIRVCrossDecorationPhysicalTypePacked);
+		else
+			mark_workgroup_struct_vec3_packed(mbr_type);
 	}
 }
 
@@ -5927,7 +5964,7 @@ void CompilerMSL::emit_custom_templates()
 		switch (spv_func)
 		{
 		case SPVFuncImplUnsafeArray:
-			statement("template<typename T, size_t Num>");
+			statement("template<typename T, uint Num>");
 			statement("struct spvUnsafeArray");
 			begin_scope();
 			statement("T elements[Num ? Num : 1];");
@@ -6297,102 +6334,201 @@ void CompilerMSL::emit_custom_functions()
 				true, false, false,
 			};
 
+			if (spv_func == SPVFuncImplArrayCopy)
+			{
+				// Add a custom is array type trait. std::is_array_v doesn't seem to exist in MSL.
+				statement("template <typename T> struct spvIsArray { enum : bool { value = false }; };");
+				statement("template <typename T> struct spvIsArray<T[]> { enum : bool { value = true }; };");
+				statement("template <typename T, uint N> struct spvIsArray<T[N]> { enum : bool { value = true }; };");
+				statement("");
+			}
+
 			for (uint32_t variant = 0; variant < 12; variant++)
 			{
 				assert(!src_is_physical_with_mismatch[variant] || !dst_is_physical_with_mismatch[variant]);
 				bool is_multidim = spv_func == SPVFuncImplArrayCopyMultidim;
-				const char *dim = is_multidim ? "[N][M]" : "[N]";
 
 				// Simple base case.
-				statement("template<typename T, uint N", is_multidim ? ", uint M>" : ">");
-				statement("inline void spvArrayCopy", function_name_tags[variant], "(",
-						  dst_address_space[variant], " T (&dst)", dim, ", ",
-						  src_address_space[variant], " T (&src)", dim, ")");
-				begin_scope();
-				statement("for (uint i = 0; i < N; i++)");
-				begin_scope();
-				if (is_multidim)
-					statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
-				else
+				bool packed_variants = spv_function_implementations.count(SPVFuncImplArrayCopyPacked);
+
+				if (!is_multidim)
+				{
+					statement("template<typename T, uint N>");
+					statement("inline enable_if_t<!spvIsArray<T>::value> spvArrayCopy", function_name_tags[variant], "(",
+							  dst_address_space[variant], " T (&dst)[N], ",
+							  src_address_space[variant], " T (&src)[N])");
+
+					begin_scope();
+					statement("for (uint i = 0; i < N; i++)");
+					begin_scope();
 					statement("dst[i] = src[i];");
-				end_scope();
-				end_scope();
+					end_scope();
+					end_scope();
+					statement("");
 
-				if (spv_function_implementations.count(SPVFuncImplArrayCopyExtendedSrc) &&
-					src_is_physical_with_mismatch[variant])
-				{
-					// 1st overload, src can be magic vector where dst is a scalar.
-					// Need reinterpret casts to be memory model correct. LLVM vectors are broken otherwise.
-					statement("template<typename T, uint V, uint N", is_multidim ? ", uint M>" : ">");
-					statement("inline void spvArrayCopy", function_name_tags[variant], "(",
-							  dst_address_space[variant], " T (&dst)", dim, ", ",
-							  src_address_space[variant], " vec<T, V> (&src)", dim, ")");
-					begin_scope();
-					statement("for (uint i = 0; i < N; i++)");
-					begin_scope();
-					if (is_multidim)
-						statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
-					else
+					// Special case for packed <-> not packed copies.
+					if (packed_variants)
+					{
+						const char *input_types[] = { "packed_vec<T, V>", "vec<T, V>" };
+						for (int i = 0; i < 2; i++)
+						{
+							statement("template<typename T, uint V, uint N>");
+							statement("inline void spvArrayCopy", function_name_tags[variant], "(",
+									  dst_address_space[variant], " ", input_types[i], " (&dst)[N], ",
+									  src_address_space[variant], " ", input_types[1 - i], " (&src)[N])");
+
+							begin_scope();
+							statement("for (uint i = 0; i < N; i++)");
+							begin_scope();
+							statement("dst[i] = src[i];");
+							end_scope();
+							end_scope();
+							statement("");
+						}
+					}
+
+					if (spv_function_implementations.count(SPVFuncImplArrayCopyExtendedSrc) &&
+						src_is_physical_with_mismatch[variant])
+					{
+						// 1st overload, src can be magic vector where dst is a scalar.
+						// Need reinterpret casts to be memory model correct. LLVM vectors are broken otherwise.
+						statement("template<typename T, uint V, uint N>");
+						statement("inline void spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " T (&dst)[N], ",
+								  src_address_space[variant], " vec<T, V> (&src)[N])");
+						begin_scope();
+						statement("for (uint i = 0; i < N; i++)");
+						begin_scope();
 						statement("dst[i] = reinterpret_cast<", src_address_space[variant], " T &>(src[i]);");
-					end_scope();
-					end_scope();
+						end_scope();
+						end_scope();
 
-					statement("");
+						statement("");
 
-					// 2nd overload, both are vectors, but need SFINAE magic to avoid ambiguous case.
-					statement("template<typename T, uint Vdst, uint Vsrc, uint N", is_multidim ? ", uint M>" : ">");
-					statement("inline enable_if_t<Vdst != Vsrc> spvArrayCopy", function_name_tags[variant], "(",
-							  dst_address_space[variant], " vec<T, Vdst> (&dst)", dim, ", ",
-							  src_address_space[variant], " vec<T, Vsrc> (&src)", dim, ")");
-					begin_scope();
-					statement("for (uint i = 0; i < N; i++)");
-					begin_scope();
-					if (is_multidim)
-						statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
-					else
+						// 2nd overload, both are vectors, but need SFINAE magic to avoid ambiguous case.
+						statement("template<typename T, uint Vdst, uint Vsrc, uint N>");
+						statement("inline enable_if_t<Vdst != Vsrc> spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " vec<T, Vdst> (&dst)[N], ",
+								  src_address_space[variant], " vec<T, Vsrc> (&src)[N])");
+						begin_scope();
+						statement("for (uint i = 0; i < N; i++)");
+						begin_scope();
 						statement("dst[i] = reinterpret_cast<", src_address_space[variant], " vec<T, Vdst> &>(src[i]);");
-					end_scope();
-					end_scope();
-				}
+						end_scope();
+						end_scope();
+					}
 
-				if (spv_function_implementations.count(SPVFuncImplArrayCopyExtendedDst) &&
-					dst_is_physical_with_mismatch[variant])
+					if (spv_function_implementations.count(SPVFuncImplArrayCopyExtendedDst) &&
+						dst_is_physical_with_mismatch[variant])
+					{
+						// 1st overload, src can be magic vector where dst is a scalar.
+						// Need reinterpret casts to be memory model correct. LLVM vectors are broken otherwise.
+						statement("template<typename T, uint V, uint N>");
+						statement("inline void spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " vec<T, V> (&dst)[N], ",
+								  src_address_space[variant], " T (&src)[N])");
+						begin_scope();
+						statement("for (uint i = 0; i < N; i++)");
+						begin_scope();
+						statement("reinterpret_cast<", dst_address_space[variant], " T &>(dst[i]) = src[i];");
+						end_scope();
+						end_scope();
+
+						statement("");
+
+						// 2nd overload, both are vectors, but need SFINAE magic to avoid ambiguous case.
+						statement("template<typename T, uint Vdst, uint Vsrc, uint N>");
+						statement("inline enable_if_t<Vdst != Vsrc> spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " vec<T, Vdst> (&dst)[N], ",
+								  src_address_space[variant], " vec<T, Vsrc> (&src)[N])");
+						begin_scope();
+						statement("for (uint i = 0; i < N; i++)");
+						begin_scope();
+						statement("reinterpret_cast<", dst_address_space[variant], " vec<T, Vsrc> &>(dst[i]) = src[i];");
+						end_scope();
+						end_scope();
+					}
+
+					if (spv_function_implementations.count(SPVFuncImplUnsafeArray))
+					{
+						// Handle spvUnsafeArray copies gracefully.
+						statement("template<typename Tdst, typename Tsrc, uint N>");
+						statement("inline enable_if_t<!spvIsArray<Tdst>::value> spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " Tdst (&dst)[N], ",
+								  src_address_space[variant], " spvUnsafeArray<Tsrc, N> &src)");
+
+						begin_scope();
+						statement("spvArrayCopy", function_name_tags[variant], "(dst, src.elements);");
+						end_scope();
+
+						statement("template<typename Tdst, typename Tsrc, uint N>");
+						statement("inline enable_if_t<!spvIsArray<Tsrc>::value> spvArrayCopy", function_name_tags[variant], "(",
+						          dst_address_space[variant], " spvUnsafeArray<Tdst, N> &dst, ",
+						          src_address_space[variant], " Tsrc (&src)[N])");
+
+						begin_scope();
+						statement("spvArrayCopy", function_name_tags[variant], "(dst.elements, src);");
+						end_scope();
+
+						// This must resolve to the final base case, since we handle array<array<>> explicitly.
+						statement("template<typename Tdst, typename Tsrc, uint N>");
+						statement("inline void spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " spvUnsafeArray<Tdst, N> &dst, ",
+								  src_address_space[variant], " spvUnsafeArray<Tsrc, N> &src)");
+
+						begin_scope();
+						statement("spvArrayCopy", function_name_tags[variant], "(dst.elements, src.elements);");
+						end_scope();
+					}
+				}
+				else
 				{
-					// 1st overload, src can be magic vector where dst is a scalar.
-					// Need reinterpret casts to be memory model correct. LLVM vectors are broken otherwise.
-					statement("template<typename T, uint V, uint N", is_multidim ? ", uint M>" : ">");
-					statement("inline void spvArrayCopy", function_name_tags[variant], "(",
-							  dst_address_space[variant], " vec<T, V> (&dst)", dim, ", ",
-							  src_address_space[variant], " T (&src)", dim, ")");
+					// At least one of the paths would need to be a plain C array.
+					// Deals with multi-dimensional plain array <-> spvUnsafeArray copies by default.
+					statement("template<typename Tdst, typename Tsrc, uint N>");
+					statement("inline enable_if_t<spvIsArray<Tdst>::value> spvArrayCopy", function_name_tags[variant], "(",
+							  dst_address_space[variant], " Tdst (&dst)[N], ",
+							  src_address_space[variant], " Tsrc &src)");
+
 					begin_scope();
 					statement("for (uint i = 0; i < N; i++)");
 					begin_scope();
-					if (is_multidim)
-						statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
-					else
-						statement("reinterpret_cast<", dst_address_space[variant], " T &>(dst[i]) = src[i];");
+					statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
 					end_scope();
 					end_scope();
-
 					statement("");
 
-					// 2nd overload, both are vectors, but need SFINAE magic to avoid ambiguous case.
-					statement("template<typename T, uint Vdst, uint Vsrc, uint N", is_multidim ? ", uint M>" : ">");
-					statement("inline enable_if_t<Vdst != Vsrc> spvArrayCopy", function_name_tags[variant], "(",
-							  dst_address_space[variant], " vec<T, Vdst> (&dst)", dim, ", ",
-							  src_address_space[variant], " vec<T, Vsrc> (&src)", dim, ")");
+					// Disambiguate.
+					statement("template<typename Tdst, typename Tsrc, uint N>");
+					statement("inline enable_if_t<spvIsArray<Tsrc>::value && !spvIsArray<Tdst>::value> spvArrayCopy", function_name_tags[variant], "(",
+							  dst_address_space[variant], " Tdst (&dst), ",
+							  src_address_space[variant], " Tsrc (&src)[N])");
+
 					begin_scope();
 					statement("for (uint i = 0; i < N; i++)");
 					begin_scope();
-					if (is_multidim)
-						statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
-					else
-						statement("reinterpret_cast<", dst_address_space[variant], " vec<T, Vsrc> &>(dst[i]) = src[i];");
+					statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
 					end_scope();
 					end_scope();
-				}
+					statement("");
 
-				statement("");
+					if (spv_function_implementations.count(SPVFuncImplUnsafeArray))
+					{
+						// Handle spvUnsafeArray copies gracefully.
+						statement("template<typename Tdst, typename Tsrc, uint M, uint N>");
+						statement("inline void spvArrayCopy", function_name_tags[variant], "(",
+								  dst_address_space[variant], " spvUnsafeArray<spvUnsafeArray<Tdst, M>, N> &dst, ",
+								  src_address_space[variant], " spvUnsafeArray<spvUnsafeArray<Tsrc, M>, N> &src)");
+
+						begin_scope();
+						statement("for (uint i = 0; i < N; i++)");
+						begin_scope();
+						statement("spvArrayCopy", function_name_tags[variant], "(dst[i], src[i]);");
+						end_scope();
+						end_scope();
+						statement("");
+					}
+				}
 			}
 			break;
 		}
@@ -11552,7 +11688,6 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 								  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type.
-	// This, however, cannot be used for threadgroup address specifiers, so consider the custom array copy as fallback.
 	bool lhs_is_thread_storage = storage_class_array_is_thread(lhs_storage);
 	bool rhs_is_thread_storage = storage_class_array_is_thread(rhs_storage);
 
@@ -11592,9 +11727,11 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 	    has_decoration(lhs_id, DecorationBuiltIn) && get_decoration(lhs_id, DecorationBuiltIn) == BuiltInClipDistance)
 		lhs_is_array_template = false;
 
-	// If threadgroup storage qualifiers are *not* used:
-	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
-	if (lhs_is_array_template && rhs_is_array_template && !using_builtin_array())
+	bool equivalent_packing_types =
+		has_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked) ==
+		has_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypePacked);
+
+	if (equivalent_packing_types && lhs_is_array_template && rhs_is_array_template && !using_builtin_array())
 	{
 		// Fall back to normal copy path.
 		return false;
@@ -11671,16 +11808,10 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 			add_spv_func_and_recompile(SPVFuncImplArrayCopyExtendedDst);
 		if (has_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypeID))
 			add_spv_func_and_recompile(SPVFuncImplArrayCopyExtendedSrc);
+		if (!equivalent_packing_types)
+			add_spv_func_and_recompile(SPVFuncImplArrayCopyPacked);
 
-		// Pass internal array of spvUnsafeArray<> into wrapper functions
-		if (lhs_is_array_template && rhs_is_array_template && !msl_options.force_native_arrays)
-			statement("spvArrayCopy", tag, "(", lhs, ".elements, ", to_expression(rhs_id), ".elements);");
-		if (lhs_is_array_template && !msl_options.force_native_arrays)
-			statement("spvArrayCopy", tag, "(", lhs, ".elements, ", to_expression(rhs_id), ");");
-		else if (rhs_is_array_template && !msl_options.force_native_arrays)
-			statement("spvArrayCopy", tag, "(", lhs, ", ", to_expression(rhs_id), ".elements);");
-		else
-			statement("spvArrayCopy", tag, "(", lhs, ", ", to_expression(rhs_id), ");");
+		statement("spvArrayCopy", tag, "(", lhs, ", ", to_expression(rhs_id), ");");
 	}
 
 	return true;
@@ -14226,7 +14357,21 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding) ?
 			"// Overlapping binding: " : "";
 
-	auto result = join(overlapping_binding_tag, pack_pfx, decl_type, " ", qualifier,
+	std::string packed_type;
+
+	if (pack_pfx.empty())
+		packed_type = decl_type;
+	else
+	{
+		// If we're using an array of packed types, the packing qualifier applies to the innermost type.
+		auto pos = decl_type.find_last_of('<');
+		if (pos != std::string::npos)
+			packed_type = join(decl_type.substr(0, pos + 1), pack_pfx, decl_type.substr(pos + 1));
+		else
+			packed_type = join(pack_pfx, decl_type);
+	}
+
+	auto result = join(overlapping_binding_tag, packed_type, " ", qualifier,
 	                   to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
 
 	is_using_builtin_array = false;
@@ -20204,7 +20349,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	if (rewrite_boolean_load)
 	{
 		if (is_array(expr_type))
-			expr = to_rerolled_array_expression(expr_type, expr, expr_type);
+			expr = to_rerolled_array_expression(expr_type, expr, expr_type, false);
 		else
 			expr = join(type_to_glsl(expr_type), "(", expr, ")");
 	}
@@ -20352,7 +20497,7 @@ void CompilerMSL::cast_to_variable_store(uint32_t target_id, std::string &expr, 
 	{
 		if (is_array(expr_type))
 		{
-			expr = to_rerolled_array_expression(*var_type, expr, expr_type);
+			expr = to_rerolled_array_expression(*var_type, expr, expr_type, false);
 		}
 		else
 		{

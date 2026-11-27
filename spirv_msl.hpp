@@ -827,10 +827,12 @@ protected:
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
 		SPVFuncImplSSign,
+		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplArrayCopy,
 		SPVFuncImplArrayCopyMultidim,
 		SPVFuncImplArrayCopyExtendedSrc,
 		SPVFuncImplArrayCopyExtendedDst,
+		SPVFuncImplArrayCopyPacked,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
 		SPVFuncImplGradientCube,
@@ -839,7 +841,6 @@ protected:
 		SPVFuncImplFSub,
 		SPVFuncImplQuantizeToF16,
 		SPVFuncImplCubemapTo2DArrayFace,
-		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplStorageMatrix, // Allow threadgroup construction of matrices
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
@@ -1027,6 +1028,7 @@ protected:
 	void mark_packable_structs();
 	void mark_as_packable(SPIRType &type);
 	void mark_as_workgroup_struct(SPIRType &type);
+	void mark_workgroup_struct_vec3_packed(SPIRType &type);
 
 	std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
@@ -1279,6 +1281,7 @@ protected:
 	std::unordered_map<uint32_t, MSLShaderInterfaceVariable> inputs_by_builtin;
 	std::map<LocationComponentPair, MSLShaderInterfaceVariable> outputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInterfaceVariable> outputs_by_builtin;
+	std::unordered_set<uint32_t> workgroup_vec3_packed_structs;
 	std::unordered_set<uint32_t> location_inputs_in_use;
 	std::unordered_set<uint32_t> location_inputs_in_use_fallback;
 	std::unordered_set<uint32_t> location_outputs_in_use;

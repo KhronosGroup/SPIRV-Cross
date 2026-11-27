@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-template<typename T, size_t Num>
+template<typename T, uint Num>
 struct spvUnsafeArray
 {
     T elements[Num ? Num : 1];
@@ -79,7 +79,7 @@ struct FPNTessellationHSToDS
 {
     FBasePassVSToDS PassSpecificData;
     spvUnsafeArray<float4, 3> WorldPosition;
-    float3 DisplacementScale;
+    packed_float3 DisplacementScale;
     float TessellationMultiplier;
     float WorldDisplacementMultiplier;
 };
