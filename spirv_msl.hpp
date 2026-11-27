@@ -827,10 +827,12 @@ protected:
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
 		SPVFuncImplSSign,
+		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplArrayCopy,
 		SPVFuncImplArrayCopyMultidim,
 		SPVFuncImplArrayCopyExtendedSrc,
 		SPVFuncImplArrayCopyExtendedDst,
+		SPVFuncImplArrayCopyPacked,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
 		SPVFuncImplGradientCube,
@@ -839,7 +841,6 @@ protected:
 		SPVFuncImplFSub,
 		SPVFuncImplQuantizeToF16,
 		SPVFuncImplCubemapTo2DArrayFace,
-		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplStorageMatrix, // Allow threadgroup construction of matrices
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,

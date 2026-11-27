@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-template<typename T, size_t Num>
+template<typename T, uint Num>
 struct spvUnsafeArray
 {
     T elements[Num ? Num : 1];
@@ -973,7 +973,7 @@ struct sG
 
 struct sH
 {
-    spvUnsafeArray<short3, 2> mA;
+    spvUnsafeArray<packed_short3, 2> mA;
 };
 
 struct S1
@@ -1328,7 +1328,7 @@ kernel void main0(device block& _424 [[buffer(0)]])
     bool _391;
     if (_382)
     {
-        _391 = all(bool3(true, false, false) == bool3(s1.c[0].mA[0]));
+        _391 = all(bool3(true, false, false) == bool3(bool3(s1.c[0].mA[0])));
     }
     else
     {
@@ -1337,7 +1337,7 @@ kernel void main0(device block& _424 [[buffer(0)]])
     bool _400;
     if (_391)
     {
-        _400 = all(bool3(true, false, false) == bool3(s1.c[0].mA[1]));
+        _400 = all(bool3(true, false, false) == bool3(bool3(s1.c[0].mA[1])));
     }
     else
     {
@@ -1346,7 +1346,7 @@ kernel void main0(device block& _424 [[buffer(0)]])
     bool _409;
     if (_400)
     {
-        _409 = all(not(bool3(s1.c[1].mA[0])));
+        _409 = all(not(bool3(bool3(s1.c[1].mA[0]))));
     }
     else
     {
@@ -1355,7 +1355,7 @@ kernel void main0(device block& _424 [[buffer(0)]])
     bool _418;
     if (_409)
     {
-        _418 = all(not(bool3(s1.c[1].mA[1])));
+        _418 = all(not(bool3(bool3(s1.c[1].mA[1]))));
     }
     else
     {

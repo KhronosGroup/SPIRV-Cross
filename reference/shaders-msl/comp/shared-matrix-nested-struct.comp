@@ -902,7 +902,7 @@ struct S1
 struct sA
 {
     spvStorage_float4x4 mA;
-    short3 mB;
+    packed_short3 mB;
     short4 mC;
 };
 
@@ -951,14 +951,14 @@ struct sH
 struct sI
 {
     spvStorage_float2x2 mA;
-    short3 mB;
+    packed_short3 mB;
     short4 mC;
 };
 
 struct sJ
 {
     sI mA;
-    short3 mB;
+    packed_short3 mB;
 };
 
 struct sK
@@ -1265,7 +1265,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     if (allOk)
     {
         bool3 param_6 = bool3(true, false, false);
-        bool3 param_7 = bool3(s2.a.mA.mA.mB);
+        bool3 param_7 = bool3(bool3(s2.a.mA.mA.mB));
         _462 = compare_bvec3(param_6, param_7);
     }
     else
@@ -1421,7 +1421,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     if (allOk)
     {
         bool3 param_32 = bool3(false);
-        bool3 param_33 = bool3(s2.d.mB.mA.mB);
+        bool3 param_33 = bool3(bool3(s2.d.mB.mA.mB));
         _579 = compare_bvec3(param_32, param_33);
     }
     else
@@ -1445,7 +1445,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     if (allOk)
     {
         bool3 param_36 = bool3(true, false, false);
-        bool3 param_37 = bool3(s2.d.mB.mB);
+        bool3 param_37 = bool3(bool3(s2.d.mB.mB));
         _597 = compare_bvec3(param_36, param_37);
     }
     else

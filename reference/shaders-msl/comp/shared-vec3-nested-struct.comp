@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-template<typename T, size_t Num>
+template<typename T, uint Num>
 struct spvUnsafeArray
 {
     T elements[Num ? Num : 1];
@@ -46,7 +46,7 @@ struct spvUnsafeArray
 
 struct Inner
 {
-    packed_float3 v[3];
+    spvUnsafeArray<packed_float3, 3> v;
 };
 
 struct S
@@ -54,7 +54,7 @@ struct S
     packed_float3 a;
     Inner in0;
     float c;
-    packed_float3 b[2];
+    spvUnsafeArray<packed_float3, 2> b;
 };
 
 struct InB

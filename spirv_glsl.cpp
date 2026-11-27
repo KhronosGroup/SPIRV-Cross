@@ -5807,7 +5807,7 @@ void CompilerGLSL::reroll_composite_insert_extract(std::string &expr, const SPIR
 	{
 		if (is_array(*obj_type))
 		{
-			expr = to_rerolled_array_expression(return_type, expr, *obj_type);
+			expr = to_rerolled_array_expression(return_type, expr, *obj_type, false);
 		}
 		else if (return_type.basetype == SPIRType::Struct)
 		{
@@ -5823,7 +5823,8 @@ void CompilerGLSL::reroll_composite_insert_extract(std::string &expr, const SPIR
 }
 
 string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
-                                                  const string &base_expr, const SPIRType &type)
+                                                  const string &base_expr, const SPIRType &type,
+                                                  bool force_outer_initializer_scope)
 {
 	bool remapped_boolean = parent_type.basetype == SPIRType::Struct &&
 	                        type.basetype == SPIRType::Boolean &&
@@ -5845,7 +5846,7 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 
 	uint32_t size = to_array_size_literal(type);
 	auto &parent = get<SPIRType>(type.parent_type);
-	string expr = "{ ";
+	string expr = force_outer_initializer_scope ? "{{ " : "{ ";
 
 	for (uint32_t i = 0; i < size; i++)
 	{
@@ -5857,17 +5858,18 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 			expr += subexpr;
 		}
 		else
-			expr += to_rerolled_array_expression(parent_type, subexpr, parent);
+			expr += to_rerolled_array_expression(parent_type, subexpr, parent, force_outer_initializer_scope);
 
 		if (i + 1 < size)
 			expr += ", ";
 	}
 
-	expr += " }";
+	expr += force_outer_initializer_scope ? " }}" : " }";
 	return expr;
 }
 
-string CompilerGLSL::to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type)
+string CompilerGLSL::to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id,
+                                                         bool block_like_type, bool force_outer_initializer_scope)
 {
 	auto &type = expression_type(id);
 
@@ -5879,7 +5881,8 @@ string CompilerGLSL::to_composite_constructor_expression(const SPIRType &parent_
 	if (is_array(type))
 	{
 		reroll_array = !backend.array_is_value_type ||
-		               (block_like_type && !backend.array_is_value_type_in_buffer_blocks);
+		               (block_like_type && !backend.array_is_value_type_in_buffer_blocks) ||
+		               force_outer_initializer_scope;
 
 		if (remapped_boolean)
 		{
@@ -5900,7 +5903,8 @@ string CompilerGLSL::to_composite_constructor_expression(const SPIRType &parent_
 
 		// We're only triggering one read of the array expression, but this is fine since arrays have to be declared
 		// as temporaries anyways.
-		return to_rerolled_array_expression(parent_type, to_enclosed_expression(id), type);
+		return to_rerolled_array_expression(parent_type, to_enclosed_expression(id), type,
+		                                    force_outer_initializer_scope && !block_like_type);
 	}
 	else
 	{
@@ -12595,13 +12599,10 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 			if (i)
 				op += ", ";
 
-			// Members with a packed physical type (e.g. MSL workgroup structs with packed vec3 arrays)
-			// are declared like buffer block members, i.e. not as array value types.
 			bool uses_buffer_offset =
-			    type.basetype == SPIRType::Struct &&
-			    (has_member_decoration(type.self, i, DecorationOffset) ||
-			     has_extended_member_decoration(type.self, i, SPIRVCrossDecorationPhysicalTypePacked));
-			subop = to_composite_constructor_expression(type, elems[i], uses_buffer_offset);
+			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, DecorationOffset);
+			bool uses_packed = has_extended_member_decoration(type.self, i, SPIRVCrossDecorationPhysicalTypePacked);
+			subop = to_composite_constructor_expression(type, elems[i], uses_buffer_offset, uses_packed);
 		}
 
 		base = e ? e->base_expression : ID(0);

@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-template<typename T, size_t Num>
+template<typename T, uint Num>
 struct spvUnsafeArray
 {
     T elements[Num ? Num : 1];
@@ -46,7 +46,7 @@ struct spvUnsafeArray
 
 struct Inner
 {
-    packed_float3 v[3];
+    spvUnsafeArray<packed_float3, 3> v;
 };
 
 struct S
@@ -54,7 +54,7 @@ struct S
     packed_float3 a;
     Inner in0;
     float c;
-    packed_float3 b[2];
+    spvUnsafeArray<packed_float3, 2> b;
 };
 
 struct InB
@@ -77,7 +77,7 @@ kernel void main0(device InB& inb [[buffer(0)]], device OutB& outb [[buffer(1)]]
     float _85 = 2.0 * inb.i[gl_LocalInvocationID.x];
     spvUnsafeArray<float3, 2> _241 = spvUnsafeArray<float3, 2>({ float3(0.5 * inb.i[gl_LocalInvocationID.x]), float3(inb.i[gl_LocalInvocationID.x], _85, 3.0 * inb.i[gl_LocalInvocationID.x]) });
     spvUnsafeArray<float3, 3> _261 = spvUnsafeArray<float3, 3>({ float3(1.0, 2.0, 3.0) * inb.i[gl_LocalInvocationID.x], float3(inb.i[gl_LocalInvocationID.x]), float3(3.0, 2.0, 1.0) });
-    sh[gl_LocalInvocationID.x] = S{ _66, Inner{ { _261[0], _261[1], _261[2] } }, _85, { _241[0], _241[1] } };
+    sh[gl_LocalInvocationID.x] = S{ _66, Inner{ {{ _261[0], _261[1], _261[2] }} }, _85, {{ _241[0], _241[1] }} };
     plain[gl_LocalInvocationID.x] = _66 + float3(1.0);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     uint _117 = (gl_LocalInvocationID.x + 1u) & 63u;

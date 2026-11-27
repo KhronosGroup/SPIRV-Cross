@@ -902,7 +902,7 @@ struct S1
 struct sA
 {
     spvStorage_float4x4 mA;
-    short3 mB;
+    packed_short3 mB;
     short4 mC;
 };
 
@@ -951,14 +951,14 @@ struct sH
 struct sI
 {
     spvStorage_float2x2 mA;
-    short3 mB;
+    packed_short3 mB;
     short4 mC;
 };
 
 struct sJ
 {
     sI mA;
-    short3 mB;
+    packed_short3 mB;
 };
 
 struct sK
@@ -1198,7 +1198,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     bool _462;
     if (_453)
     {
-        _462 = all(bool3(true, false, false) == bool3(s2.a.mA.mA.mB));
+        _462 = all(bool3(true, false, false) == bool3(bool3(s2.a.mA.mA.mB)));
     }
     else
     {
@@ -1402,7 +1402,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     bool _579;
     if (_570)
     {
-        _579 = all(not(bool3(s2.d.mB.mA.mB)));
+        _579 = all(not(bool3(bool3(s2.d.mB.mA.mB))));
     }
     else
     {
@@ -1420,7 +1420,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     bool _597;
     if (_588)
     {
-        _597 = all(bool3(true, false, false) == bool3(s2.d.mB.mB));
+        _597 = all(bool3(true, false, false) == bool3(bool3(s2.d.mB.mB)));
     }
     else
     {

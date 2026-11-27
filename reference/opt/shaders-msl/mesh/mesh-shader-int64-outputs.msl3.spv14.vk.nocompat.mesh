@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-template<typename T, size_t Num>
+template<typename T, uint Num>
 struct spvUnsafeArray
 {
     T elements[Num ? Num : 1];
