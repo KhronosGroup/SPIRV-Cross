@@ -1,0 +1,48 @@
+#version 450
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_KHR_shader_subgroup_clustered : require
+#extension GL_KHR_shader_subgroup_quad : require
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, std430) buffer SSBO
+{
+    uint u;
+    int i;
+    float f;
+    uint b;
+} _11;
+
+void main()
+{
+    _11.u = (((subgroupMin(_11.u) + subgroupMax(_11.u)) + subgroupAnd(_11.u)) + subgroupOr(_11.u)) + subgroupXor(_11.u);
+    _11.i = subgroupInclusiveMin(_11.i) + subgroupExclusiveMax(_11.i);
+    _11.f = subgroupMin(_11.f) + subgroupInclusiveMax(_11.f);
+    bool _61 = subgroupAnd(_11.b != 0u);
+    bool _69;
+    if (!_61)
+    {
+        _69 = subgroupOr(_11.b != 0u);
+    }
+    else
+    {
+        _69 = _61;
+    }
+    bool _77;
+    if (!_69)
+    {
+        _77 = subgroupXor(_11.b != 0u);
+    }
+    else
+    {
+        _77 = _69;
+    }
+    _11.b = uint(_77);
+    _11.f = subgroupShuffle(_11.f, 1u) + subgroupShuffleXor(_11.f, 2u);
+    _11.u = subgroupShuffleUp(_11.u, 1u) + subgroupShuffleDown(_11.u, 1u);
+    _11.u = (subgroupClusteredAdd(_11.u, 4u) + subgroupClusteredMin(_11.u, 4u)) + subgroupClusteredXor(_11.u, 4u);
+    _11.b = uint(subgroupClusteredOr(_11.b != 0u, 8u));
+    _11.f = ((subgroupQuadBroadcast(_11.f, 2u) + subgroupQuadSwapHorizontal(_11.f)) + subgroupQuadSwapVertical(_11.f)) + subgroupQuadSwapDiagonal(_11.f);
+}
+
