@@ -39,9 +39,6 @@ void main(triangle SPIRV_Cross_Input stage_input[3], inout TriangleStream<SPIRV_
     for (int i = 0; i < 3; i++)
     {
         gl_PositionIn[i] = stage_input[i].gl_PositionIn;
-    }
-    for (int i = 0; i < 3; i++)
-    {
         vUV[i] = stage_input[i].vUV;
     }
     geom_main(stage_input, geometry_stream);
