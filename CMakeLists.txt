@@ -35,6 +35,7 @@ project(SPIRV-Cross LANGUAGES CXX C)
 enable_testing()
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert" OFF)
 option(SPIRV_CROSS_SHARED "Build the C API as a single shared library." OFF)
@@ -199,13 +200,12 @@ macro(spirv_cross_add_library name config_name library_type)
 
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
 		install(TARGETS ${name}
-			EXPORT ${config_name}Config
+			EXPORT SPIRV-CrossTargets
 			RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 			LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 			ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 			PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/spirv_cross)
 		install(FILES ${hdrs} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/spirv_cross)
-		install(EXPORT ${config_name}Config DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/${config_name}/cmake)
 		export(TARGETS ${name} FILE ${config_name}Config.cmake)
 	endif()
 endmacro()
@@ -656,4 +656,36 @@ if (SPIRV_CROSS_CLI)
 					"cmake with -DPYTHON_EXECUTABLE:FILEPATH=/path/to/python3 to help it find the executable")
 		endif()
 	endif()
+endif()
+
+if (NOT SPIRV_CROSS_SKIP_INSTALL)
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfig.cmake.in" [=[
+	    @PACKAGE_INIT@
+	    include("${CMAKE_CURRENT_LIST_DIR}/SPIRV-CrossTargets.cmake")
+	]=])
+
+	configure_package_config_file(
+	    "${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfig.cmake.in"
+	    "${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfig.cmake"
+	    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/SPIRV-Cross
+	)
+
+	write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfigVersion.cmake"
+		VERSION ${SPIRV_CROSS_VERSION}
+		COMPATIBILITY SameMajorVersion
+	)
+
+	install(
+	    EXPORT      SPIRV-CrossTargets
+	    NAMESPACE   "SPIRV-Cross::"
+	    DESTINATION "${CMAKE_INSTALL_DATADIR}/SPIRV-Cross"
+	)
+
+	install(
+	    FILES
+	        "${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfig.cmake"
+	        "${CMAKE_CURRENT_BINARY_DIR}/SPIRV-CrossConfigVersion.cmake"
+	    DESTINATION
+	        "${CMAKE_INSTALL_DATADIR}/SPIRV-Cross"
+	)
 endif()
