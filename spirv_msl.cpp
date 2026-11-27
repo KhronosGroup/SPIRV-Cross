@@ -8818,6 +8818,8 @@ string CompilerMSL::to_ptr_expression(uint32_t id, bool register_expression_read
 void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
+	// The || is short circuiting, so similar rationale as logical and and or.
+	flush_control_dependent_expressions(current_emitting_block->self);
 	bool forward = should_forward(op0) && should_forward(op1);
 	emit_op(result_type, result_id,
 	        join("(isunordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
@@ -8832,7 +8834,10 @@ void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id,
 void CompilerMSL::emit_binary_ord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                      const char *op)
 {
+	// The && is short circuiting, so similar rationale as logical and and or.
+	flush_control_dependent_expressions(current_emitting_block->self);
 	bool forward = should_forward(op0) && should_forward(op1);
+
 	emit_op(result_type, result_id,
 	        join("(isordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
 	             ") && ", to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1),
