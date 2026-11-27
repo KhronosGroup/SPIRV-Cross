@@ -933,7 +933,7 @@ protected:
 		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
 		void pop_remap_parameters();
 		void register_combined_image_sampler(SPIRFunction &caller, VariableID combined_id, VariableID texture_id,
-		                                     VariableID sampler_id, bool depth);
+		                                     VariableID sampler_id);
 	};
 
 	struct DummySamplerForCombinedImageHandler : OpcodeHandler
@@ -1223,7 +1223,7 @@ protected:
 	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index) const;
 	static bool is_desktop_only_format(ImageFormat format);
 
-	bool is_depth_image(const SPIRType &type, uint32_t id) const;
+	bool is_depth_image(uint32_t id) const;
 
 	void set_extended_decoration(uint32_t id, ExtendedDecorations decoration, uint32_t value = 0);
 	uint32_t get_extended_decoration(uint32_t id, ExtendedDecorations decoration) const;

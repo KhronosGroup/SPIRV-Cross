@@ -1,0 +1,50 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct Words;
+
+struct Row
+{
+    device Words* a;
+    device Words* b;
+    uint count;
+};
+
+struct Words
+{
+    uint words[1];
+};
+
+struct Row_1
+{
+    device Words* a;
+    device Words* b;
+    uint count;
+};
+
+struct Table
+{
+    Row_1 rows[1];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+kernel void main0(device Table& _17 [[buffer(0)]])
+{
+    Row_1 _22 = _17.rows[0];
+    Row _23;
+    _23.a = _22.a;
+    _23.b = _22.b;
+    _23.count = _22.count;
+    Row r = _23;
+    r.a->words[0] = r.b->words[0] + r.count;
+    Row _39 = r;
+    Row_1 _41;
+    _41.a = _39.a;
+    _41.b = _39.b;
+    _41.count = _39.count;
+    _17.rows[1] = _41;
+}
+

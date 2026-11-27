@@ -1,0 +1,25 @@
+#version 450
+#extension GL_INTEL_shader_integer_functions2 : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, std430) buffer SSBO
+{
+    int i0;
+    int i1;
+    uint u0;
+    uint u1;
+} ssbo;
+
+void main()
+{
+    int _20 = ssbo.i0;
+    int _21 = ssbo.i1;
+    uint _22 = ssbo.u0;
+    uint _23 = ssbo.u1;
+    ssbo.i0 = int(absoluteDifference(_20, _21));
+    ssbo.u0 = uint(addSaturate(int(_22), int(_23)));
+    ssbo.i1 = int(countLeadingZeros(uint(_21)));
+    ssbo.i0 = int(average(uint(_20), uint(_21)));
+    ssbo.u1 = absoluteDifference(uint(_20), _23);
+}
+

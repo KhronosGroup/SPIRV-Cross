@@ -1719,6 +1719,7 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 	backend.supports_spec_constant_array_size = false;
+	backend.cooperative_matrix_element_access = ".thread_elements()";
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -1947,7 +1948,8 @@ void CompilerMSL::preprocess_op_codes()
 		add_header_line("#endif");
 	}
 
-	if (preproc.uses_cooperative_matrix)
+	uses_cooperative_matrix = preproc.uses_cooperative_matrix;
+	if (uses_cooperative_matrix)
 	{
 		if (!msl_options.supports_msl_version(3, 1))
 			SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
@@ -4354,7 +4356,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		if (get_execution_model() == ExecutionModelFragment && storage == StorageClassOutput && !patch &&
 		    ((is_builtin && ((bi_type == BuiltInFragDepth && (!msl_options.enable_frag_depth_builtin || uses_explicit_early_fragment_test())) ||
 		                     (bi_type == BuiltInFragStencilRefEXT && (!msl_options.enable_frag_stencil_ref_builtin || uses_explicit_early_fragment_test())))) ||
-		     (!is_builtin && !(msl_options.enable_frag_output_mask & (1 << location)))))
+		     (!is_builtin && location < 32 && !(msl_options.enable_frag_output_mask & (1u << location)))))
 		{
 			hidden = true;
 			disabled_frag_outputs.push_back(var_id);
@@ -4420,7 +4422,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		{
 			// In this case, we won't add the builtin to the interface struct,
 			// but we still need the hook to run to populate the arrays.
-			string base_ref = join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id), "]");
+			string base_ref = join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(), "]");
 			const char *mbr_name =
 			    bi_type == BuiltInTessLevelOuter ? "edgeTessellationFactor" : "insideTessellationFactor";
 			add_tess_level_input(base_ref, mbr_name, var);
@@ -4497,7 +4499,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				    [=]()
 				    {
 					    statement("const device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
-					              " = ", patch_input_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+					              " = ", patch_input_buffer_var_name, "[", to_raw_primitive_id_expression(),
 					              "];");
 				    });
 			}
@@ -4507,7 +4509,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				    [=]()
 				    {
 					    statement("const device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_in = &",
-					              input_buffer_var_name, "[", to_expression(builtin_primitive_id_id), " * ",
+					              input_buffer_var_name, "[", to_raw_primitive_id_expression(), " * ",
 					              get_entry_point().output_vertices, "];");
 				    });
 			}
@@ -4611,7 +4613,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
-							          " = ", patch_output_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+							          " = ", patch_output_buffer_var_name, "[", to_raw_primitive_id_expression(),
 							          "];");
 						});
 					}
@@ -4619,7 +4621,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_out = &",
-							          output_buffer_var_name, "[", to_expression(builtin_primitive_id_id), " * ",
+							          output_buffer_var_name, "[", to_raw_primitive_id_expression(), " * ",
 							          get_entry_point().output_vertices, "];");
 						});
 					}
@@ -6145,8 +6147,8 @@ void CompilerMSL::emit_custom_templates()
 // From MSL 3.2 the body is compiled with safe math and without contraction
 // through the scoped fp pragmas, so every operation stays exactly as written
 // while the helper can still be inlined. Earlier MSL versions have no such
-// pragmas; there the helper is optnone, which keeps it exact but turns every
-// use into a real function call.
+// pragmas; there clang's own "#pragma clang fp contract(off)" keeps the
+// helper's operations from being contracted, and the helper is forced inline.
 void CompilerMSL::emit_precise_helper_begin(const char *signature)
 {
 	if (msl_options.supports_msl_version(3, 2))
@@ -6158,8 +6160,9 @@ void CompilerMSL::emit_precise_helper_begin(const char *signature)
 	}
 	else
 	{
-		statement("[[clang::optnone]] ", signature);
+		statement("static inline __attribute__((always_inline)) ", signature);
 		begin_scope();
+		statement("#pragma clang fp contract(off)");
 	}
 }
 
@@ -7055,6 +7058,22 @@ void CompilerMSL::emit_custom_functions()
 				statement("// 128 lanes in an SIMD-group.");
 				statement("return uint4(as_type<uint2>((simd_vote::vote_t)vote), 0, 0);");
 			}
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupInvocationIdFromBallot:
+			// A vertex function has no thread_index_in_simdgroup. Every active invocation sets its own bit in the
+			// ballot, and the number of active invocations below it says which of the set bits is its own.
+			statement("inline uint spvSubgroupInvocationID()");
+			begin_scope();
+			statement("simd_vote::vote_t ballot = (simd_vote::vote_t)simd_ballot(true);");
+			statement("uint rank = simd_prefix_exclusive_sum(1u);");
+			statement("for (uint i = 0; i < rank; i++)");
+			statement("    ballot &= ballot - 1;");
+			statement("uint2 ballot2 = as_type<uint2>(ballot);");
+			// MSL doesn't support 64-bit ctz it seems.
+			statement("return uint(ballot2.x ? ctz(ballot2.x) : (ctz(ballot2.y) + 32));");
 			end_scope();
 			statement("");
 			break;
@@ -8674,6 +8693,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// attribute, and use its initializer to initialize all the spec constants with
 	// that ID.
 	std::unordered_map<uint32_t, ConstantID> unique_func_constants;
+	std::unordered_set<uint64_t> cooperative_matrix_asserted_operands;
 
 	for (auto &id_ : ir.ids_for_constant_undef_or_type)
 	{
@@ -8702,8 +8722,8 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				// Function constants are only supported in MSL 1.2 and later.
 				// If we don't support it just declare the "default" directly.
 				// This "default" value can be overridden to the true specialization constant by the API user.
-				// Specialization constants which are used as array length expressions cannot be function constants in MSL,
-				// so just fall back to macros.
+				// Specialization constants which are used as array length expressions, or as the scope or dimensions
+				// of a cooperative matrix, cannot be function constants in MSL, so just fall back to macros.
 				if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId) &&
 				    !c.is_used_as_array_length)
 				{
@@ -8772,6 +8792,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			// and structs nested within uniform and read-write buffers.
 			auto &type = id.get<SPIRType>();
 			TypeID type_id = type.self;
+
+			// Only validated types have their spec constant operands declared as macros.
+			if (type.op == OpTypeCooperativeMatrixKHR && uses_cooperative_matrix &&
+			    emit_cooperative_matrix_static_asserts(type, cooperative_matrix_asserted_operands))
+				emitted = true;
 
 			bool is_struct = (type.basetype == SPIRType::Struct) && type.array.empty() && !type.pointer;
 			bool is_block =
@@ -8851,10 +8876,29 @@ string CompilerMSL::to_ptr_expression(uint32_t id, bool register_expression_read
 void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
+	// The || is short circuiting, so similar rationale as logical and and or.
+	flush_control_dependent_expressions(current_emitting_block->self);
 	bool forward = should_forward(op0) && should_forward(op1);
 	emit_op(result_type, result_id,
 	        join("(isunordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
 	             ") || ", to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1),
+	             ")"),
+	        forward);
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+void CompilerMSL::emit_binary_ord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                     const char *op)
+{
+	// The && is short circuiting, so similar rationale as logical and and or.
+	flush_control_dependent_expressions(current_emitting_block->self);
+	bool forward = should_forward(op0) && should_forward(op1);
+
+	emit_op(result_type, result_id,
+	        join("(isordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
+	             ") && ", to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1),
 	             ")"),
 	        forward);
 
@@ -9618,6 +9662,15 @@ bool CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 	return false;
 }
 
+// Calls func(id, required_value, error) for the scope, rows and columns of a cooperative matrix type.
+template <typename Func>
+static void for_each_cooperative_matrix_operand(const SPIRType &type, const Func &func)
+{
+	func(type.ext.cooperative.scope_id, ScopeSubgroup, "MSL cooperative matrices only support Subgroup scope.");
+	func(type.ext.cooperative.rows_id, 8, "MSL cooperative matrices only support 8x8 dimensions.");
+	func(type.ext.cooperative.columns_id, 8, "MSL cooperative matrices only support 8x8 dimensions.");
+}
+
 // Metal only implements Subgroup scoped 8x8 matrices with floating-point components.
 void CompilerMSL::validate_cooperative_matrix_type(const SPIRType &type)
 {
@@ -9626,20 +9679,36 @@ void CompilerMSL::validate_cooperative_matrix_type(const SPIRType &type)
 	if (comp.basetype != SPIRType::Float && comp.basetype != SPIRType::Half && comp.basetype != SPIRType::BFloat16)
 		SPIRV_CROSS_THROW("MSL cooperative matrices only support float16, float32, and bfloat16 component types.");
 
-	// Only Subgroup scope.
-	auto &scope = get<SPIRConstant>(type.ext.cooperative.scope_id);
-	if (scope.specialization)
-		SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
-	if (scope.scalar() != ScopeSubgroup)
-		SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
+	// Only Subgroup scoped 8x8 matrices can be expressed. Spec constants must be known when the MSL is
+	// compiled, so like array lengths they become macros, which the API user must set to those values.
+	// emit_cooperative_matrix_static_asserts() makes the MSL fail to compile if they are set to anything else.
+	for_each_cooperative_matrix_operand(type, [&](uint32_t id, uint32_t required_value, const char *error) {
+		auto *c = this->maybe_get<SPIRConstant>(id);
+		if (c && !c->specialization)
+		{
+			if (c->scalar() != required_value)
+				SPIRV_CROSS_THROW(error);
+		}
+		else if (c || ir.ids[id].get_type() == TypeConstantOp)
+			ir.mark_used_as_array_length(id);
+		else
+			SPIRV_CROSS_THROW("MSL cooperative matrix scope and dimensions must be constant instructions.");
+	});
+}
 
-	// Only 8x8.
-	auto &rows = get<SPIRConstant>(type.ext.cooperative.rows_id);
-	auto &columns = get<SPIRConstant>(type.ext.cooperative.columns_id);
-	if (rows.specialization || columns.specialization)
-		SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
-	if (rows.scalar() != 8 || columns.scalar() != 8)
-		SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
+// Spec constant scope and dimensions cannot be checked until the MSL is compiled.
+bool CompilerMSL::emit_cooperative_matrix_static_asserts(const SPIRType &type,
+                                                         unordered_set<uint64_t> &asserted_operands)
+{
+	bool emitted = false;
+	for_each_cooperative_matrix_operand(type, [&](uint32_t id, uint32_t required_value, const char *error) {
+		auto *c = this->maybe_get<SPIRConstant>(id);
+		if ((c && !c->specialization) || !asserted_operands.insert((uint64_t(id) << 32) | required_value).second)
+			return;
+		statement("static_assert(", to_expression(id), " == ", required_value, ", \"", error, "\");");
+		emitted = true;
+	});
+	return emitted;
 }
 
 // Validates all cooperative matrix types up-front, rather than failing partway through a function.
@@ -9729,6 +9798,41 @@ void CompilerMSL::emit_cooperative_matrix_select_op(uint32_t result_type, uint32
 	inherit_expression_dependencies(result_id, op1);
 }
 
+// Returns the transpose argument of simdgroup_load() and simdgroup_store(), or an empty string if there is none.
+// The argument does not need to be a constant expression, so a spec constant layout is simply compared.
+string CompilerMSL::to_cooperative_matrix_transpose(uint32_t layout)
+{
+	auto *layout_c = maybe_get<SPIRConstant>(layout);
+	if (!layout_c || layout_c->specialization)
+		return join("(", to_expression(layout), " == ", uint32_t(CooperativeMatrixLayoutColumnMajorKHR), "u)");
+
+	switch (layout_c->scalar())
+	{
+	case CooperativeMatrixLayoutRowMajorKHR:
+		return "";
+	case CooperativeMatrixLayoutColumnMajorKHR:
+		return "true";
+	default:
+		SPIRV_CROSS_THROW("MSL cooperative matrices only support RowMajorKHR and ColumnMajorKHR layouts.");
+	}
+}
+
+// The simdgroup_matrix(T) constructor creates a diagonal matrix, so fill every component instead.
+string CompilerMSL::constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope,
+                                        bool inside_struct_scope)
+{
+	auto &type = get<SPIRType>(c.constant_type);
+	if (type.op != OpTypeCooperativeMatrixKHR)
+		return CompilerGLSL::constant_expression(c, inside_block_like_struct_scope, inside_struct_scope);
+
+	// It would have to be declared in the constant address space, which cannot hold a simdgroup matrix.
+	if (c.specialization)
+		SPIRV_CROSS_THROW("MSL does not support spec constant cooperative matrices.");
+
+	auto value = c.constant_is_null() ? string("0") : constant_expression_vector(c, 0);
+	return join("make_filled_simdgroup_matrix<", type_to_glsl(get<SPIRType>(type.parent_type)), ", 8, 8>(", value, ")");
+}
+
 // Returns false if instruction is not a cooperative matrix op, so the caller can fall back.
 bool CompilerMSL::maybe_emit_cooperative_matrix_op(const Instruction &instruction)
 {
@@ -9772,6 +9876,12 @@ bool CompilerMSL::maybe_emit_cooperative_matrix_op(const Instruction &instructio
 	// Unsupported component types, scope or dimensions are rejected by validate_cooperative_matrix_types().
 	switch (opcode)
 	{
+	case OpFunctionCall:
+	case OpCopyObject:
+	case OpCopyLogical:
+		// Whole matrices are passed and copied as values.
+		return false;
+
 	case OpFNegate:
 		emit_cooperative_matrix_unary_op(result_type, result_id, ops[2], "-");
 		break;
@@ -9855,6 +9965,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define MSL_UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 #define MSL_UNORD_BOP(op) emit_binary_unord_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define MSL_ORD_BOP(op) emit_binary_ord_op(ops[0], ops[1], ops[2], ops[3], #op)
 
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
@@ -9923,12 +10034,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpLogicalNotEqual:
-	case OpFOrdNotEqual:
-		// TODO: Should probably negate the == result here.
-		// Typically OrdNotEqual comes from GLSL which itself does not really specify what
-		// happens with NaN.
-		// Consider fixing this if we run into real issues.
 		MSL_BOP(!=);
+		break;
+
+	case OpFOrdNotEqual:
+		// != in MSL, as in C, is the unordered not-equal: true when either operand is NaN.
+		// OpFOrdNotEqual must be false then, so only compare ordered operands.
+		MSL_ORD_BOP(!=);
 		break;
 
 	case OpUGreaterThan:
@@ -11121,24 +11233,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];
 		uint32_t layout = ops[3];
 
-		auto &layout_c = get<SPIRConstant>(layout);
-		if (layout_c.specialization)
-			SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
-		uint32_t layout_val = layout_c.scalar();
-		bool col_major = false;
-
-		switch (layout_val)
-		{
-		case CooperativeMatrixLayoutRowMajorKHR:
-		case CooperativeMatrixLayoutColumnMajorKHR:
-			if (instruction.length < 5)
-				SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
-			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
-			break;
-
-		default:
-			SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
-		}
+		if (instruction.length < 5)
+			SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
+		auto transpose = to_cooperative_matrix_transpose(layout);
 
 		uint32_t stride = ops[4];
 
@@ -11183,12 +11280,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 
-		if (col_major)
-			statement("simdgroup_load(", to_expression(id), ", ",
-			          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+		if (transpose.empty())
+			statement("simdgroup_load(", to_expression(id), ", ", ptr_expr, ", ", stride_expr, ");");
 		else
-			statement("simdgroup_load(", to_expression(id), ", ",
-			          ptr_expr, ", ", stride_expr, ");");
+			statement("simdgroup_load(", to_expression(id), ", ", ptr_expr, ", ", stride_expr, ", ulong2(0), ",
+			          transpose, ");");
 
 		register_read(id, ptr, false);
 		break;
@@ -11200,24 +11296,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t obj = ops[1];
 		uint32_t layout = ops[2];
 
-		auto &layout_c = get<SPIRConstant>(layout);
-		if (layout_c.specialization)
-			SPIRV_CROSS_THROW("MSL cooperative matrix store does not support spec-constant layout.");
-		uint32_t layout_val = layout_c.scalar();
-		bool col_major = false;
-
-		switch (layout_val)
-		{
-		case CooperativeMatrixLayoutRowMajorKHR:
-		case CooperativeMatrixLayoutColumnMajorKHR:
-			if (instruction.length < 4)
-				SPIRV_CROSS_THROW("MSL cooperative matrix store requires Stride for row/column-major layouts.");
-			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
-			break;
-
-		default:
-			SPIRV_CROSS_THROW("MSL cooperative matrix store only supports RowMajorKHR and ColumnMajorKHR layouts.");
-		}
+		if (instruction.length < 4)
+			SPIRV_CROSS_THROW("MSL cooperative matrix store requires Stride for row/column-major layouts.");
+		auto transpose = to_cooperative_matrix_transpose(layout);
 
 		uint32_t stride = ops[3];
 
@@ -11260,12 +11341,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 
-		if (col_major)
-			statement("simdgroup_store(", to_expression(obj), ", ",
-			          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+		if (transpose.empty())
+			statement("simdgroup_store(", to_expression(obj), ", ", ptr_expr, ", ", stride_expr, ");");
 		else
-			statement("simdgroup_store(", to_expression(obj), ", ",
-			          ptr_expr, ", ", stride_expr, ");");
+			statement("simdgroup_store(", to_expression(obj), ", ", ptr_expr, ", ", stride_expr, ", ulong2(0), ",
+			          transpose, ");");
 
 		register_write(ptr);
 		break;
@@ -11300,13 +11380,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (coop_type.op != OpTypeCooperativeMatrixKHR)
 			SPIRV_CROSS_THROW("OpCooperativeMatrixLengthKHR requires cooperative matrix type.");
 
-		auto &component_type = get<SPIRType>(coop_type.parent_type);
-		auto coop_type_name = type_to_glsl(coop_type);
-		auto component_type_name = type_to_glsl(component_type);
-
-		auto expr = join(type_to_glsl(get<SPIRType>(result_type)),
-		                 "(sizeof(", coop_type_name, "::storage_type) / sizeof(", component_type_name, "))");
-		emit_op(result_type, id, expr, true);
+		// The number of components each invocation holds, not the whole matrix.
+		emit_op(result_type, id,
+		        join(type_to_glsl(get<SPIRType>(result_type)), "(", k_cooperative_matrix_components_per_thread, ")"),
+		        true);
 		break;
 	}
 
@@ -11557,6 +11634,11 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 		lhs_is_array_template = false;
 	if (rhs_var && rhs_storage == StorageClassOutput && is_builtin_variable(*rhs_var))
 		rhs_is_array_template = false;
+
+	// Mesh shader outputs are remapped to threadgroup storage, but clip distance is still a native array there.
+	if (lhs_var && is_mesh_shader() && lhs_var->storage == StorageClassOutput &&
+	    has_decoration(lhs_id, DecorationBuiltIn) && get_decoration(lhs_id, DecorationBuiltIn) == BuiltInClipDistance)
+		lhs_is_array_template = false;
 
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
@@ -14580,7 +14662,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		}
 		uint32_t locn = get_member_location(type.self, index);
 		// Metal will likely complain about missing color attachments, too.
-		if (locn != k_unknown_location && !(msl_options.enable_frag_output_mask & (1 << locn)))
+		if (locn != k_unknown_location && locn < 32 && !(msl_options.enable_frag_output_mask & (1u << locn)))
 			return "";
 		if (locn != k_unknown_location && has_member_decoration(type.self, index, DecorationIndex))
 			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex),
@@ -15158,15 +15240,26 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	case BuiltInSubgroupSize:
 		if (msl_options.fixed_subgroup_size != 0)
 			return false;
-		/* fallthrough */
-	case BuiltInSubgroupLocalInvocationId:
 		return !msl_options.emulate_subgroups;
+	case BuiltInSubgroupLocalInvocationId:
+		return !msl_options.emulate_subgroups && !subgroup_invocation_id_from_ballot();
 	case BuiltInDrawIndex:
 		// Emulated
 		return false;
 	default:
 		return true;
 	}
+}
+
+// A Metal vertex function, which is also what runs a tessellation evaluation shader, has no
+// thread_index_in_simdgroup attribute. Where SIMD-group functions are available, SubgroupLocalInvocationId
+// is then computed at entry from a ballot and an exclusive scan instead (spvSubgroupInvocationID).
+bool CompilerMSL::subgroup_invocation_id_from_ballot() const
+{
+	auto model = get_execution_model();
+	bool vertex_function = (model == ExecutionModelVertex && !msl_options.vertex_for_tessellation) ||
+	                       model == ExecutionModelTessellationEvaluation;
+	return vertex_function && !msl_options.emulate_subgroups && !msl_options.use_quadgroup_operation();
 }
 
 // Returns true if this is a fragment shader that runs per sample, and false otherwise.
@@ -15304,6 +15397,13 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args += ", ";
 		ep_args += join("constant uint& spvEmulatedReversedDepthViewportMask [[buffer(",
 		                msl_options.reversed_depth_viewport_buffer_index, ")]]");
+	}
+
+	if (is_tese_shader() && is_instance_relative_primitive_id() && active_input_builtins.get(BuiltInPrimitiveId))
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 	}
 
 	if (capture_output_to_buffer)
@@ -16051,7 +16151,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = min(",
+					statement(builtin_type_decl(bi_type), " ", to_raw_primitive_id_expression(), " = min(",
 					          to_expression(builtin_invocation_id_id), ".x / ", this->get_entry_point().output_vertices,
 					          ", spvIndirectParams[1] - 1);");
 				});
@@ -16127,11 +16227,25 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				});
 				break;
 			case BuiltInSubgroupLocalInvocationId:
-				if (!msl_options.emulate_subgroups)
-					break;
-				// For subgroup emulation, assume subgroups of size 1.
-				entry_func.fixup_hooks_in.push_back(
-				    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
+				if (msl_options.emulate_subgroups)
+				{
+					// For subgroup emulation, assume subgroups of size 1.
+					entry_func.fixup_hooks_in.push_back(
+					    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
+				}
+				else if (subgroup_invocation_id_from_ballot())
+				{
+					if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+						SPIRV_CROSS_THROW("SubgroupLocalInvocationId in a vertex function requires Metal 2.3 on iOS.");
+					if (!msl_options.supports_msl_version(2, 1))
+						SPIRV_CROSS_THROW("SubgroupLocalInvocationId in a vertex function requires Metal 2.1.");
+					add_spv_func_and_recompile(SPVFuncImplSubgroupInvocationIdFromBallot);
+					// First, since the subgroup mask builtins are computed from it.
+					entry_func.fixup_hooks_in.insert(entry_func.fixup_hooks_in.begin(), [=]() {
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
+						          " = spvSubgroupInvocationID();");
+					});
+				}
 				break;
 			case BuiltInSubgroupSize:
 				if (msl_options.emulate_subgroups)
@@ -17549,36 +17663,6 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		return type_name;
 	}
 
-	// Cooperative matrix -> Metal simdgroup matrix type
-	{
-		const SPIRType *coop_type = &type;
-		while (coop_type && (is_pointer(*coop_type) || is_array(*coop_type)))
-			coop_type = maybe_get<SPIRType>(coop_type->parent_type);
-
-		if (coop_type && coop_type->op == OpTypeCooperativeMatrixKHR)
-		{
-			if (!msl_options.supports_msl_version(3, 1))
-				SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
-
-			// Only Subgroup scoped 8x8 matrices can be expressed.
-			validate_cooperative_matrix_type(*coop_type);
-
-			// Map component type to simdgroup_*8x8
-			auto &comp = get<SPIRType>(coop_type->parent_type);
-			switch (comp.basetype)
-			{
-			case SPIRType::Float:
-				return "simdgroup_float8x8";
-			case SPIRType::Half:
-				return "simdgroup_half8x8";
-			case SPIRType::BFloat16:
-				return "simdgroup_bfloat8x8";
-			default:
-				SPIRV_CROSS_THROW("Unsupported component type for MSL cooperative matrix.");
-			}
-		}
-	}
-
 	switch (type.basetype)
 	{
 	case SPIRType::Struct:
@@ -17708,6 +17792,20 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 	// Vector or Matrix?
 	if (type.vecsize > 1)
 		type_name += to_string(type.vecsize);
+
+	// Cooperative matrix -> Metal simdgroup matrix type, e.g. simdgroup_float8x8.
+	const SPIRType *coop_type = &type;
+	while (coop_type && is_array(*coop_type))
+		coop_type = maybe_get<SPIRType>(coop_type->parent_type);
+	if (coop_type && coop_type->op == OpTypeCooperativeMatrixKHR)
+	{
+		if (!msl_options.supports_msl_version(3, 1))
+			SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
+
+		// Only Subgroup scoped 8x8 matrices of floating-point components can be expressed.
+		validate_cooperative_matrix_type(*coop_type);
+		type_name = join("simdgroup_", type_name, "8x8");
+	}
 
 	if (type.array.empty() || using_builtin_array())
 	{
@@ -18525,6 +18623,26 @@ bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
 	return false;
 }
 
+// The patch index as Metal sees it (counting across instances), for indexing per-patch buffers.
+string CompilerMSL::to_raw_primitive_id_expression()
+{
+	bool old_builtin_declaration = builtin_declaration;
+	builtin_declaration = true;
+	auto expr = to_expression(builtin_primitive_id_id);
+	builtin_declaration = old_builtin_declaration;
+	return expr;
+}
+
+bool CompilerMSL::is_instance_relative_primitive_id() const
+{
+	if (!msl_options.instance_relative_patch_id)
+		return false;
+	if (is_tesc_shader())
+		return msl_options.multi_patch_workgroup;
+	// A captured tessellation evaluation shader already uses spvIndirectParams for its output count.
+	return is_tese_shader() && !capture_output_to_buffer;
+}
+
 // Returns an MSL string identifying the name of a SPIR-V builtin.
 // Output builtins are qualified with the name of the stage out structure.
 string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
@@ -18698,7 +18816,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (is_tesc_shader() && storage != StorageClassInput && current_function &&
 		    (current_function->self == ir.default_entry_point))
 		{
-			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+			return join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(),
 			            "].edgeTessellationFactor");
 		}
 		break;
@@ -18707,7 +18825,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (is_tesc_shader() && storage != StorageClassInput && current_function &&
 		    (current_function->self == ir.default_entry_point))
 		{
-			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+			return join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(),
 			            "].insideTessellationFactor");
 		}
 		break;
@@ -18723,6 +18841,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "simd_is_helper_thread()";
 
 	case BuiltInPrimitiveId:
+		if (!builtin_declaration && storage == StorageClassInput && is_instance_relative_primitive_id())
+			return "(gl_PrimitiveID % spvIndirectParams[2])";
 		return "gl_PrimitiveID";
 
 	default:
@@ -21302,6 +21422,10 @@ void CompilerMSL::emit_mesh_outputs()
 					access += "[" + to_string(orig_index) + "]";
 					statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index, "] = ", to_name(orig_var), "[spvVI]", access, ";");
 				}
+			}
+			else if (has_decoration(orig_var, DecorationBuiltIn))
+			{
+				builtin = BuiltIn(get_decoration(orig_var, DecorationBuiltIn));
 			}
 
 			auto &elem_type = get_variable_element_type(orig);

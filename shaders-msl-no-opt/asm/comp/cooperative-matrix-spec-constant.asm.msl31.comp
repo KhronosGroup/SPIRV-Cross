@@ -1,0 +1,56 @@
+; SPIR-V
+; Version: 1.6
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 23
+; Schema: 0
+               OpCapability Shader
+               OpCapability CooperativeMatrixKHR
+               OpCapability VulkanMemoryModel
+               OpExtension "SPV_KHR_cooperative_matrix"
+               OpExtension "SPV_KHR_vulkan_memory_model"
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 32 1 1
+               OpName %main "main"
+               OpName %SCOPE "SCOPE"
+               OpName %TM "TM"
+               OpName %TK "TK"
+               OpName %SSBO "SSBO"
+               OpMemberName %SSBO 0 "data"
+               OpName %ssbo "ssbo"
+               OpDecorate %SCOPE SpecId 0
+               OpDecorate %TM SpecId 1
+               OpDecorate %TK SpecId 2
+               OpDecorate %arr_float ArrayStride 4
+               OpMemberDecorate %SSBO 0 Offset 0
+               OpDecorate %SSBO Block
+               OpDecorate %ssbo DescriptorSet 0
+               OpDecorate %ssbo Binding 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+; Scope and dimensions are spec constants, which become macros checked by static_assert.
+      %SCOPE = OpSpecConstant %uint 3
+         %TM = OpSpecConstant %uint 8
+         %TK = OpSpecConstant %uint 16
+; The columns are derived from a spec constant, which must become a macro too.
+       %cols = OpSpecConstantOp %uint UDiv %TK %uint_2
+; Stride derived from the spec constants.
+     %stride = OpSpecConstantOp %uint IMul %TK %uint_2
+  %arr_float = OpTypeRuntimeArray %float
+       %SSBO = OpTypeStruct %arr_float
+   %ptr_ssbo = OpTypePointer StorageBuffer %SSBO
+       %ssbo = OpVariable %ptr_ssbo StorageBuffer
+  %ptr_float = OpTypePointer StorageBuffer %float
+%coopmat_f32 = OpTypeCooperativeMatrixKHR %float %SCOPE %TM %cols %uint_2
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %20 = OpAccessChain %ptr_float %ssbo %uint_0 %uint_0
+         %21 = OpCooperativeMatrixLoadKHR %coopmat_f32 %20 %uint_0 %stride
+         %22 = OpFAdd %coopmat_f32 %21 %21
+               OpCooperativeMatrixStoreKHR %20 %22 %uint_0 %stride
+               OpReturn
+               OpFunctionEnd

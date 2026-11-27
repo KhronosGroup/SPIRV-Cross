@@ -2058,7 +2058,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRFunction &func, OpcodeHa
 uint32_t Compiler::type_struct_member_offset(const SPIRType &type, uint32_t index) const
 {
 	auto *type_meta = ir.find_meta(type.self);
-	if (type_meta)
+	if (type_meta && index < type_meta->members.size())
 	{
 		// Decoration must be set in valid SPIR-V, otherwise throw.
 		auto &dec = type_meta->members[index];
@@ -2091,7 +2091,7 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
 {
 	auto *type_meta = ir.find_meta(type.self);
-	if (type_meta)
+	if (type_meta && index < type_meta->members.size())
 	{
 		// Decoration must be set in valid SPIR-V, otherwise throw.
 		// MatrixStride is part of OpMemberDecorate.
@@ -2937,7 +2937,7 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 			if (s)
 				sampler_id = s->self;
 
-			register_combined_image_sampler(caller, 0, image_id, sampler_id, param.depth);
+			register_combined_image_sampler(caller, 0, image_id, sampler_id);
 		}
 	}
 
@@ -2946,14 +2946,13 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 
 void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller,
                                                                             VariableID combined_module_id,
-                                                                            VariableID image_id, VariableID sampler_id,
-                                                                            bool depth)
+                                                                            VariableID image_id, VariableID sampler_id)
 {
 	// We now have a texture ID and a sampler ID which will either be found as a global
 	// or a parameter in our own function. If both are global, they will not need a parameter,
 	// otherwise, add it to our list.
 	SPIRFunction::CombinedImageSamplerParameter param = {
-		0u, image_id, sampler_id, true, true, depth,
+		0u, image_id, sampler_id, true, true,
 	};
 
 	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
@@ -2997,7 +2996,6 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		type.basetype = SPIRType::SampledImage;
 		type.pointer = false;
 		type.storage = StorageClassGeneric;
-		type.image.depth = depth;
 
 		ptr_type = type;
 		ptr_type.pointer = true;
@@ -3224,8 +3222,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 			uint32_t combined_id = args[1];
 
-			auto &combined_type = compiler.get<SPIRType>(args[0]);
-			register_combined_image_sampler(callee, combined_id, image_id, sampler_id, combined_type.image.depth);
+			register_combined_image_sampler(callee, combined_id, image_id, sampler_id);
 		}
 	}
 
@@ -5278,11 +5275,10 @@ bool Compiler::is_desktop_only_format(ImageFormat format)
 	return false;
 }
 
-// An image is determined to be a depth image if it is marked as a depth image and is not also
-// explicitly marked with a color format, or if there are any sample/gather compare operations on it.
-bool Compiler::is_depth_image(const SPIRType &type, uint32_t id) const
+// While OpTypeImage has a depth field, it's effectively ignored in Vulkan.
+bool Compiler::is_depth_image(uint32_t id) const
 {
-	return (type.image.depth && type.image.format == ImageFormatUnknown) || comparison_ids.count(id);
+	return comparison_ids.count(id);
 }
 
 bool Compiler::type_is_opaque_value(const SPIRType &type) const

@@ -354,6 +354,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('1')
         msl_args.append('any16')
         msl_args.append('2')
+    if '.instance-relative-patch-id.' in shader:
+        msl_args.append('--msl-instance-relative-patch-id')
     if '.raw-tess-in.' in shader:
         msl_args.append('--msl-raw-buffer-tese-input')
     if '.for-tess.' in shader:
@@ -385,6 +387,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-emulate-depth-clip-enable')
     if '.fixup-clipspace.' in shader:
         msl_args.append('--fixup-clipspace')
+    if '.flip-vert-y.' in shader:
+        msl_args.append('--flip-vert-y')
     if '.lod-as-grad.' in shader:
         msl_args.append('--msl-sample-dref-lod-array-as-grad')
     if '.agx-cube-grad.' in shader:

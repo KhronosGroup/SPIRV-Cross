@@ -1,0 +1,76 @@
+#version 310 es
+precision highp float;
+precision highp int;
+
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) readonly buffer Input { uvec2 inputs[]; };
+layout(std430, binding = 1) writeonly buffer Output { uint outputs[]; };
+
+struct S
+{
+    mediump uint v;
+    uint w;
+};
+
+shared mediump uint sh[64];
+
+void inout_param(inout mediump uint a, highp uint b)
+{
+    a |= b;
+}
+
+// PowerVR GLES drivers drop bitwise compound assignments (|=, &=, ^=) whose left operand is
+// mediump or lowp and whose right operand is highp, so these must be emitted as "a = a | b".
+// highp left operands can still use the compound form.
+void main()
+{
+    highp uint idx = gl_GlobalInvocationID.x;
+    highp uint x = inputs[idx].x;
+    highp uint y = inputs[idx].y;
+
+    mediump uint a = x;
+    a |= y;
+    a &= y;
+    a ^= y;
+
+    lowp uint b = x;
+    b |= y;
+
+    // Shifts are not merged into compound assignments today. If they ever are, the same rule applies.
+    highp uint s = y & 7u;
+    mediump uint d = x;
+    d <<= s;
+    d >>= s;
+
+    mediump uvec2 c = uvec2(x, 0u);
+    c |= uvec2(y);
+
+    // Other kinds of mediump l-values.
+    mediump uint arr[2] = uint[2](0u, x);
+    uint i = (y >> 20u) & 1u;
+    arr[i] |= y;
+
+    S st;
+    st.v = x;
+    st.w = 0u;
+    st.v |= y;
+
+    mediump uvec2 vec = uvec2(x, 0u);
+    vec.x |= y;
+    vec[i] ^= y;
+
+    sh[gl_LocalInvocationID.x] = x;
+    sh[gl_LocalInvocationID.x] &= y;
+
+    mediump uint p = x;
+    inout_param(p, y);
+
+    highp uint h = x;
+    h |= y;
+    h &= y;
+    h ^= y;
+    h <<= s;
+    h >>= s;
+
+    outputs[idx] = a + b + c.x + c.y + d + h + arr[i] + st.v + vec.x + sh[gl_LocalInvocationID.x] + p;
+}

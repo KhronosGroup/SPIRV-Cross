@@ -1665,7 +1665,7 @@ void CompilerHLSL::replace_illegal_names()
 		"Texture3D", "TextureCube", "TextureCubeArray", "true", "typedef", "triangle",
 		"triangleadj", "TriangleStream", "uint", "uniform", "unorm", "unsigned",
 		"vector", "vertexfragment", "VertexShader", "vertices", "void", "volatile", "while",
-		"signed",
+		"signed", "dx"
 	};
 
 	CompilerGLSL::replace_illegal_names(keywords);
@@ -3056,8 +3056,9 @@ void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	}
 	else
 	{
+		VariableID combined_id;
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
-		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id, combined_id), true, true);
 	}
 }
 
@@ -3124,6 +3125,18 @@ uint32_t CompilerHLSL::input_vertices_from_execution_mode(SPIREntryPoint &execut
 	else
 		SPIRV_CROSS_THROW("Unsupported execution model.");
 	return input_vertices;
+}
+
+// Geometry shaders declare their arrayed position input as one static array
+// (gl_PositionIn[N], filled from stage_input[i]), not as a gl_in[] block of structs.
+string CompilerHLSL::flattened_arrayed_builtin_name(uint32_t base, BuiltIn builtin)
+{
+	if (builtin != BuiltInPosition || get_execution_model() != ExecutionModelGeometry)
+		return {};
+	auto *var = maybe_get_backing_variable(base);
+	if (!var || var->storage != StorageClassInput)
+		return {};
+	return builtin_to_glsl(builtin, StorageClassInput);
 }
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
@@ -3198,7 +3211,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		    arg_type.image.dim != DimBuffer)
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
-			arglist.push_back(join(is_depth_image(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
+			arglist.push_back(join(is_depth_image(arg.id) ? "SamplerComparisonState " : "SamplerState ",
 			                       to_sampler_expression(arg.id), type_to_array_glsl(arg_type, arg.id)));
 		}
 
@@ -3977,7 +3990,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 		{
 			texop += img_expr;
 
-			if (is_depth_image(imgtype, img))
+			if (is_depth_image(img))
 			{
 				if (gather)
 				{
@@ -4458,7 +4471,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
-			if (is_depth_image(type, var.self))
+			if (is_depth_image(var.self))
 				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type, var.self),
 				          to_resource_binding_sampler(var), ";");
 			else
@@ -5984,6 +5997,22 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
+	case OpUCountLeadingZerosINTEL:
+	case OpUCountTrailingZerosINTEL:
+	case OpAbsISubINTEL:
+	case OpAbsUSubINTEL:
+	case OpIAddSatINTEL:
+	case OpUAddSatINTEL:
+	case OpIAverageINTEL:
+	case OpUAverageINTEL:
+	case OpIAverageRoundedINTEL:
+	case OpUAverageRoundedINTEL:
+	case OpISubSatINTEL:
+	case OpUSubSatINTEL:
+	case OpIMul32x16INTEL:
+	case OpUMul32x16INTEL:
+		SPIRV_CROSS_THROW("SPV_INTEL_shader_integer_functions2 is not supported in HLSL.");
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	{

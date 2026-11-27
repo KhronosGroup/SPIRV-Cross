@@ -1,0 +1,36 @@
+#version 450
+#extension GL_EXT_buffer_reference2 : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(buffer_reference) buffer uintPointer;
+
+struct Row
+{
+    uintPointer a;
+    uint count;
+};
+
+layout(buffer_reference) buffer uintPointer
+{
+    uint value;
+};
+
+layout(set = 0, binding = 0, std430) buffer Table
+{
+    Row rows[];
+} _4;
+
+void main()
+{
+    Row _22 = _4.rows[0];
+    Row _23;
+    _23.a = _22.a;
+    _23.count = _22.count;
+    Row r = _23;
+    Row _25 = r;
+    Row _27;
+    _27.a = _25.a;
+    _27.count = _25.count;
+    _4.rows[1] = _27;
+}
+

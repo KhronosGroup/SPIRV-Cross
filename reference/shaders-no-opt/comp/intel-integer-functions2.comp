@@ -1,0 +1,32 @@
+#version 450
+#extension GL_INTEL_shader_integer_functions2 : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, std430) buffer SSBO
+{
+    uint u0;
+    uint u1;
+    int i0;
+    int i1;
+    uvec2 uv0;
+    uvec2 uv1;
+    ivec4 iv0;
+    ivec4 iv1;
+} _12;
+
+void main()
+{
+    _12.u0 = countLeadingZeros(_12.u0) + countTrailingZeros(_12.u1);
+    _12.uv0 = countLeadingZeros(_12.uv0) + countTrailingZeros(_12.uv1);
+    _12.u0 = absoluteDifference(_12.i0, _12.i1) + absoluteDifference(_12.u0, _12.u1);
+    _12.uv0 = absoluteDifference(_12.iv0.xy, _12.iv1.xy) + absoluteDifference(_12.uv0, _12.uv1);
+    _12.i0 = addSaturate(_12.i0, _12.i1) + subtractSaturate(_12.i0, _12.i1);
+    _12.u0 = addSaturate(_12.u0, _12.u1) + subtractSaturate(_12.u0, _12.u1);
+    _12.iv0 = addSaturate(_12.iv0, _12.iv1) + subtractSaturate(_12.iv0, _12.iv1);
+    _12.i0 = average(_12.i0, _12.i1) + averageRounded(_12.i0, _12.i1);
+    _12.uv0 = average(_12.uv0, _12.uv1) + averageRounded(_12.uv0, _12.uv1);
+    _12.i0 = multiply32x16(_12.i0, _12.i1);
+    _12.u0 = multiply32x16(_12.u0, _12.u1);
+    _12.iv0 = multiply32x16(_12.iv0, _12.iv1);
+}
+

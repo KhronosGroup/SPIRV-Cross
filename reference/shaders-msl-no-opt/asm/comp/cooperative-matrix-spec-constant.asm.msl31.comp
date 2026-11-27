@@ -1,0 +1,40 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+#include <metal_simdgroup_matrix>
+
+using namespace metal;
+
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 3u
+#endif
+constant uint SCOPE = SPIRV_CROSS_CONSTANT_ID_0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 8u
+#endif
+constant uint TM = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 16u
+#endif
+constant uint TK = SPIRV_CROSS_CONSTANT_ID_2;
+constant uint _15 = (TK / 2u);
+constant uint _16 = (TK * 2u);
+
+struct SSBO
+{
+    float data[1];
+};
+
+static_assert(SCOPE == 3, "MSL cooperative matrices only support Subgroup scope.");
+static_assert(TM == 8, "MSL cooperative matrices only support 8x8 dimensions.");
+static_assert(_15 == 8, "MSL cooperative matrices only support 8x8 dimensions.");
+
+kernel void main0(device SSBO& ssbo [[buffer(0)]])
+{
+    simdgroup_float8x8 _21;
+    simdgroup_load(_21, &ssbo.data[0u], _16);
+    simdgroup_float8x8 _22;
+    _22.thread_elements()[0u] = _21.thread_elements()[0u] + _21.thread_elements()[0u];
+    _22.thread_elements()[1u] = _21.thread_elements()[1u] + _21.thread_elements()[1u];
+    simdgroup_store(_22, &ssbo.data[0u], _16);
+}
+

@@ -692,6 +692,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		options->msl.multi_patch_workgroup = value != 0;
 		break;
 
+	case SPVC_COMPILER_OPTION_MSL_INSTANCE_RELATIVE_PATCH_ID:
+		options->msl.instance_relative_patch_id = value != 0;
+		break;
+
 	case SPVC_COMPILER_OPTION_MSL_SHADER_INPUT_BUFFER_INDEX:
 		options->msl.shader_input_buffer_index = value;
 		break;

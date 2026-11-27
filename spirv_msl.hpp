@@ -424,6 +424,14 @@ public:
 		// builtins are processed, but should result in more efficient usage of the GPU.
 		bool multi_patch_workgroup = false;
 
+		// Vulkan resets PrimitiveId to zero for each instance of a tessellated draw, but Metal's patch
+		// index counts across all instances. When enabled, a PrimitiveId read in a tessellation control
+		// shader (with multi_patch_workgroup) or a tessellation evaluation shader becomes
+		// (patch index % spvIndirectParams[2]), where spvIndirectParams[2] is the number of patches in
+		// one instance, supplied by the caller. Tessellation evaluation shaders then take
+		// spvIndirectParams as an extra buffer at indirect_params_buffer_index.
+		bool instance_relative_patch_id = false;
+
 		// Use storage buffers instead of vertex-style attributes for tessellation evaluation
 		// input. This may require conversion of inputs in the generated post-tessellation
 		// vertex shader, but allows the use of nested arrays.
@@ -848,6 +856,7 @@ protected:
 		SPVFuncImplSubgroupBroadcast,
 		SPVFuncImplSubgroupBroadcastFirst,
 		SPVFuncImplSubgroupBallot,
+		SPVFuncImplSubgroupInvocationIdFromBallot,
 		SPVFuncImplSubgroupBallotBitExtract,
 		SPVFuncImplSubgroupBallotFindLSB,
 		SPVFuncImplSubgroupBallotFindMSB,
@@ -927,6 +936,7 @@ protected:
 	void emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	std::string to_ptr_expression(uint32_t id, bool register_expression_read = true);
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_binary_ord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
@@ -1110,6 +1120,7 @@ protected:
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
 	bool is_direct_input_builtin(BuiltIn builtin);
+	bool subgroup_invocation_id_from_ballot() const;
 	std::string builtin_qualifier(BuiltIn builtin);
 	std::string builtin_type_decl(BuiltIn builtin, uint32_t id = 0);
 	std::string built_in_func_arg(BuiltIn builtin, bool prefix_comma);
@@ -1191,9 +1202,13 @@ protected:
 	void emit_cooperative_matrix_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	void emit_cooperative_matrix_select_op(uint32_t result_type, uint32_t result_id, uint32_t cond, uint32_t op0,
 	                                       uint32_t op1);
+	std::string to_cooperative_matrix_transpose(uint32_t layout);
+	std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
+	                                bool inside_struct_scope = false) override;
 	bool maybe_emit_cooperative_matrix_op(const Instruction &instruction);
 	void validate_cooperative_matrix_type(const SPIRType &type);
 	void validate_cooperative_matrix_types();
+	bool emit_cooperative_matrix_static_asserts(const SPIRType &type, std::unordered_set<uint64_t> &asserted_operands);
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
 	bool uses_explicit_early_fragment_test();
@@ -1311,6 +1326,8 @@ protected:
 
 	bool has_sampled_images = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
+	std::string to_raw_primitive_id_expression();
+	bool is_instance_relative_primitive_id() const;
 
 	bool is_using_builtin_array = false; // Force the use of C style array declaration.
 	bool using_builtin_array() const;
@@ -1399,6 +1416,7 @@ protected:
 	uint32_t build_msl_interpolant_type(uint32_t type_id, bool is_noperspective);
 
 	bool suppress_missing_prototypes = false;
+	bool uses_cooperative_matrix = false;
 	bool suppress_incompatible_pointer_types_discard_qualifiers = false;
 	bool suppress_sometimes_unitialized = false;
 

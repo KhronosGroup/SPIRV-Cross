@@ -27,6 +27,15 @@ The goal is to emit GLSL or MSL that looks like it was written by a human and no
 NOTE: Individual features are expected to be mostly complete, but it is possible that certain obscure GLSL features are not yet supported.
 However, most missing features are expected to be "trivial" improvements at this stage.
 
+## Security note
+
+SPIRV-Cross is not a SPIR-V validator and has no intention of being one.
+SPIRV-Cross expects valid SPIR-V, otherwise undefined behavior may happen. This is similar to Vulkan drivers.
+Application is responsible for validating untrusted SPIR-V before consuming it.
+`spirv-val` from [https://github.com/KhronosGroup/SPIRV-Tools](SPIRV-Tools) should always be used before compiling an untrusted shader.
+Bug reports or pull requests that fix "bugs" with invalid SPIR-V may be discarded.
+SPIRV-Cross will sometimes check for invalid SPIR-V and report it when it helps developers debug, but it is not a general rule.
+
 ## Building
 
 SPIRV-Cross has been tested on Linux, iOS/OSX, Windows and Android. CMake is the main build system.
@@ -76,6 +85,21 @@ cd vcpkg
 The SPIRV-Cross port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
 
 ## Usage
+
+### JSON reflection
+
+Use `spirv-cross shader.spv --reflect` to emit JSON reflection. Resources are grouped by SPIRV-Cross resource category, not by Vulkan descriptor-type names. In particular:
+
+| JSON array | Resource category | Vulkan descriptor type (except buffer images) |
+| --- | --- | --- |
+| `textures` | Combined sampled images and samplers | `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` |
+| `separate_images` | Images without a combined sampler | `VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE` |
+| `separate_samplers` | Separate samplers | `VK_DESCRIPTOR_TYPE_SAMPLER` |
+| `images` | Storage images | `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE` |
+
+The array name alone is not sufficient to choose a Vulkan descriptor type. For buffer images, inspect the resource's `type`: sampled buffer images such as `samplerBuffer` use `VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER`, while storage buffer images such as `imageBuffer` use `VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER`. For example, the [texture-buffer reflection output](reference/shaders-reflection/vert/texture_buffer.vert.json) contains a `samplerBuffer` in `textures` and an `imageBuffer` in `images`.
+
+The `set` and `binding` fields, when present, are the resource's SPIR-V descriptor-set and binding decorations. Empty resource categories are omitted. See the [reflection API guide](https://github.com/KhronosGroup/SPIRV-Cross/wiki/Reflection-API-user-guide) for the other resource categories and their Vulkan mappings.
 
 ### Using the C++ API
 
