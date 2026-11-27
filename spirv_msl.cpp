@@ -7021,6 +7021,22 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplSubgroupInvocationIdFromBallot:
+			// A vertex function has no thread_index_in_simdgroup. Every active invocation sets its own bit in the
+			// ballot, and the number of active invocations below it says which of the set bits is its own.
+			statement("inline uint spvSubgroupInvocationID()");
+			begin_scope();
+			statement("simd_vote::vote_t ballot = (simd_vote::vote_t)simd_ballot(true);");
+			statement("uint rank = simd_prefix_exclusive_sum(1u);");
+			statement("for (uint i = 0; i < rank; i++)");
+			statement("    ballot &= ballot - 1;");
+			statement("uint2 ballot2 = as_type<uint2>(ballot);");
+			// MSL doesn't support 64-bit ctz it seems.
+			statement("return uint(ballot2.x ? ctz(ballot2.x) : (ctz(ballot2.y) + 32));");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplSubgroupBallotBitExtract:
 			statement("inline bool spvSubgroupBallotBitExtract(uint4 ballot, uint bit)");
 			begin_scope();
@@ -15150,15 +15166,26 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	case BuiltInSubgroupSize:
 		if (msl_options.fixed_subgroup_size != 0)
 			return false;
-		/* fallthrough */
-	case BuiltInSubgroupLocalInvocationId:
 		return !msl_options.emulate_subgroups;
+	case BuiltInSubgroupLocalInvocationId:
+		return !msl_options.emulate_subgroups && !subgroup_invocation_id_from_ballot();
 	case BuiltInDrawIndex:
 		// Emulated
 		return false;
 	default:
 		return true;
 	}
+}
+
+// A Metal vertex function, which is also what runs a tessellation evaluation shader, has no
+// thread_index_in_simdgroup attribute. Where SIMD-group functions are available, SubgroupLocalInvocationId
+// is then computed at entry from a ballot and an exclusive scan instead (spvSubgroupInvocationID).
+bool CompilerMSL::subgroup_invocation_id_from_ballot() const
+{
+	auto model = get_execution_model();
+	bool vertex_function = (model == ExecutionModelVertex && !msl_options.vertex_for_tessellation) ||
+	                       model == ExecutionModelTessellationEvaluation;
+	return vertex_function && !msl_options.emulate_subgroups && !msl_options.use_quadgroup_operation();
 }
 
 // Returns true if this is a fragment shader that runs per sample, and false otherwise.
@@ -16119,11 +16146,25 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				});
 				break;
 			case BuiltInSubgroupLocalInvocationId:
-				if (!msl_options.emulate_subgroups)
-					break;
-				// For subgroup emulation, assume subgroups of size 1.
-				entry_func.fixup_hooks_in.push_back(
-				    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
+				if (msl_options.emulate_subgroups)
+				{
+					// For subgroup emulation, assume subgroups of size 1.
+					entry_func.fixup_hooks_in.push_back(
+					    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;"); });
+				}
+				else if (subgroup_invocation_id_from_ballot())
+				{
+					if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+						SPIRV_CROSS_THROW("SubgroupLocalInvocationId in a vertex function requires Metal 2.3 on iOS.");
+					if (!msl_options.supports_msl_version(2, 1))
+						SPIRV_CROSS_THROW("SubgroupLocalInvocationId in a vertex function requires Metal 2.1.");
+					add_spv_func_and_recompile(SPVFuncImplSubgroupInvocationIdFromBallot);
+					// First, since the subgroup mask builtins are computed from it.
+					entry_func.fixup_hooks_in.insert(entry_func.fixup_hooks_in.begin(), [=]() {
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
+						          " = spvSubgroupInvocationID();");
+					});
+				}
 				break;
 			case BuiltInSubgroupSize:
 				if (msl_options.emulate_subgroups)
