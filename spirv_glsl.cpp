@@ -1783,7 +1783,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		uint32_t alignment = 1;
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
-			auto member_flags = ir.meta[type.self].members[i].decoration_flags;
+			auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 			alignment =
 			    max(alignment, type_to_packed_alignment(get<SPIRType>(type.member_types[i]), member_flags, packing));
 		}
@@ -1927,7 +1927,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
-			auto member_flags = ir.meta[type.self].members[i].decoration_flags;
+			auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 			auto &member_type = get<SPIRType>(type.member_types[i]);
 
 			uint32_t packed_alignment = type_to_packed_alignment(member_type, member_flags, packing);
@@ -2027,8 +2027,7 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	{
 		auto &memb_type = get<SPIRType>(type.member_types[i]);
 
-		auto *type_meta = ir.find_meta(type.self);
-		auto member_flags = type_meta ? type_meta->members[i].decoration_flags : Bitset{};
+		auto member_flags = ir.get_member_decoration_bitset(type.self, i);
 
 		// Verify alignment rules.
 		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
@@ -2773,6 +2772,9 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable *var, const Descr
 
 	bool ssbo = storage == StorageClassStorageBuffer || storage == StorageClassShaderRecordBufferKHR ||
 	            has_decoration(type->self, DecorationBufferBlock);
+
+	if (ssbo && !options.es && options.version < 430)
+		require_extension_internal("GL_ARB_shader_storage_buffer_object");
 
 	bool shared = storage == StorageClassWorkgroup;
 	if (shared)
@@ -5773,6 +5775,51 @@ string CompilerGLSL::to_extract_constant_composite_expression(uint32_t result_ty
 	}
 
 	return constant_expression(tmp);
+}
+
+void CompilerGLSL::reroll_composite_insert_extract(std::string &expr, const SPIRType &expression_type,
+	const SPIRType &return_type, const SPIRType &composite_type, const uint32_t *chain, uint32_t count)
+{
+	const SPIRType *remapped_bool_struct_type = nullptr;
+	const auto *obj_type = &composite_type;
+
+	if (backend.boolean_in_struct_remapped_type != SPIRType::Boolean && expression_type.basetype == SPIRType::Boolean)
+	{
+		for (uint32_t i = 0; i < count; i++)
+		{
+			if (is_array(*obj_type))
+			{
+				obj_type = &get<SPIRType>(obj_type->parent_type);
+			}
+			else if (obj_type->basetype == SPIRType::Struct)
+			{
+				remapped_bool_struct_type = obj_type;
+				obj_type = &get<SPIRType>(obj_type->member_types[chain[i]]);
+			}
+			else if (obj_type->parent_type)
+			{
+				obj_type = &get<SPIRType>(obj_type->parent_type);
+			}
+		}
+	}
+
+	if (remapped_bool_struct_type)
+	{
+		if (is_array(*obj_type))
+		{
+			expr = to_rerolled_array_expression(return_type, expr, *obj_type);
+		}
+		else if (return_type.basetype == SPIRType::Struct)
+		{
+			auto tmp_type = *obj_type;
+			tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+			expr = join(type_to_glsl(tmp_type), "(", expr, ")");
+		}
+		else
+		{
+			expr = join(type_to_glsl(*obj_type), "(", expr, ")");
+		}
+	}
 }
 
 string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
@@ -10992,6 +11039,11 @@ bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
 	return true;
 }
 
+string CompilerGLSL::flattened_arrayed_builtin_name(uint32_t, BuiltIn)
+{
+	return {};
+}
+
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
                                            AccessChainFlags flags, AccessChainMeta *meta,
                                            const SPIRType *untyped_data_type)
@@ -11356,7 +11408,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				BuiltIn builtin = BuiltInMax;
 				if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 				{
-					if (access_chain_is_arrayed)
+					string flat_name = access_chain_is_arrayed ? flattened_arrayed_builtin_name(base, builtin) : string();
+					auto *flat_var = flat_name.empty() ? nullptr : maybe_get_backing_variable(base);
+					string block_name = flat_var ? to_name(flat_var->self) : string();
+					if (!block_name.empty() && expr.compare(0, block_name.size(), block_name) == 0)
+					{
+						// gl_in[i].gl_Position -> gl_PositionIn[i]: keep the subscripts, swap the block name.
+						expr = flat_name + expr.substr(block_name.size());
+					}
+					else if (access_chain_is_arrayed)
 					{
 						expr += ".";
 						expr += builtin_to_glsl(builtin, type->storage);
@@ -11491,6 +11551,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 				ignore_potential_sliced_writes = true;
 
+			if (type->op == OpTypeCooperativeMatrixKHR)
+				expr += backend.cooperative_matrix_element_access;
+
 			if (!row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				// On some backends, we might not be able to safely access individual scalars in a vector.
@@ -11516,7 +11579,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					expr += join("[", out_of_bounds ? 0 : index, "]");
 				}
 			}
-			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
+			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion &&
+			         type->op != OpTypeCooperativeMatrixKHR)
 			{
 				auto &c = get<SPIRConstant>(index);
 				bool out_of_bounds = (c.scalar() >= type->vecsize);
@@ -13817,6 +13881,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
 			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT,
 			                                  &meta, nullptr);
+
+			reroll_composite_insert_extract(expr, type, type, expression_type(ops[2]), &ops[3], length);
+
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
@@ -13843,6 +13910,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t composite = ops[3];
 		const auto *elems = &ops[4];
 		length -= 4;
+		auto &res_type = get<SPIRType>(result_type);
 
 		flush_variable_declaration(composite);
 
@@ -13870,7 +13938,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (backend.requires_relaxed_precision_analysis &&
 		         has_decoration(composite, DecorationRelaxedPrecision) !=
 		         has_decoration(id, DecorationRelaxedPrecision) &&
-		         get<SPIRType>(result_type).basetype != SPIRType::Struct)
+		         res_type.basetype != SPIRType::Struct)
 		{
 			// Similarly, if precision does not match for input and output,
 			// we cannot alias them. If we write a composite into a relaxed precision
@@ -13886,7 +13954,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT,
 			                                   nullptr, nullptr);
-			statement(chain, " = ", to_unpacked_expression(obj), ";");
+			auto expr = to_unpacked_expression(obj);
+
+			reroll_composite_insert_extract(expr, expression_type(obj), res_type, res_type, elems, length);
+
+			statement(chain, " = ", expr, ";");
 			set<SPIRExpression>(id, to_expression(composite), result_type, true);
 			invalid_expressions.insert(composite);
 			composite_insert_overwritten.insert(composite);
@@ -13905,7 +13977,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 
 			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr, nullptr);
-			statement(chain, " = ", to_unpacked_expression(obj), ";");
+			auto expr = to_unpacked_expression(obj);
+
+			reroll_composite_insert_extract(expr, expression_type(obj), res_type, res_type, elems, length);
+
+			statement(chain, " = ", expr, ";");
 		}
 
 		break;
@@ -14523,6 +14599,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 		auto &type = get<SPIRType>(result_type);
 
+		// SPIR-V doesn't short circuit, but HLLs started doing that.
+		// This messes with subgroup operations, etc.
+		flush_control_dependent_expressions(current_emitting_block->self);
+
 		if (type.vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "||", false, SPIRType::Unknown);
 		else
@@ -14536,6 +14616,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto result_type = ops[0];
 		auto id = ops[1];
 		auto &type = get<SPIRType>(result_type);
+
+		// SPIR-V doesn't short circuit, but HLLs started doing that at some point.
+		// This messes with subgroup operations, etc.
+		flush_control_dependent_expressions(current_emitting_block->self);
 
 		if (type.vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&", false, SPIRType::Unknown);

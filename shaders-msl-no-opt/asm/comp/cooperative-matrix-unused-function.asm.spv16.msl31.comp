@@ -1,0 +1,72 @@
+; SPIR-V
+; Version: 1.6
+; Bound: 41
+; Schema: 0
+; The cooperative matrix is only used by a function that is never called, so DIM stays a function constant.
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpCapability CooperativeMatrixKHR
+               OpExtension "SPV_KHR_cooperative_matrix"
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %main "main" %_ %gl_LocalInvocationID
+               OpExecutionMode %main LocalSize 32 1 1
+               OpName %main "main"
+               OpName %unused_ "unused("
+               OpName %DIM "DIM"
+               OpName %m "m"
+               OpName %Buf "Buf"
+               OpMemberName %Buf 0 "data"
+               OpName %_ ""
+               OpName %gl_LocalInvocationID "gl_LocalInvocationID"
+               OpDecorate %DIM SpecId 0
+               OpDecorate %_runtimearr_float ArrayStride 4
+               OpDecorate %Buf Block
+               OpMemberDecorate %Buf 0 Offset 0
+               OpDecorate %_ Binding 0
+               OpDecorate %_ DescriptorSet 0
+               OpDecorate %gl_LocalInvocationID BuiltIn LocalInvocationId
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+        %DIM = OpSpecConstant %uint 8
+     %uint_2 = OpConstant %uint 2
+         %13 = OpTypeCooperativeMatrixKHR %float %uint_3 %DIM %DIM %uint_2
+%_ptr_Function_13 = OpTypePointer Function %13
+%_runtimearr_float = OpTypeRuntimeArray %float
+        %Buf = OpTypeStruct %_runtimearr_float
+%_ptr_StorageBuffer_Buf = OpTypePointer StorageBuffer %Buf
+          %_ = OpVariable %_ptr_StorageBuffer_Buf StorageBuffer
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+     %uint_0 = OpConstant %uint 0
+%_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
+    %uint_64 = OpConstant %uint 64
+     %v3uint = OpTypeVector %uint 3
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+%gl_LocalInvocationID = OpVariable %_ptr_Input_v3uint Input
+%_ptr_Input_uint = OpTypePointer Input %uint
+    %uint_32 = OpConstant %uint 32
+     %uint_1 = OpConstant %uint 1
+         %40 = OpConstantComposite %v3uint %uint_32 %uint_1 %uint_1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %34 = OpAccessChain %_ptr_Input_uint %gl_LocalInvocationID %uint_0
+         %35 = OpLoad %uint %34
+         %36 = OpConvertUToF %float %DIM
+         %37 = OpAccessChain %_ptr_StorageBuffer_float %_ %int_0 %35
+               OpStore %37 %36
+               OpReturn
+               OpFunctionEnd
+    %unused_ = OpFunction %void None %3
+          %7 = OpLabel
+          %m = OpVariable %_ptr_Function_13 Function
+         %24 = OpAccessChain %_ptr_StorageBuffer_float %_ %int_0 %uint_0
+         %25 = OpCooperativeMatrixLoadKHR %13 %24 %int_0 %DIM None
+               OpStore %m %25
+         %26 = OpLoad %13 %m
+         %28 = OpAccessChain %_ptr_StorageBuffer_float %_ %int_0 %uint_64
+               OpCooperativeMatrixStoreKHR %28 %26 %int_0 %DIM None
+               OpReturn
+               OpFunctionEnd

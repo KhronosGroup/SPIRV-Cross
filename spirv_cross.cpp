@@ -2058,7 +2058,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRFunction &func, OpcodeHa
 uint32_t Compiler::type_struct_member_offset(const SPIRType &type, uint32_t index) const
 {
 	auto *type_meta = ir.find_meta(type.self);
-	if (type_meta)
+	if (type_meta && index < type_meta->members.size())
 	{
 		// Decoration must be set in valid SPIR-V, otherwise throw.
 		auto &dec = type_meta->members[index];
@@ -2091,7 +2091,7 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
 {
 	auto *type_meta = ir.find_meta(type.self);
-	if (type_meta)
+	if (type_meta && index < type_meta->members.size())
 	{
 		// Decoration must be set in valid SPIR-V, otherwise throw.
 		// MatrixStride is part of OpMemberDecorate.

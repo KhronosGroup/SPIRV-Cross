@@ -1,0 +1,20 @@
+StructuredBuffer<float3> Points : register(t0);
+RWStructuredBuffer<uint> Output : register(u1);
+
+void comp_main()
+{
+    uint _22;
+    uint _0ident;
+    Points.GetDimensions(_22, _0ident);
+    Output[0u] = _22;
+    uint _24;
+    uint _1ident;
+    Output.GetDimensions(_24, _1ident);
+    Output[1u] = _24;
+}
+
+[numthreads(1, 1, 1)]
+void main()
+{
+    comp_main();
+}
