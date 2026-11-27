@@ -5752,15 +5752,19 @@ string CompilerGLSL::to_extract_constant_composite_expression(uint32_t result_ty
 
 	if (is_matrix(composite_type))
 	{
+		if (length < 1 || length > 2 || chain[0] >= composite_type.columns || chain[0] >= 4)
+			SPIRV_CROSS_THROW("Composite extract index is out of bounds.");
+
 		if (length == 2)
 		{
+			if (chain[1] >= composite_type.vecsize || chain[1] >= 4)
+				SPIRV_CROSS_THROW("Composite extract index is out of bounds.");
 			tmp.m.c[0].vecsize = 1;
 			tmp.m.columns = 1;
 			tmp.m.c[0].r[0] = c.m.c[chain[0]].r[chain[1]];
 		}
 		else
 		{
-			assert(length == 1);
 			tmp.m.c[0].vecsize = composite_type.vecsize;
 			tmp.m.columns = 1;
 			tmp.m.c[0] = c.m.c[chain[0]];
@@ -5768,7 +5772,8 @@ string CompilerGLSL::to_extract_constant_composite_expression(uint32_t result_ty
 	}
 	else
 	{
-		assert(length == 1);
+		if (length != 1 || chain[0] >= composite_type.vecsize || chain[0] >= 4)
+			SPIRV_CROSS_THROW("Composite extract index is out of bounds.");
 		tmp.m.c[0].vecsize = 1;
 		tmp.m.columns = 1;
 		tmp.m.c[0].r[0] = c.m.c[0].r[chain[0]];
@@ -6166,7 +6171,11 @@ TypeID CompilerGLSL::get_composite_member_type(TypeID type_id, uint32_t member_i
 	if (is_array(type))
 		return type.parent_type;
 	if (type.basetype == SPIRType::Struct)
+	{
+		if (member_idx >= type.member_types.size())
+			SPIRV_CROSS_THROW("Composite insert index is out of bounds.");
 		return type.member_types[member_idx];
+	}
 	if (is_matrix(type))
 		return type.parent_type;
 	if (is_vector(type))
@@ -6334,6 +6343,8 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 
 	case OpCompositeInsert:
 	{
+		if (cop.arguments.size() < 3)
+			SPIRV_CROSS_THROW("Not enough operands for OpCompositeInsert.");
 		SmallVector<ConstantID> new_init = get_composite_constant_ids(cop.arguments[1]);
 		uint32_t idx;
 		uint32_t target_id = cop.self;
@@ -6342,6 +6353,8 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		// constants for each containing part.
 		for (idx = 2; idx < cop.arguments.size() - 1; ++idx)
 		{
+			if (cop.arguments[idx] >= new_init.size())
+				SPIRV_CROSS_THROW("Composite insert index is out of bounds.");
 			uint32_t new_const = ir.increase_bound_by(1);
 			uint32_t old_const = new_init[cop.arguments[idx]];
 			new_init[cop.arguments[idx]] = new_const;
@@ -6351,6 +6364,8 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 			target_type_id = get_composite_member_type(target_type_id, cop.arguments[idx]);
 		}
 		// Now replace the initializer with the one from this instruction.
+		if (cop.arguments[idx] >= new_init.size())
+			SPIRV_CROSS_THROW("Composite insert index is out of bounds.");
 		new_init[cop.arguments[idx]] = cop.arguments[0];
 		set_composite_constant(target_id, target_type_id, new_init);
 		SPIRConstant tmp_const(cop.basetype);
