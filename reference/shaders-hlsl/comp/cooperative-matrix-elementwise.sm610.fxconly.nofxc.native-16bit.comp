@@ -1,0 +1,98 @@
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F32, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF32_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::F16, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatF16_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::I32, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatI32_16x16_A_Wave;
+typedef dx::linalg::Matrix<dx::linalg::ComponentType::U32, 16, 16, dx::linalg::MatrixUse::A, dx::linalg::MatrixScope::Wave> spvCoopMatU32_16x16_A_Wave;
+
+static const uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
+
+RWByteAddressBuffer ssbo : register(u0, space0);
+RWByteAddressBuffer ssbo_int : register(u1, space0);
+
+void comp_main()
+{
+    spvCoopMatF32_16x16_A_Wave _24 = spvCoopMatF32_16x16_A_Wave::Load(ssbo, 16, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    spvCoopMatF32_16x16_A_Wave a = _24;
+    spvCoopMatF32_16x16_A_Wave _28 = spvCoopMatF32_16x16_A_Wave::Load(ssbo, 1040, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    spvCoopMatF32_16x16_A_Wave b = _28;
+    spvCoopMatF32_16x16_A_Wave _32 = a.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _32.Length(); spvIndex++)
+    {
+        _32.Set(spvIndex, _32.Get(spvIndex) + b.Get(spvIndex));
+    }
+    spvCoopMatF32_16x16_A_Wave _35 = a.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _35.Length(); spvIndex++)
+    {
+        _35.Set(spvIndex, _35.Get(spvIndex) - b.Get(spvIndex));
+    }
+    spvCoopMatF32_16x16_A_Wave _36 = _32.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _36.Length(); spvIndex++)
+    {
+        _36.Set(spvIndex, _36.Get(spvIndex) * _35.Get(spvIndex));
+    }
+    spvCoopMatF32_16x16_A_Wave _38 = _36.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _38.Length(); spvIndex++)
+    {
+        _38.Set(spvIndex, _38.Get(spvIndex) / b.Get(spvIndex));
+    }
+    spvCoopMatF32_16x16_A_Wave f = _38;
+    spvCoopMatF32_16x16_A_Wave _42 = f.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _42.Length(); spvIndex++)
+    {
+        _42.Set(spvIndex, _42.Get(spvIndex) * ssbo.Load<float>(0));
+    }
+    spvCoopMatF32_16x16_A_Wave _43 = _42.Cast<dx::linalg::ComponentType::F32>();
+    for (uint spvIndex = 0u; spvIndex < _43.Length(); spvIndex++)
+    {
+        _43.Set(spvIndex, -_43.Get(spvIndex));
+    }
+    f = _43;
+    spvCoopMatF16_16x16_A_Wave h = f.Cast<dx::linalg::ComponentType::F16>();
+    spvCoopMatI32_16x16_A_Wave i = h.Cast<dx::linalg::ComponentType::I32>();
+    spvCoopMatI32_16x16_A_Wave _57 = i.Cast<dx::linalg::ComponentType::I32>();
+    for (uint spvIndex = 0u; spvIndex < _57.Length(); spvIndex++)
+    {
+        _57.Set(spvIndex, _57.Get(spvIndex) + i.Get(spvIndex));
+    }
+    spvCoopMatI32_16x16_A_Wave _59 = _57.Cast<dx::linalg::ComponentType::I32>();
+    for (uint spvIndex = 0u; spvIndex < _59.Length(); spvIndex++)
+    {
+        _59.Set(spvIndex, _59.Get(spvIndex) * i.Get(spvIndex));
+    }
+    spvCoopMatI32_16x16_A_Wave _63 = i.Cast<dx::linalg::ComponentType::I32>();
+    for (uint spvIndex = 0u; spvIndex < _63.Length(); spvIndex++)
+    {
+        _63.Set(spvIndex, _63.Get(spvIndex) + i.Get(spvIndex));
+    }
+    spvCoopMatI32_16x16_A_Wave _64 = i.Cast<dx::linalg::ComponentType::I32>();
+    for (uint spvIndex = 0u; spvIndex < _64.Length(); spvIndex++)
+    {
+        _64.Set(spvIndex, _64.Get(spvIndex) / _63.Get(spvIndex));
+    }
+    spvCoopMatI32_16x16_A_Wave _65 = _59.Cast<dx::linalg::ComponentType::I32>();
+    for (uint spvIndex = 0u; spvIndex < _65.Length(); spvIndex++)
+    {
+        _65.Set(spvIndex, _65.Get(spvIndex) - _64.Get(spvIndex));
+    }
+    i = _65;
+    spvCoopMatF32_16x16_A_Wave back = i.Cast<dx::linalg::ComponentType::F32>();
+    for (int k = 0; k < int(spvCoopMatF32_16x16_A_Wave::Splat(0).Length()); k++)
+    {
+        float _85 = back.Get(k);
+        back.Set(k, _85 + 50.0f);
+    }
+    spvCoopMatF32_16x16_A_Wave arr[2];
+    arr[0] = back;
+    arr[1] = f;
+    float _100 = arr[0].Get(1);
+    arr[1].Set(0, _100);
+    arr[1].Store(ssbo, 2064, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    i.Store(ssbo_int, 0, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+    spvCoopMatU32_16x16_A_Wave u = i.Cast<dx::linalg::ComponentType::U32>();
+    u.Store(ssbo_int, 1024, 64, dx::linalg::MatrixLayout::RowMajor, 4);
+}
+
+[numthreads(32, 1, 1)]
+void main()
+{
+    comp_main();
+}

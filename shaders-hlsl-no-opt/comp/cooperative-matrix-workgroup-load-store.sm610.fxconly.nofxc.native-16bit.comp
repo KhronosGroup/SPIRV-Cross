@@ -1,0 +1,43 @@
+#version 450
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_KHR_memory_scope_semantics : require
+
+layout(local_size_x = 32) in;
+
+layout(set = 0, binding = 0) buffer Out32
+{
+	float data[];
+} out32;
+
+shared float16_t tile16[512];
+shared uint tile32[512];
+
+struct Tiles
+{
+	uint head;
+	float16_t data[256];
+};
+shared Tiles tiles;
+
+void main()
+{
+	// Matching element type: index and stride count float16_t elements.
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> a;
+	coopMatLoad(a, tile16, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+	coopMatStore(a, tile16, 0, 16, gl_CooperativeMatrixLayoutColumnMajor);
+
+	// A float matrix bit-cast through a uint array.
+	coopmat<float, gl_ScopeWorkgroup, 16, 16, gl_MatrixUseAccumulator> c;
+	coopMatLoad(c, tile32, 4 * gl_WorkGroupID.x, 16, gl_CooperativeMatrixLayoutColumnMajor);
+	coopMatStore(c, tile32, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	// A float16_t matrix through a uint array: SPIR-V counts uints, dx::linalg float16_t elements.
+	coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB> b;
+	coopMatLoad(b, tile32, 128, 8, gl_CooperativeMatrixLayoutRowMajor);
+
+	// An array member of a shared struct.
+	coopMatStore(b, tiles.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+
+	coopMatStore(c, out32.data, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+}
