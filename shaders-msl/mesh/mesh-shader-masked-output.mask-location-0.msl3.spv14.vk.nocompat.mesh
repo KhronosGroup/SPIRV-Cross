@@ -1,0 +1,18 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x = 3) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+layout(location = 0) out vec4 maskedColor[];
+layout(location = 1) out vec4 visibleColor[];
+
+void main()
+{
+	SetMeshOutputsEXT(3, 1);
+	uint index = gl_LocalInvocationIndex;
+	maskedColor[index] = vec4(float(index));
+	visibleColor[index] = vec4(1.0);
+	gl_MeshVerticesEXT[index].gl_Position = vec4(float(index), 0.0, 0.0, 1.0);
+	if (index == 0)
+		gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+}
