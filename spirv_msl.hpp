@@ -424,6 +424,14 @@ public:
 		// builtins are processed, but should result in more efficient usage of the GPU.
 		bool multi_patch_workgroup = false;
 
+		// Vulkan resets PrimitiveId to zero for each instance of a tessellated draw, but Metal's patch
+		// index counts across all instances. When enabled, a PrimitiveId read in a tessellation control
+		// shader (with multi_patch_workgroup) or a tessellation evaluation shader becomes
+		// (patch index % spvIndirectParams[2]), where spvIndirectParams[2] is the number of patches in
+		// one instance, supplied by the caller. Tessellation evaluation shaders then take
+		// spvIndirectParams as an extra buffer at indirect_params_buffer_index.
+		bool instance_relative_patch_id = false;
+
 		// Use storage buffers instead of vertex-style attributes for tessellation evaluation
 		// input. This may require conversion of inputs in the generated post-tessellation
 		// vertex shader, but allows the use of nested arrays.
@@ -1313,6 +1321,8 @@ protected:
 
 	bool has_sampled_images = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
+	std::string to_raw_primitive_id_expression();
+	bool is_instance_relative_primitive_id() const;
 
 	bool is_using_builtin_array = false; // Force the use of C style array declaration.
 	bool using_builtin_array() const;

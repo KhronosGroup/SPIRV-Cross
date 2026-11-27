@@ -4381,7 +4381,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		{
 			// In this case, we won't add the builtin to the interface struct,
 			// but we still need the hook to run to populate the arrays.
-			string base_ref = join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id), "]");
+			string base_ref = join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(), "]");
 			const char *mbr_name =
 			    bi_type == BuiltInTessLevelOuter ? "edgeTessellationFactor" : "insideTessellationFactor";
 			add_tess_level_input(base_ref, mbr_name, var);
@@ -4458,7 +4458,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				    [=]()
 				    {
 					    statement("const device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
-					              " = ", patch_input_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+					              " = ", patch_input_buffer_var_name, "[", to_raw_primitive_id_expression(),
 					              "];");
 				    });
 			}
@@ -4468,7 +4468,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				    [=]()
 				    {
 					    statement("const device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_in = &",
-					              input_buffer_var_name, "[", to_expression(builtin_primitive_id_id), " * ",
+					              input_buffer_var_name, "[", to_raw_primitive_id_expression(), " * ",
 					              get_entry_point().output_vertices, "];");
 				    });
 			}
@@ -4572,7 +4572,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
-							          " = ", patch_output_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+							          " = ", patch_output_buffer_var_name, "[", to_raw_primitive_id_expression(),
 							          "];");
 						});
 					}
@@ -4580,7 +4580,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_out = &",
-							          output_buffer_var_name, "[", to_expression(builtin_primitive_id_id), " * ",
+							          output_buffer_var_name, "[", to_raw_primitive_id_expression(), " * ",
 							          get_entry_point().output_vertices, "];");
 						});
 					}
@@ -15271,6 +15271,13 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 		                msl_options.reversed_depth_viewport_buffer_index, ")]]");
 	}
 
+	if (is_tese_shader() && is_instance_relative_primitive_id() && active_input_builtins.get(BuiltInPrimitiveId))
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
+	}
+
 	if (capture_output_to_buffer)
 	{
 		// Add parameters to hold the indirect draw parameters and the shader output. This has to be handled
@@ -16016,7 +16023,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = min(",
+					statement(builtin_type_decl(bi_type), " ", to_raw_primitive_id_expression(), " = min(",
 					          to_expression(builtin_invocation_id_id), ".x / ", this->get_entry_point().output_vertices,
 					          ", spvIndirectParams[1] - 1);");
 				});
@@ -18474,6 +18481,26 @@ bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
 	return false;
 }
 
+// The patch index as Metal sees it (counting across instances), for indexing per-patch buffers.
+string CompilerMSL::to_raw_primitive_id_expression()
+{
+	bool old_builtin_declaration = builtin_declaration;
+	builtin_declaration = true;
+	auto expr = to_expression(builtin_primitive_id_id);
+	builtin_declaration = old_builtin_declaration;
+	return expr;
+}
+
+bool CompilerMSL::is_instance_relative_primitive_id() const
+{
+	if (!msl_options.instance_relative_patch_id)
+		return false;
+	if (is_tesc_shader())
+		return msl_options.multi_patch_workgroup;
+	// A captured tessellation evaluation shader already uses spvIndirectParams for its output count.
+	return is_tese_shader() && !capture_output_to_buffer;
+}
+
 // Returns an MSL string identifying the name of a SPIR-V builtin.
 // Output builtins are qualified with the name of the stage out structure.
 string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
@@ -18647,7 +18674,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (is_tesc_shader() && storage != StorageClassInput && current_function &&
 		    (current_function->self == ir.default_entry_point))
 		{
-			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+			return join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(),
 			            "].edgeTessellationFactor");
 		}
 		break;
@@ -18656,7 +18683,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (is_tesc_shader() && storage != StorageClassInput && current_function &&
 		    (current_function->self == ir.default_entry_point))
 		{
-			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
+			return join(tess_factor_buffer_var_name, "[", to_raw_primitive_id_expression(),
 			            "].insideTessellationFactor");
 		}
 		break;
@@ -18672,6 +18699,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "simd_is_helper_thread()";
 
 	case BuiltInPrimitiveId:
+		if (!builtin_declaration && storage == StorageClassInput && is_instance_relative_primitive_id())
+			return "(gl_PrimitiveID % spvIndirectParams[2])";
 		return "gl_PrimitiveID";
 
 	default:
