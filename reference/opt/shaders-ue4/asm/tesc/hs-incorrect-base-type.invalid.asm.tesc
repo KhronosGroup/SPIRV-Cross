@@ -79,7 +79,7 @@ struct FPNTessellationHSToDS
 {
     FBasePassVSToDS PassSpecificData;
     spvUnsafeArray<float4, 3> WorldPosition;
-    float3 DisplacementScale;
+    packed_float3 DisplacementScale;
     float TessellationMultiplier;
     float WorldDisplacementMultiplier;
 };

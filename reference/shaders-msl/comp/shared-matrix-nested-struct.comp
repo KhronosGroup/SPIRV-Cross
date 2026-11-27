@@ -932,7 +932,7 @@ struct sE
 
 struct sF
 {
-    uint3 mA;
+    packed_uint3 mA;
     short mB;
 };
 
@@ -971,7 +971,7 @@ struct sK
 struct S2
 {
     sE a;
-    int3 b;
+    packed_int3 b;
     sH c;
     sK d;
 };
@@ -1337,7 +1337,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     if (allOk)
     {
         int3 param_18 = int3(1, -4, 0);
-        int3 param_19 = s2.b;
+        int3 param_19 = int3(s2.b);
         _516 = compare_ivec3(param_18, param_19);
     }
     else
@@ -1349,7 +1349,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     if (allOk)
     {
         uint3 param_20 = uint3(4u, 9u, 1u);
-        uint3 param_21 = s2.c.mA.mA.mA;
+        uint3 param_21 = uint3(s2.c.mA.mA.mA);
         _525 = compare_uvec3(param_20, param_21);
     }
     else

@@ -73,7 +73,7 @@ struct FBasePassVSToDS
 struct FFlatTessellationHSToDS
 {
     FBasePassVSToDS PassSpecificData;
-    float3 DisplacementScale;
+    packed_float3 DisplacementScale;
     float TessellationMultiplier;
     float WorldDisplacementMultiplier;
 };

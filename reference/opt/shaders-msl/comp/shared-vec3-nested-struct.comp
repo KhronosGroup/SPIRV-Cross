@@ -1,0 +1,100 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+struct Inner
+{
+    packed_float3 v[3];
+};
+
+struct S
+{
+    packed_float3 a;
+    Inner in0;
+    float c;
+    packed_float3 b[2];
+};
+
+struct InB
+{
+    float i[1];
+};
+
+struct OutB
+{
+    float o[1];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(64u, 1u, 1u);
+
+kernel void main0(device InB& inb [[buffer(0)]], device OutB& outb [[buffer(1)]], uint3 gl_LocalInvocationID [[thread_position_in_threadgroup]])
+{
+    threadgroup spvUnsafeArray<S, 64> sh;
+    threadgroup spvUnsafeArray<float3, 64> plain;
+    float3 _66 = float3(inb.i[gl_LocalInvocationID.x], inb.i[gl_LocalInvocationID.x] + 1.0, inb.i[gl_LocalInvocationID.x] + 2.0);
+    float _85 = 2.0 * inb.i[gl_LocalInvocationID.x];
+    spvUnsafeArray<float3, 2> _241 = spvUnsafeArray<float3, 2>({ float3(0.5 * inb.i[gl_LocalInvocationID.x]), float3(inb.i[gl_LocalInvocationID.x], _85, 3.0 * inb.i[gl_LocalInvocationID.x]) });
+    spvUnsafeArray<float3, 3> _261 = spvUnsafeArray<float3, 3>({ float3(1.0, 2.0, 3.0) * inb.i[gl_LocalInvocationID.x], float3(inb.i[gl_LocalInvocationID.x]), float3(3.0, 2.0, 1.0) });
+    sh[gl_LocalInvocationID.x] = S{ _66, Inner{ { _261[0], _261[1], _261[2] } }, _85, { _241[0], _241[1] } };
+    plain[gl_LocalInvocationID.x] = _66 + float3(1.0);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    uint _117 = (gl_LocalInvocationID.x + 1u) & 63u;
+    float3 _269 = float3(sh[_117].a);
+    float3 _277 = float3(sh[_117].in0.v[1u]);
+    float _279 = sh[_117].c;
+    float3 _284 = float3(sh[_117].b[1u]);
+    float3 _286 = float3(sh[gl_LocalInvocationID.x].a);
+    float3 _292 = float3(sh[gl_LocalInvocationID.x].in0.v[1u]);
+    float _294 = sh[gl_LocalInvocationID.x].c;
+    float3 _298 = float3(sh[gl_LocalInvocationID.x].b[1u]);
+    float _135 = ((threadgroup float*)&plain[(gl_LocalInvocationID.x + 3u) & 63u])[1u];
+    float _142 = ((threadgroup float*)&sh[(gl_LocalInvocationID.x + 5u) & 63u].in0.v[2])[0u];
+    float _146 = ((threadgroup float*)&sh[gl_LocalInvocationID.x].b[1])[1u];
+    float _147 = (((((dot(_269, _277) + _284.z) + _279) + ((dot(_286, _292) + _298.z) + _294)) + _135) + _142) + _146;
+    ((threadgroup float*)&sh[gl_LocalInvocationID.x].in0.v[1])[2u] += _147;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    outb.o[gl_LocalInvocationID.x] = _147 + ((threadgroup float*)&sh[(gl_LocalInvocationID.x + 2u) & 63u].in0.v[1])[2u];
+}
+

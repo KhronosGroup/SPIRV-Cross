@@ -1,0 +1,59 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct Inner
+{
+	vec3 v[3];
+};
+
+struct S
+{
+	vec3 a;
+	Inner in0;
+	float c;
+	vec3 b[2];
+};
+
+shared S sh[64];
+shared vec3 plain[64];
+
+layout(std430, binding = 0) buffer OutB
+{
+	float o[];
+} outb;
+
+layout(std430, binding = 1) buffer InB
+{
+	float i[];
+} inb;
+
+float f(S s)
+{
+	return dot(s.a, s.in0.v[1]) + s.b[1].z + s.c;
+}
+
+void main()
+{
+	uint t = gl_LocalInvocationID.x;
+	float x = inb.i[t];
+
+	S loc;
+	loc.a = vec3(x, x + 1.0, x + 2.0);
+	loc.in0.v[0] = vec3(1.0, 2.0, 3.0) * x;
+	loc.in0.v[1] = vec3(x);
+	loc.in0.v[2] = vec3(3.0, 2.0, 1.0);
+	loc.b[0] = vec3(0.5 * x);
+	loc.b[1] = vec3(x, 2.0 * x, 3.0 * x);
+	loc.c = x * 2.0;
+
+	sh[t] = loc;
+	plain[t] = loc.a + vec3(1.0);
+	barrier();
+
+	S other = sh[(t + 1u) & 63u];
+	float r = f(other) + f(sh[t]) + plain[(t + 3u) & 63u].y + sh[(t + 5u) & 63u].in0.v[2].x + sh[t].b[1].y;
+	sh[t].in0.v[1].z += r;
+	barrier();
+
+	outb.o[t] = r + sh[(t + 2u) & 63u].in0.v[1].z;
+}

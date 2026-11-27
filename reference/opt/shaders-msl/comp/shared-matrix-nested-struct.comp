@@ -932,7 +932,7 @@ struct sE
 
 struct sF
 {
-    uint3 mA;
+    packed_uint3 mA;
     short mB;
 };
 
@@ -971,7 +971,7 @@ struct sK
 struct S2
 {
     sE a;
-    int3 b;
+    packed_int3 b;
     sH c;
     sK d;
 };
@@ -1252,7 +1252,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     bool _516;
     if (_507)
     {
-        _516 = all(int3(1, -4, 0) == s2.b);
+        _516 = all(int3(1, -4, 0) == int3(s2.b));
     }
     else
     {
@@ -1261,7 +1261,7 @@ kernel void main0(device block& _612 [[buffer(0)]])
     bool _525;
     if (_516)
     {
-        _525 = all(uint3(4u, 9u, 1u) == s2.c.mA.mA.mA);
+        _525 = all(uint3(4u, 9u, 1u) == uint3(s2.c.mA.mA.mA));
     }
     else
     {
