@@ -21252,6 +21252,10 @@ void CompilerMSL::emit_mesh_outputs()
 					statement("spvV.", builtin_to_glsl(builtin, StorageClassOutput), "[", orig_index, "] = ", to_name(orig_var), "[spvVI]", access, ";");
 				}
 			}
+			else if (has_decoration(orig_var, DecorationBuiltIn))
+			{
+				builtin = BuiltIn(get_decoration(orig_var, DecorationBuiltIn));
+			}
 
 			auto &elem_type = get_variable_element_type(orig);
 			uint32_t part = get_member_decoration(type_vert.self, index, DecorationIndex);
