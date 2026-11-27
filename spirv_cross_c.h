@@ -797,7 +797,11 @@ SPVC_PUBLIC_API spvc_result spvc_context_create_compiler(spvc_context context, s
 /* Maps directly to C++ API. */
 SPVC_PUBLIC_API unsigned spvc_compiler_get_current_id_bound(spvc_compiler compiler);
 
-/* Create compiler options, which will initialize defaults. */
+/*
+ * Create compiler options, initialized from the options currently set on the compiler.
+ * For a newly created compiler, these are the defaults.
+ * After spvc_compiler_install_compiler_options(), new options objects inherit the installed values.
+ */
 SPVC_PUBLIC_API spvc_result spvc_compiler_create_compiler_options(spvc_compiler compiler,
                                                                   spvc_compiler_options *options);
 /* Override options. Will return error if e.g. MSL options are used for the HLSL backend, etc. */
