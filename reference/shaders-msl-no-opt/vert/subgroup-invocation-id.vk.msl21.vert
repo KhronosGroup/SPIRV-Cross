@@ -21,7 +21,8 @@ inline uint spvSubgroupInvocationID()
     uint rank = simd_prefix_exclusive_sum(1u);
     for (uint i = 0; i < rank; i++)
         ballot &= ballot - 1;
-    return uint(ctz(ballot));
+    uint2 ballot2 = as_type<uint2>(ballot);
+    return uint(ballot2.x ? ctz(ballot2.x) : (ctz(ballot2.y) + 32));
 }
 
 template<typename T>

@@ -7029,7 +7029,9 @@ void CompilerMSL::emit_custom_functions()
 			statement("uint rank = simd_prefix_exclusive_sum(1u);");
 			statement("for (uint i = 0; i < rank; i++)");
 			statement("    ballot &= ballot - 1;");
-			statement("return uint(ctz(ballot));");
+			statement("uint2 ballot2 = as_type<uint2>(ballot);");
+			// MSL doesn't support 64-bit ctz it seems.
+			statement("return uint(ballot2.x ? ctz(ballot2.x) : (ctz(ballot2.y) + 32));");
 			end_scope();
 			statement("");
 			break;
